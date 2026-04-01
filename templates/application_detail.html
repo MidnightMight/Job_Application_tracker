@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}{{ app.company }} — {{ app.job_desc }} — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h2 class="fw-bold mb-0">
+      <i class="bi bi-file-text text-warning me-2"></i>{{ app.job_desc }}
+    </h2>
+    <div class="text-muted small mt-1">
+      <i class="bi bi-building me-1"></i>{{ app.company }}
+      {% if app.team %} &mdash; {{ app.team }}{% endif %}
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('edit_application', app_id=app.id) }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    <form method="post" action="{{ url_for('delete_application', app_id=app.id) }}"
+          onsubmit="return confirm('Delete this application?')">
+      <button class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-trash me-1"></i>Delete
+      </button>
+    </form>
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Left column: details ─────────────────────────────────────────── -->
+  <div class="col-lg-7">
+
+    <!-- Core details card -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-info-circle text-primary me-2"></i>Application Details
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4 text-muted">Status</dt>
+          <dd class="col-sm-8">
+            <span class="badge status-badge status-{{ app.status | replace(' ', '_') }}">
+              {{ app.status | replace('_', ' ') }}
+            </span>
+            {% if app.status_changed_at %}
+            <span class="text-muted small ms-2">
+              (changed {{ app.status_changed_at[:10] }})
+            </span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Date Applied</dt>
+          <dd class="col-sm-8">{{ app.date_applied }}
+            <span class="badge bg-light text-dark border ms-1">{{ app.duration }} days ago</span>
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Company</dt>
+          <dd class="col-sm-8">{{ app.company }}</dd>
+
+          {% if app.team %}
+          <dt class="col-sm-4 text-muted">Team / Division</dt>
+          <dd class="col-sm-8">{{ app.team }}</dd>
+          {% endif %}
+
+          {% if app.contact %}
+          <dt class="col-sm-4 text-muted">
+            <i class="bi bi-person-lines-fill text-info me-1"></i>Contact
+          </dt>
+          <dd class="col-sm-8">{{ app.contact }}</dd>
+          {% endif %}
+
+          <dt class="col-sm-4 text-muted">Cover Letter</dt>
+          <dd class="col-sm-8">
+            {% if app.cover_letter %}
+              <i class="bi bi-check-circle-fill text-success"></i> Included
+            {% else %}
+              <i class="bi bi-x-circle-fill text-danger"></i> Not included
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Resume / CV</dt>
+          <dd class="col-sm-8">
+            {% if app.resume %}
+              <i class="bi bi-check-circle-fill text-success"></i> Included
+            {% else %}
+              <i class="bi bi-x-circle-fill text-danger"></i> Not included
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Success Chance</dt>
+          <dd class="col-sm-8">
+            {% if app.success_chance >= 1 %}
+              <span class="badge bg-success">{{ app.success_chance }}</span>
+            {% elif app.success_chance > 0 %}
+              <span class="badge bg-info text-dark">{{ app.success_chance }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </dd>
+
+          {% if app.link %}
+          <dt class="col-sm-4 text-muted">Link</dt>
+          <dd class="col-sm-8">
+            <a href="{{ app.link }}" target="_blank" rel="noopener" class="text-truncate d-inline-block" style="max-width:300px;">
+              <i class="bi bi-box-arrow-up-right me-1"></i>{{ app.link }}
+            </a>
+          </dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    <!-- Comments card -->
+    {% if app.comment %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-chat-left-text text-secondary me-2"></i>Comments / Notes
+      </div>
+      <div class="card-body">
+        <p class="mb-0" style="white-space:pre-wrap;">{{ app.comment }}</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Additional notes card -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-journal-text text-warning me-2"></i>Additional Notes</span>
+        <a href="{{ url_for('edit_application', app_id=app.id) }}" class="btn btn-outline-warning btn-sm py-0">
+          <i class="bi bi-pencil me-1"></i>Edit
+        </a>
+      </div>
+      <div class="card-body">
+        {% if app.additional_notes %}
+          <p class="mb-0" style="white-space:pre-wrap;">{{ app.additional_notes }}</p>
+        {% else %}
+          <p class="text-muted mb-0 fst-italic">No additional notes yet.
+            <a href="{{ url_for('edit_application', app_id=app.id) }}">Add some →</a>
+          </p>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Right column: timeline ───────────────────────────────────────── -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-clock-history text-info me-2"></i>Status Timeline
+      </div>
+      <div class="card-body p-0">
+        {% if timeline %}
+        <ul class="timeline-list list-unstyled mb-0 px-3 py-3">
+          {% for entry in timeline %}
+          <li class="timeline-item {% if loop.last %}timeline-item--last{% endif %}">
+            <div class="timeline-dot status-{{ entry.status | replace(' ', '_') }}"></div>
+            <div class="timeline-content">
+              <div class="fw-semibold">
+                <span class="badge status-badge status-{{ entry.status | replace(' ', '_') }}">
+                  {{ entry.status | replace('_', ' ') }}
+                </span>
+              </div>
+              <div class="text-muted small mt-1">{{ entry.changed_at[:16] | replace('T', ' ') }}</div>
+              {% if entry.days_since_prev is not none %}
+              <div class="text-muted small">
+                <i class="bi bi-arrow-up me-1"></i>
+                {% if entry.days_since_prev == 0 %}
+                  Same day
+                {% elif entry.days_since_prev == 1 %}
+                  1 day after previous
+                {% else %}
+                  {{ entry.days_since_prev }} days after previous
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="p-3 text-muted fst-italic">No timeline entries yet.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Total elapsed -->
+    {% if timeline and timeline | length > 1 %}
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-body py-2 text-center">
+        <div class="small text-muted mb-1">Total time in pipeline</div>
+        <div class="fw-bold fs-5">{{ app.duration }} days</div>
+        <div class="small text-muted">from application to today</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

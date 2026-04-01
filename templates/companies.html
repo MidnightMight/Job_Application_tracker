@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Company Tracker — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h2 class="fw-bold mb-0">
+    <i class="bi bi-building text-warning me-2"></i>Company Tracker
+  </h2>
+  <a href="{{ url_for('add_company') }}" class="btn btn-warning">
+    <i class="bi bi-plus-circle me-1"></i>Add Company
+  </a>
+</div>
+
+<!-- Sector Frequency Chart -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-pie-chart-fill text-info me-2"></i>Companies by Sector / Industry
+      </div>
+      <div class="card-body">
+        <canvas id="sectorChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-info-circle text-primary me-2"></i>Summary
+      </div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item d-flex justify-content-between">
+            <span>Total Companies Tracked</span>
+            <strong>{{ companies | length }}</strong>
+          </li>
+          {% for y in years %}
+          {% set applied = companies | selectattr('applied_' + y|string, 'equalto', 1) | list | length %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>Applied to in {{ y }}</span>
+            <strong>{{ applied }}</strong>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Company Table -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent fw-semibold">
+    <i class="bi bi-table me-2"></i>All Companies
+    <span class="badge bg-secondary ms-2">{{ companies | length }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>Company</th>
+          <th>Sector / Note</th>
+          {% for y in years %}
+          <th class="text-center">{{ y }}</th>
+          {% endfor %}
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in companies %}
+        <tr>
+          <td class="text-muted small">{{ loop.index }}</td>
+          <td class="fw-semibold">{{ c.company_name }}</td>
+          <td class="text-muted small">{{ c.note or '—' }}</td>
+          {% for y in years %}
+          <td class="text-center">
+            {% if c['applied_' + y|string] %}
+              <i class="bi bi-check-circle-fill text-success fs-5"></i>
+            {% else %}
+              <i class="bi bi-x-circle text-light fs-5"></i>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="text-nowrap">
+            <a href="{{ url_for('edit_company', company_id=c.id) }}"
+               class="btn btn-outline-primary btn-sm py-0 me-1">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post"
+                  action="{{ url_for('delete_company', company_id=c.id) }}"
+                  class="d-inline"
+                  onsubmit="return confirm('Delete {{ c.company_name }}?')">
+              <button class="btn btn-outline-danger btn-sm py-0">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const labels = {{ sector_freq.keys() | list | tojson }};
+  const data   = {{ sector_freq.values() | list | tojson }};
+  const colors = [
+    '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
+    '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
+    '#54a0ff','#5f27cd','#00d2d3','#1dd1a1','#ffeaa7',
+  ];
+  new Chart(document.getElementById('sectorChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Companies', data,
+      backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+})();
+</script>
+{% endblock %}

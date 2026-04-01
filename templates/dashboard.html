@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="fw-bold mb-0">
+    <i class="bi bi-speedometer2 text-warning me-2"></i>Dashboard
+    <span class="badge bg-secondary fs-6 ms-2">{{ current_year }}</span>
+  </h2>
+  <a href="{{ url_for('add_application') }}" class="btn btn-warning">
+    <i class="bi bi-plus-circle me-1"></i>Add Application
+  </a>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card stat-card border-0 shadow-sm h-100 text-center">
+      <div class="card-body">
+        <div class="stat-icon text-primary"><i class="bi bi-collection"></i></div>
+        <div class="stat-value text-primary">{{ stats.total }}</div>
+        <div class="stat-label">Total Applications</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card border-0 shadow-sm h-100 text-center">
+      <div class="card-body">
+        <div class="stat-icon text-success"><i class="bi bi-send-check"></i></div>
+        <div class="stat-value text-success">{{ stats.submitted }}</div>
+        <div class="stat-label">Submitted</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card border-0 shadow-sm h-100 text-center">
+      <div class="card-body">
+        <div class="stat-icon text-warning"><i class="bi bi-trophy"></i></div>
+        <div class="stat-value text-warning">{{ stats.offers }}</div>
+        <div class="stat-label">Offers Received</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card border-0 shadow-sm h-100 text-center">
+      <div class="card-body">
+        <div class="stat-icon text-info"><i class="bi bi-percent"></i></div>
+        <div class="stat-value text-info">{{ stats.success_rate }}%</div>
+        <div class="stat-label">Success Rate</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-bar-chart-fill text-primary me-2"></i>Applications by Status ({{ current_year }})
+      </div>
+      <div class="card-body">
+        <canvas id="statusChart" height="240"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-calendar-range text-success me-2"></i>Applications per Year
+      </div>
+      <div class="card-body">
+        <canvas id="yearChart" height="240"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-graph-up text-warning me-2"></i>Success Rate per Year (%)
+      </div>
+      <div class="card-body">
+        <canvas id="successChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-tags-fill text-info me-2"></i>Top Industry / Sector Keywords
+      </div>
+      <div class="card-body">
+        <canvas id="keywordChart" height="220"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pending Applications -->
+{% if stats.pending %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-transparent fw-semibold">
+    <i class="bi bi-hourglass-split text-danger me-2"></i>
+    Applications Requiring Attention
+    <span class="badge bg-danger ms-2">{{ stats.pending | length }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Company</th><th>Role</th><th>Status</th>
+          <th>Date Applied</th><th>Days</th><th>Comment</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in stats.pending %}
+        <tr>
+          <td class="fw-semibold">{{ a.company }}</td>
+          <td>{{ a.job_desc }}</td>
+          <td>
+            <span class="badge status-badge status-{{ a.status | replace(' ', '_') }}">
+              {{ a.status | replace('_', ' ') }}
+            </span>
+          </td>
+          <td>{{ a.date_applied }}</td>
+          <td>
+            <span class="badge {% if a.duration > 60 %}bg-danger{% elif a.duration > 30 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+              {{ a.duration }}d
+            </span>
+          </td>
+          <td class="text-muted small">{{ a.comment or '—' }}</td>
+          <td>
+            <a href="{{ url_for('application_detail', app_id=a.id) }}"
+               class="btn btn-outline-info btn-sm py-0 me-1" title="View details">
+              <i class="bi bi-eye"></i>
+            </a>
+            <a href="{{ url_for('edit_application', app_id=a.id) }}"
+               class="btn btn-outline-primary btn-sm py-0">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Quick Year Links -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-transparent fw-semibold">
+    <i class="bi bi-lightning-fill text-warning me-2"></i>Quick Navigation
+  </div>
+  <div class="card-body d-flex gap-2 flex-wrap">
+    {% for y in years %}
+    <a href="{{ url_for('year_view', year=y) }}" class="btn btn-outline-secondary">
+      {{ y }} Applications
+    </a>
+    {% endfor %}
+    <a href="{{ url_for('companies') }}" class="btn btn-outline-info">
+      <i class="bi bi-building me-1"></i>Company Tracker
+    </a>
+    <a href="{{ url_for('import_csv') }}" class="btn btn-outline-success">
+      <i class="bi bi-upload me-1"></i>Import CSV
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHART_COLORS = [
+  '#4e79a7','#f28e2b','#e15759','#76b7b2',
+  '#59a14f','#edc948','#b07aa1','#ff9da7',
+  '#9c755f','#bab0ac','#54a0ff','#5f27cd','#00d2d3',
+];
+
+(function () {
+  const labels = {{ status_counts.keys() | list | tojson }};
+  const data   = {{ status_counts.values() | list | tojson }};
+  new Chart(document.getElementById('statusChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Applications', data,
+      backgroundColor: CHART_COLORS.slice(0, labels.length), borderRadius: 4 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                x: { ticks: { maxRotation: 45 } } } }
+  });
+})();
+
+(function () {
+  const labels = {{ apps_per_year.keys() | list | tojson }};
+  const data   = {{ apps_per_year.values() | list | tojson }};
+  new Chart(document.getElementById('yearChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Applications', data,
+      backgroundColor: '#4e79a7', borderRadius: 4 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 5 } } } }
+  });
+})();
+
+(function () {
+  const labels = {{ success_per_year.keys() | list | tojson }};
+  const data   = {{ success_per_year.values() | list | tojson }};
+  new Chart(document.getElementById('successChart'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Success Rate (%)', data,
+      borderColor: '#f28e2b', backgroundColor: 'rgba(242,142,43,0.15)',
+      tension: 0.3, fill: true, pointBackgroundColor: '#f28e2b', pointRadius: 5 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, max: 100 } } }
+  });
+})();
+
+(function () {
+  const labels = {{ keyword_freq.keys() | list | tojson }};
+  const data   = {{ keyword_freq.values() | list | tojson }};
+  new Chart(document.getElementById('keywordChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Companies', data,
+      backgroundColor: CHART_COLORS, borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+})();
+</script>
+{% endblock %}

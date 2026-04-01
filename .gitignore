@@ -1,5 +1,31 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+.env/
+
+# Python bytecode
 __pycache__/
-*.pyc
-jobs.db
+*.py[cod]
+*.pyo
+
+# Database (keep personal data out of version control)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment / secrets
 .env
-.env.*
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log

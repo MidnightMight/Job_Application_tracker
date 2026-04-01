@@ -1,0 +1,142 @@
+/* ============================================================
+   Job Tracker — Custom CSS
+   ============================================================ */
+
+body {
+  background-color: #f0f2f5;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Stat cards */
+.stat-card {
+  border-radius: 12px;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.12) !important;
+}
+.stat-icon  { font-size: 2rem;   line-height: 1; margin-bottom: .25rem; }
+.stat-value { font-size: 2.2rem; font-weight: 700; line-height: 1.1; }
+.stat-label { font-size: .82rem; color: #6c757d; text-transform: uppercase; letter-spacing: .05em; }
+
+/* Navigation */
+.navbar-brand { font-size: 1.2rem; letter-spacing: .02em; }
+
+/* Cards */
+.card        { border-radius: 10px; }
+.card-header { border-radius: 10px 10px 0 0 !important; font-size: .93rem; }
+
+/* ── Status badges ──────────────────────────────────────────────────────── */
+.status-badge {
+  font-size: .75rem;
+  white-space: nowrap;
+  padding: .28em .6em;
+  border-radius: 6px;
+}
+
+.status-Rejected             { background-color: #dc3545 !important; }
+.status-Likely_Rejected      { background-color: #fd7e14 !important; }
+.status-Not_Applying         { background-color: #6c757d !important; }
+.status-Offer_Received       { background-color: #198754 !important; }
+.status-Offer_Rejected       { background-color: #20c997 !important; color: #000 !important; }
+.status-Submitted            { background-color: #0d6efd !important; }
+.status-Online_Assessment    { background-color: #6610f2 !important; }
+.status-Awaiting_Response    { background-color: #0dcaf0 !important; color: #000 !important; }
+.status-Interview_Scheduled  { background-color: #ffc107 !important; color: #000 !important; }
+.status-Interview_In_Person  { background-color: #e83e8c !important; }
+.status-Drafting_CV          { background-color: #adb5bd !important; color: #000 !important; }
+.status-Select_Status        { background-color: #dee2e6 !important; color: #495057 !important; }
+.status-EOI                  { background-color: #0dcaf0 !important; color: #000 !important; }
+
+/* ── Table row colours ──────────────────────────────────────────────────── */
+.app-row-Offer_Received       { background-color: rgba(25,  135,  84, .08) !important; }
+.app-row-Interview_Scheduled  { background-color: rgba(255, 193,   7, .08) !important; }
+.app-row-Interview_In_Person  { background-color: rgba(232,  62, 140, .08) !important; }
+.app-row-Awaiting_Response    { background-color: rgba( 13, 202, 240, .06) !important; }
+.app-row-Rejected             { background-color: rgba(220,  53,  69, .04) !important; }
+.app-row-Not_Applying         { background-color: rgba(108, 117, 125, .04) !important; }
+
+/* Tables */
+.table th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+.table td  { vertical-align: middle; }
+
+/* Footer */
+footer { background-color: #fff; margin-top: 3rem; }
+
+/* Progress bar label */
+.progress-bar { font-size: .75rem; font-weight: 600; }
+
+/* ── Status timeline ────────────────────────────────────────────────────── */
+.timeline-list { position: relative; }
+
+.timeline-item {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 1.4rem;
+  position: relative;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 22px;
+  bottom: 0;
+  width: 2px;
+  background: #dee2e6;
+}
+
+.timeline-item--last::before { display: none; }
+
+.timeline-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px #adb5bd;
+  background-color: #adb5bd;
+}
+
+/* Colour the dot to match its status */
+.timeline-dot.status-Submitted           { background-color: #0d6efd; box-shadow: 0 0 0 2px #0d6efd; }
+.timeline-dot.status-Online_Assessment   { background-color: #6610f2; box-shadow: 0 0 0 2px #6610f2; }
+.timeline-dot.status-Awaiting_Response   { background-color: #0dcaf0; box-shadow: 0 0 0 2px #0dcaf0; }
+.timeline-dot.status-Interview_Scheduled { background-color: #ffc107; box-shadow: 0 0 0 2px #ffc107; }
+.timeline-dot.status-Interview_In_Person { background-color: #e83e8c; box-shadow: 0 0 0 2px #e83e8c; }
+.timeline-dot.status-Offer_Received      { background-color: #198754; box-shadow: 0 0 0 2px #198754; }
+.timeline-dot.status-Offer_Rejected      { background-color: #20c997; box-shadow: 0 0 0 2px #20c997; }
+.timeline-dot.status-Rejected            { background-color: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
+.timeline-dot.status-Likely_Rejected     { background-color: #fd7e14; box-shadow: 0 0 0 2px #fd7e14; }
+.timeline-dot.status-EOI                 { background-color: #0dcaf0; box-shadow: 0 0 0 2px #0dcaf0; }
+
+.timeline-content { flex: 1; }
+
+/* ── CSV Import step indicator ──────────────────────────────────────────── */
+.step-circle {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: #dee2e6;
+  color: #6c757d;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .9rem;
+}
+.step-circle.step-active { background: #ffc107; color: #000; }
+.step-circle.step-done   { background: #198754; color: #fff; }
+
+.step-line {
+  flex: 1;
+  max-width: 60px;
+  height: 2px;
+  background: #dee2e6;
+  align-self: center;
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+  .stat-value { font-size: 1.6rem; }
+  .stat-icon  { font-size: 1.4rem; }
+}
