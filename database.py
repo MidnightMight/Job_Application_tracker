@@ -45,8 +45,26 @@ def get_connection():
     return conn
 
 
-def _add_column_if_missing(c, table, column, definition):
-    """Safely add a column to an existing table (migration helper)."""
+_ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses"}
+_ALLOWED_COLUMNS = {
+    "contact", "additional_notes", "status_changed_at",
+}
+_ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0"}
+
+
+def _add_column_if_missing(c, table: str, column: str, definition: str):
+    """Safely add a column to an existing table (migration helper).
+
+    All three parameters are validated against allowlists so that this
+    internal helper can never be used as a SQL-injection vector.
+    """
+    if table not in _ALLOWED_TABLES:
+        raise ValueError(f"_add_column_if_missing: unknown table '{table}'")
+    if column not in _ALLOWED_COLUMNS:
+        raise ValueError(f"_add_column_if_missing: unknown column '{column}'")
+    if definition not in _ALLOWED_DEFINITIONS:
+        raise ValueError(f"_add_column_if_missing: unknown definition '{definition}'")
+    # Safe to interpolate — values validated against allowlists above.
     existing = [row[1] for row in c.execute(f"PRAGMA table_info({table})").fetchall()]
     if column not in existing:
         c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
