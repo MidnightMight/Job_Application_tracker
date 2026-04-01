@@ -1,0 +1,31 @@
+# Job Tracker – Docker Compose
+# ─────────────────────────────────────────────────────────────────────────────
+# Quick start (Windows PowerShell / WSL / macOS / Linux):
+#   docker compose up -d
+# Then open:  http://localhost:5000
+#
+# Synology Container Manager:
+#   Upload this file via Container Manager → Projects → Create → "Upload"
+#   The data volume (job_tracker_data) is created automatically.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  job-tracker:
+    build: .
+    image: job-tracker:latest
+    container_name: job_tracker
+    restart: unless-stopped
+    ports:
+      - "5000:5000"       # Change the left number to use a different host port
+    volumes:
+      - job_tracker_data:/data   # SQLite database persists here
+    environment:
+      # ⚠️  Change SECRET_KEY to something random before exposing externally
+      SECRET_KEY: "change-me-in-production"
+      DB_PATH: "/data/jobs.db"
+      PORT: "5000"
+      FLASK_DEBUG: "0"
+
+volumes:
+  job_tracker_data:
+    driver: local
