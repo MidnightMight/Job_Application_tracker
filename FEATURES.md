@@ -129,46 +129,92 @@ The Export page also surfaces the existing CSV Import feature for convenience. T
 
 Two launcher scripts eliminate the need to manually activate a virtual environment from the terminal for day-to-day use.
 
-### 5.1 `launch.sh` — Linux / macOS
+### 5.1 `launch.sh` — Linux · macOS · Unix
 
 ```bash
 bash launch.sh
 ```
 
-Or make it executable once and double-click it (on macOS, right-click → Open with Terminal):
+Or make it executable once and run directly (or double-click in a file manager that opens a terminal):
 
 ```bash
 chmod +x launch.sh
 ./launch.sh
 ```
 
-**What it does:**
+**Supported platforms** (detected automatically via `uname`):
 
-1. `cd`s to the script's directory.
-2. Creates a `venv/` virtual environment (skipped if it already exists).
-3. Activates the venv.
-4. Runs `pip install -r requirements.txt` (fast no-op if nothing changed).
-5. Starts `python app.py`.
+| Platform | Browser auto-open | Notes |
+|---|---|---|
+| **Linux** (Debian, Ubuntu, Fedora, Arch …) | `xdg-open` / `gnome-open` / `kde-open` | Requires a display (`$DISPLAY` or `$WAYLAND_DISPLAY`) |
+| **macOS** (Intel & Apple Silicon) | `open` (built-in) | Works out of the box |
+| **FreeBSD / OpenBSD / NetBSD** | `xdg-open` / `firefox` / `chromium` | Requires a display |
+| **Solaris / other Unix** | Not attempted | App still starts normally |
+| **Git Bash / Cygwin / MSYS2** (Windows) | `start` | Use `launch.bat` for a better Windows experience |
+
+**What it does, step by step:**
+
+1. Detects the current OS with `uname`.
+2. Finds a Python 3 interpreter by trying `python3`, `python3.13` … `python3.10`, `python` in order.
+3. Prints a platform-specific install hint if no Python 3 is found.
+4. Creates `venv/` with `python3 -m venv` (skipped if it already exists); prints a hint if `venv` is not available.
+5. Activates the venv.
+6. Runs `pip install -r requirements.txt` (fast no-op if nothing changed).
+7. Opens `http://localhost:5000` in the default browser **in the background** (best-effort — never fatal if it fails or there is no display).
+8. Starts `python app.py` in the foreground. Press **Ctrl+C** to stop.
+
+**Respect the `PORT` environment variable:**
+
+```bash
+PORT=8080 bash launch.sh
+```
+
+The browser auto-open and the server both use `$PORT` (default `5000`).
+
+**Prerequisites by platform:**
+
+| Platform | Requirement | How to install |
+|---|---|---|
+| Ubuntu / Debian | `python3`, `python3-venv` | `sudo apt install python3 python3-venv` |
+| Fedora / RHEL | `python3` | `sudo dnf install python3` |
+| Arch Linux | `python` | `sudo pacman -S python` |
+| macOS | Python 3.10+ | `brew install python` or [python.org](https://www.python.org/downloads/) |
+| FreeBSD | `python3` | `pkg install python3` |
+| OpenBSD / NetBSD | `python3` | `pkg_add python3` |
 
 ### 5.2 `launch.bat` — Windows
 
-Double-click `launch.bat` in File Explorer (or run from Command Prompt).
+Double-click `launch.bat` in File Explorer, or run it from Command Prompt / PowerShell.
 
-**What it does:**
+**What it does, step by step:**
 
 1. Changes to the script's directory.
-2. Creates `venv\` (skipped if it already exists).
-3. Activates the venv.
-4. Runs `pip install -r requirements.txt`.
-5. Opens `http://localhost:5000` in the default browser.
-6. Starts `python app.py`.
-7. Pauses the window so you can read any error messages.
+2. Finds a Python 3 interpreter by trying `py` (Python Launcher for Windows), then `python3`, then `python` — whichever is found first and is Python 3.
+3. Prints a friendly install hint with three options if no Python 3 is found.
+4. Creates `venv\` (skipped if it already exists); prints a hint if it fails.
+5. Activates the venv.
+6. Runs `pip install -r requirements.txt` (fast no-op if nothing changed).
+7. Opens `http://localhost:%PORT%` in the default browser.
+8. Starts `python app.py`. Close the window or press **Ctrl+C** to stop.
 
-### Prerequisites
+**Respect the `PORT` environment variable:**
 
-- **Python 3.10+** must be installed and available on `PATH`.
-  - Linux/macOS: `python3`
-  - Windows: `python`
+```bat
+set PORT=8080
+launch.bat
+```
+
+Or set it as a system variable in Control Panel → System → Advanced → Environment Variables.
+
+**Prerequisites:**
+
+Python 3.10+ installed and on `PATH`. Three ways to get it:
+
+| Method | Command / Link | Notes |
+|---|---|---|
+| **Microsoft Store** | Search "Python 3" in the Store | Easiest — no PATH setup needed |
+| **python.org installer** | [python.org/downloads](https://www.python.org/downloads/) | Tick **"Add Python to PATH"** during install |
+| **winget** | `winget install Python.Python.3` | From Command Prompt / Terminal |
 
 ---
 
