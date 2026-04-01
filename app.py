@@ -1,11 +1,13 @@
 import csv
 import io
 import os
+import shutil
 
 from flask import (
     Flask, flash, redirect, render_template,
-    request, url_for,
+    request, url_for, send_file, Response,
 )
+from apscheduler.schedulers.background import BackgroundScheduler
 
 import database as db
 
@@ -17,12 +19,43 @@ db.init_db()
 app.jinja_env.globals["enumerate"] = enumerate
 
 
+# ---------------------------------------------------------------------------
+# Background scheduler — reminder checks
+# ---------------------------------------------------------------------------
+
+def _check_and_create_reminders():
+    """Scheduled task: create inbox reminders for long-pending applications."""
+    try:
+        if db.get_setting("reminder_enabled", "1") != "1":
+            return
+        days = int(db.get_setting("reminder_days", "3"))
+        for app_record in db.get_pending_for_reminders(days):
+            msg = (
+                f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
+                f"has been pending ({app_record['status'].replace('_', ' ')}) "
+                f"for {app_record['duration']} days."
+            )
+            db.create_reminder(app_record["id"], msg)
+    except Exception:
+        pass  # Never crash the scheduler thread
+
+
+# Start scheduler only once (skip in Werkzeug reloader child process).
+if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
+    _scheduler = BackgroundScheduler(daemon=True)
+    _scheduler.add_job(_check_and_create_reminders, "interval", hours=1, id="reminders")
+    _scheduler.start()
+    # Also run once on startup so the inbox is populated immediately.
+    _check_and_create_reminders()
+
+
 @app.context_processor
 def inject_globals():
     from datetime import date
     return {
         "years": db.YEARS,
         "current_year_for_footer": date.today().year,
+        "unread_reminder_count": db.get_unread_reminder_count(),
     }
 
 
@@ -321,6 +354,132 @@ def delete_company(company_id):
     db.delete_company(company_id)
     flash("Company deleted.", "warning")
     return redirect(url_for("companies"))
+
+
+# ---------------------------------------------------------------------------
+# Inbox (reminders)
+# ---------------------------------------------------------------------------
+
+@app.route("/inbox")
+def inbox():
+    reminders = db.get_reminders()
+    return render_template("inbox.html", reminders=reminders)
+
+
+@app.route("/inbox/dismiss/<int:reminder_id>", methods=["POST"])
+def dismiss_reminder(reminder_id):
+    db.dismiss_reminder(reminder_id)
+    return redirect(url_for("inbox"))
+
+
+@app.route("/inbox/dismiss-all", methods=["POST"])
+def dismiss_all_reminders():
+    db.dismiss_all_reminders()
+    flash("All reminders dismissed.", "success")
+    return redirect(url_for("inbox"))
+
+
+# ---------------------------------------------------------------------------
+# Settings
+# ---------------------------------------------------------------------------
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    if request.method == "POST":
+        db.set_setting("reminder_enabled", "1" if request.form.get("reminder_enabled") else "0")
+        days = request.form.get("reminder_days", "3").strip()
+        if days.isdigit() and int(days) >= 1:
+            db.set_setting("reminder_days", days)
+        else:
+            flash("Reminder days must be a positive integer.", "danger")
+            return redirect(url_for("settings"))
+        flash("Settings saved.", "success")
+        return redirect(url_for("settings"))
+    current = db.get_all_settings()
+    return render_template("settings.html", settings=current)
+
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
+
+@app.route("/export")
+def export_page():
+    status_options = db.get_status_options()
+    return render_template(
+        "export.html",
+        years=db.YEARS,
+        status_options=status_options,
+    )
+
+
+@app.route("/export/applications")
+def export_applications():
+    year = request.args.get("year", "")
+    status = request.args.get("status", "")
+    company = request.args.get("company", "").strip()
+
+    apps = db.get_applications(
+        year=int(year) if year.isdigit() else None,
+        status=status if status else None,
+    )
+    if company:
+        apps = [a for a in apps if company.lower() in a["company"].lower()]
+
+    fields = [
+        "id", "company", "job_desc", "team", "date_applied", "status",
+        "cover_letter", "resume", "duration", "success_chance",
+        "link", "contact", "comment", "additional_notes",
+    ]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(apps)
+
+    filename_parts = ["applications"]
+    if year:
+        filename_parts.append(year)
+    if status:
+        filename_parts.append(status)
+    filename = "_".join(filename_parts) + ".csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.route("/export/companies")
+def export_companies():
+    companies_list = db.get_companies()
+    fields = ["id", "company_name", "note",
+              "applied_2023", "applied_2024", "applied_2025",
+              "applied_2026", "applied_2027"]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(companies_list)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=companies.csv"},
+    )
+
+
+@app.route("/export/db")
+def export_db():
+    """Download a copy of the SQLite database for migration / backup."""
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    shutil.copy2(db.DB_PATH, tmp.name)
+    return send_file(
+        tmp.name,
+        mimetype="application/octet-stream",
+        as_attachment=True,
+        download_name="jobs_backup.db",
+    )
 
 
 # ---------------------------------------------------------------------------

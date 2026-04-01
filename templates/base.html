@@ -49,8 +49,28 @@
             <i class="bi bi-tags me-1"></i>Statuses
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'export_page' %}active{% endif %}"
+             href="{{ url_for('export_page') }}">
+            <i class="bi bi-box-arrow-up me-1"></i>Export
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}"
+             href="{{ url_for('settings') }}">
+            <i class="bi bi-gear me-1"></i>Settings
+          </a>
+        </li>
       </ul>
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 align-items-center">
+        <a href="{{ url_for('inbox') }}" class="btn btn-outline-light btn-sm position-relative" title="Reminder Inbox">
+          <i class="bi bi-bell me-1"></i>Inbox
+          {% if unread_reminder_count > 0 %}
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+            {{ unread_reminder_count }}
+          </span>
+          {% endif %}
+        </a>
         <a href="{{ url_for('import_csv') }}" class="btn btn-outline-light btn-sm">
           <i class="bi bi-upload me-1"></i>Import CSV
         </a>

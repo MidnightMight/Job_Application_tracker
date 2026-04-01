@@ -45,7 +45,7 @@ def get_connection():
     return conn
 
 
-_ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses"}
+_ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings"}
 _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at",
 }
@@ -133,7 +133,36 @@ def init_db():
         )
     """)
 
+    # ── Settings ─────────────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+
+    # ── Reminders (inbox) ────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS reminders (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id INTEGER,
+            message        TEXT NOT NULL,
+            created_at     TEXT NOT NULL,
+            dismissed      INTEGER DEFAULT 0,
+            FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+        )
+    """)
+
     conn.commit()
+
+    # Seed default settings if the table is empty.
+    if c.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0:
+        default_settings = [
+            ("reminder_enabled", "1"),
+            ("reminder_days",    "3"),
+        ]
+        c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
+        conn.commit()
 
     # Seed statuses if empty.
     if c.execute("SELECT COUNT(*) FROM statuses").fetchone()[0] == 0:
@@ -635,3 +664,107 @@ def get_company_note_frequency():
         if note:
             freq[note] = freq.get(note, 0) + 1
     return dict(sorted(freq.items(), key=lambda x: x[1], reverse=True)[:15])
+
+
+# ---------------------------------------------------------------------------
+# Settings helpers
+# ---------------------------------------------------------------------------
+
+def get_setting(key: str, default: str = "") -> str:
+    conn = get_connection()
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def set_setting(key: str, value: str):
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?,?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, str(value)),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_settings() -> dict:
+    conn = get_connection()
+    rows = conn.execute("SELECT key, value FROM settings").fetchall()
+    conn.close()
+    return {r["key"]: r["value"] for r in rows}
+
+
+# ---------------------------------------------------------------------------
+# Reminders / inbox helpers
+# ---------------------------------------------------------------------------
+
+def get_pending_for_reminders(days_threshold: int) -> list:
+    """Return pending applications that have been waiting more than days_threshold days
+    and don't already have an undismissed reminder created within the last day."""
+    conn = get_connection()
+    placeholders = ",".join("?" for _ in PENDING_STATUSES)
+    rows = conn.execute(
+        f"""SELECT a.* FROM applications a
+            WHERE a.status IN ({placeholders})
+              AND julianday('now') - julianday(a.date_applied) > ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM reminders r
+                  WHERE r.application_id = a.id
+                    AND r.dismissed = 0
+                    AND julianday('now') - julianday(r.created_at) < 1
+              )
+        """,
+        (*PENDING_STATUSES, days_threshold),
+    ).fetchall()
+    conn.close()
+    return [_enrich(dict(r)) for r in rows]
+
+
+def create_reminder(application_id: int, message: str):
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO reminders (application_id, message, created_at, dismissed) VALUES (?,?,?,0)",
+        (application_id, message, now),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_reminders(unread_only: bool = False) -> list:
+    conn = get_connection()
+    sql = (
+        "SELECT r.*, a.company, a.job_desc, a.status, a.date_applied "
+        "FROM reminders r "
+        "LEFT JOIN applications a ON a.id = r.application_id "
+    )
+    if unread_only:
+        sql += "WHERE r.dismissed=0 "
+    sql += "ORDER BY r.created_at DESC"
+    rows = conn.execute(sql).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def dismiss_reminder(reminder_id: int):
+    conn = get_connection()
+    conn.execute("UPDATE reminders SET dismissed=1 WHERE id=?", (reminder_id,))
+    conn.commit()
+    conn.close()
+
+
+def dismiss_all_reminders():
+    conn = get_connection()
+    conn.execute("UPDATE reminders SET dismissed=1")
+    conn.commit()
+    conn.close()
+
+
+def get_unread_reminder_count() -> int:
+    conn = get_connection()
+    count = conn.execute(
+        "SELECT COUNT(*) FROM reminders WHERE dismissed=0"
+    ).fetchone()[0]
+    conn.close()
+    return count
