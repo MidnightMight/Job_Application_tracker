@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} Application — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-dark text-white fw-semibold">
+        <i class="bi bi-{% if action == 'Add' %}plus-circle{% else %}pencil{% endif %} me-2"></i>
+        {{ action }} Application
+      </div>
+      <div class="card-body">
+        <form method="post">
+          <div class="row g-3">
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Job Description / Role</label>
+              <input type="text" name="job_desc" class="form-control"
+                     value="{{ app.job_desc if app else '' }}"
+                     placeholder="e.g. Internship, Graduate Engineer">
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Company</label>
+              <input type="text" name="company" class="form-control"
+                     list="company-list"
+                     value="{{ app.company if app else '' }}"
+                     placeholder="Company name" required>
+              <datalist id="company-list">
+                {% for c in companies %}
+                <option value="{{ c.company_name }}">
+                {% endfor %}
+              </datalist>
+            </div>
+
+            <div class="col-md-12">
+              <label class="form-label fw-semibold">Team / Division</label>
+              <input type="text" name="team" class="form-control"
+                     value="{{ app.team if app else '' }}"
+                     placeholder="e.g. Building electrical, Graduate program">
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Date Applied</label>
+              <input type="date" name="date_applied" class="form-control"
+                     value="{{ app.date_applied if app else '' }}" required>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Status</label>
+              <select name="status" class="form-select" required>
+                {% for s in status_options %}
+                <option value="{{ s }}"
+                  {% if app and app.status == s %}selected{% endif %}>
+                  {{ s }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Success Chance</label>
+              <input type="number" name="success_chance" class="form-control"
+                     step="0.1" min="0" max="10"
+                     value="{{ app.success_chance if app else '0' }}"
+                     placeholder="0 = none, 1 = offer">
+              <div class="form-text">0=none · 0.1=EOI · 1=offer · 1.5=multiple</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Application Link</label>
+              <input type="url" name="link" class="form-control"
+                     value="{{ app.link if app else '' }}"
+                     placeholder="https://...">
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Cover Letter</label>
+              <div class="form-check form-switch mt-1">
+                <input class="form-check-input" type="checkbox" name="cover_letter"
+                       id="cover_letter" value="1"
+                       {% if app and app.cover_letter %}checked{% endif %}>
+                <label class="form-check-label" for="cover_letter">Included</label>
+              </div>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Resume</label>
+              <div class="form-check form-switch mt-1">
+                <input class="form-check-input" type="checkbox" name="resume"
+                       id="resume" value="1"
+                       {% if not app or app.resume %}checked{% endif %}>
+                <label class="form-check-label" for="resume">Included</label>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label fw-semibold">Comment / Notes</label>
+              <textarea name="comment" class="form-control" rows="3"
+                        placeholder="Any notes, interview details, follow-up actions...">{{ app.comment if app else '' }}</textarea>
+            </div>
+
+          </div><!-- /.row -->
+
+          <hr class="my-4">
+          <div class="d-flex gap-2 justify-content-end">
+            <a href="javascript:history.back()" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Cancel
+            </a>
+            <button type="submit" class="btn btn-warning fw-semibold">
+              <i class="bi bi-{% if action == 'Add' %}plus-circle{% else %}save{% endif %} me-1"></i>
+              {{ action }} Application
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

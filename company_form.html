@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ action }} Company — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-dark text-white fw-semibold">
+        <i class="bi bi-building me-2"></i>{{ action }} Company
+      </div>
+      <div class="card-body">
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Company Name</label>
+            <input type="text" name="company_name" class="form-control"
+                   value="{{ company.company_name if company else '' }}"
+                   placeholder="e.g. BHP" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Sector / Note</label>
+            <input type="text" name="note" class="form-control"
+                   value="{{ company.note if company else '' }}"
+                   placeholder="e.g. Mining, Consultant, Aerospace">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold d-block">Applied Years</label>
+            <div class="d-flex gap-3 flex-wrap">
+              {% for y in years %}
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox"
+                       name="applied_{{ y }}" id="applied_{{ y }}" value="1"
+                       {% if company and company['applied_' + y|string] %}checked{% endif %}>
+                <label class="form-check-label" for="applied_{{ y }}">{{ y }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <hr>
+          <div class="d-flex gap-2 justify-content-end">
+            <a href="{{ url_for('companies') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Cancel
+            </a>
+            <button type="submit" class="btn btn-warning fw-semibold">
+              <i class="bi bi-save me-1"></i>{{ action }} Company
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
