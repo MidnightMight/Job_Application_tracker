@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Manage Statuses — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="fw-bold mb-0">
+    <i class="bi bi-tags text-warning me-2"></i>Manage Application Statuses
+  </h2>
+</div>
+
+<div class="row g-4">
+
+  <!-- Current statuses -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-list-ul text-primary me-2"></i>Current Statuses
+        <span class="badge bg-secondary ms-2">{{ statuses | length }}</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th class="ps-3">#</th>
+              <th>Status Name</th>
+              <th>Display Label</th>
+              <th>Badge Preview</th>
+              <th class="text-end pe-3">Remove</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in statuses %}
+            <tr>
+              <td class="ps-3 text-muted small">{{ loop.index }}</td>
+              <td class="fw-semibold small">{{ s }}</td>
+              <td class="text-muted small">{{ s | replace('_', ' ') }}</td>
+              <td>
+                <span class="badge status-badge status-{{ s | replace(' ', '_') }}">
+                  {{ s | replace('_', ' ') }}
+                </span>
+              </td>
+              <td class="text-end pe-3">
+                <form method="post" class="d-inline"
+                      onsubmit="return confirm('Delete status \'{{ s }}\'? This will fail if any applications currently use it.')">
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="name" value="{{ s }}">
+                  <button class="btn btn-outline-danger btn-sm py-0">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add new status -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-plus-circle text-success me-2"></i>Add New Status
+      </div>
+      <div class="card-body">
+        <form method="post">
+          <input type="hidden" name="action" value="add">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Status Name</label>
+            <input type="text" name="name" class="form-control"
+                   placeholder="e.g. Technical_Test or Phone_Screen" required>
+            <div class="form-text">
+              Spaces will be converted to underscores automatically.
+            </div>
+          </div>
+          <button type="submit" class="btn btn-success fw-semibold">
+            <i class="bi bi-plus-circle me-1"></i>Add Status
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-body text-muted small">
+        <i class="bi bi-info-circle text-primary me-1"></i>
+        <strong>Note:</strong> A status cannot be deleted while any application is using it.
+        Update those applications to a different status first.
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}Import Applications from CSV — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="fw-bold mb-0">
+    <i class="bi bi-upload text-warning me-2"></i>Bulk Import from CSV
+  </h2>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+  </a>
+</div>
+
+<!-- Progress indicator -->
+<div class="d-flex align-items-center gap-3 mb-4">
+  <div class="d-flex align-items-center gap-2">
+    <div class="step-circle {% if stage == 'upload' %}step-active{% else %}step-done{% endif %}">1</div>
+    <span class="fw-semibold {% if stage != 'upload' %}text-muted{% endif %}">Upload File</span>
+  </div>
+  <div class="step-line"></div>
+  <div class="d-flex align-items-center gap-2">
+    <div class="step-circle {% if stage == 'map' %}step-active{% elif stage == 'result' %}step-done{% endif %}">2</div>
+    <span class="fw-semibold {% if stage == 'upload' %}text-muted{% endif %}">Map Columns</span>
+  </div>
+  <div class="step-line"></div>
+  <div class="d-flex align-items-center gap-2">
+    <div class="step-circle {% if stage == 'result' %}step-active{% endif %}">3</div>
+    <span class="fw-semibold {% if stage != 'result' %}text-muted{% endif %}">Results</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- STAGE 1 — Upload                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+{% if stage == 'upload' %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-file-earmark-arrow-up text-primary me-2"></i>Select your CSV file
+      </div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">CSV File</label>
+            <input type="file" name="csv_file" class="form-control" accept=".csv,.txt" required>
+            <div class="form-text">
+              UTF-8 or ANSI encoded · first row must be a header row · any column names are fine —
+              you will map them to the application fields in the next step.
+            </div>
+          </div>
+          <button type="submit" class="btn btn-warning fw-semibold">
+            <i class="bi bi-arrow-right-circle me-1"></i>Next: Map Columns
+          </button>
+        </form>
+
+        <!-- Field reference -->
+        <hr class="my-4">
+        <h6 class="fw-semibold text-muted">Available application fields</h6>
+        <div class="row g-2">
+          {% for key, label in import_fields %}
+          {% if key %}
+          <div class="col-md-6">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge {% if '*' in label %}bg-danger{% else %}bg-secondary{% endif %} text-nowrap">{{ key }}</span>
+              <span class="small text-muted">{{ label }}</span>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        <p class="small text-muted mt-2"><span class="text-danger fw-semibold">*</span> = required for each row</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- STAGE 2 — Map Columns                                                 -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+{% if stage == 'map' %}
+<form method="post">
+  <input type="hidden" name="stage" value="import">
+  <input type="hidden" name="csv_content" value="{{ csv_content | e }}">
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent fw-semibold">
+      <i class="bi bi-arrows-collapse text-primary me-2"></i>
+      Map CSV Columns to Application Fields
+    </div>
+    <div class="card-body p-0">
+      <p class="px-3 pt-3 text-muted small mb-0">
+        For each column detected in your CSV, choose which application field it contains.
+        Select <em>"(ignore this column)"</em> to skip a column.
+        Columns marked <span class="text-danger fw-semibold">*</span> are required for every row.
+      </p>
+
+      <!-- Column mapping table -->
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th class="ps-3" style="width:5%">#</th>
+              <th style="width:25%">CSV Column Header</th>
+              <th style="width:30%">Map to Application Field</th>
+              <th>Preview (first {{ preview_rows | length }} rows)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for i, header in enumerate(headers) %}
+            <tr>
+              <td class="ps-3 text-muted small">{{ i + 1 }}</td>
+              <td class="fw-semibold">{{ header }}</td>
+              <td>
+                <select name="col_map_{{ i }}" class="form-select form-select-sm col-map-select">
+                  {% for key, label in import_fields %}
+                  <option value="{{ key }}"
+                    {% if guessed[i] == key %}selected{% endif %}>
+                    {{ label }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="small text-muted">
+                {% for row in preview_rows %}
+                  <span class="badge bg-light text-dark border me-1">
+                    {{ row[i] if i < row | length else '—' }}
+                  </span>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 justify-content-end">
+    <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Start Over
+    </a>
+    <button type="submit" class="btn btn-warning fw-semibold" id="importBtn">
+      <i class="bi bi-check-circle me-1"></i>Import Applications
+    </button>
+  </div>
+</form>
+
+<!-- Duplicate-field warning (client-side) -->
+<div class="modal fade" id="dupModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-warning">
+      <div class="modal-header bg-warning text-dark">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Duplicate Field Mapping</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">The following fields are mapped to more than one CSV column:</p>
+        <ul id="dupList" class="mb-0 text-danger fw-semibold"></ul>
+        <p class="mt-2 mb-0 text-muted small">Only the last mapped column will be used. Consider setting the others to "ignore".</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Go Back &amp; Fix</button>
+        <button type="button" class="btn btn-warning" id="forceImportBtn">Import Anyway</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- STAGE 3 — Results                                                     -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+{% if stage == 'result' %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-check2-circle text-success me-2"></i>Import Complete
+      </div>
+      <div class="card-body">
+        <div class="row g-3 text-center mb-3">
+          <div class="col-6">
+            <div class="fw-bold fs-3 text-success">{{ result.imported }}</div>
+            <div class="text-muted small">Rows Imported</div>
+          </div>
+          <div class="col-6">
+            <div class="fw-bold fs-3 {% if result.skipped > 0 %}text-warning{% else %}text-muted{% endif %}">
+              {{ result.skipped }}
+            </div>
+            <div class="text-muted small">Rows Skipped</div>
+          </div>
+        </div>
+
+        {% if result.errors %}
+        <div class="alert alert-warning mb-3">
+          <strong><i class="bi bi-exclamation-triangle me-1"></i>Skipped rows had the following issues:</strong>
+          <ul class="mb-0 mt-2 small">
+            {% for err in result.errors %}
+            <li>{{ err }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 justify-content-center">
+          <a href="{{ url_for('dashboard') }}" class="btn btn-warning fw-semibold">
+            <i class="bi bi-speedometer2 me-1"></i>Go to Dashboard
+          </a>
+          <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-upload me-1"></i>Import Another File
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Make enumerate available in Jinja for column mapping
+</script>
+
+{% if stage == 'map' %}
+<script>
+(function () {
+  var form       = document.querySelector('form[method="post"]');
+  var importBtn  = document.getElementById('importBtn');
+  var forceBtn   = document.getElementById('forceImportBtn');
+  var dupModal   = new bootstrap.Modal(document.getElementById('dupModal'));
+
+  function getDuplicates () {
+    var counts = {};
+    document.querySelectorAll('.col-map-select').forEach(function (sel) {
+      var v = sel.value;
+      if (!v) return;
+      counts[v] = (counts[v] || 0) + 1;
+    });
+    return Object.keys(counts).filter(function (k) { return counts[k] > 1; });
+  }
+
+  importBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    var dups = getDuplicates();
+    if (dups.length) {
+      var list = document.getElementById('dupList');
+      list.innerHTML = dups.map(function (d) { return '<li>' + d + '</li>'; }).join('');
+      dupModal.show();
+    } else {
+      form.submit();
+    }
+  });
+
+  forceBtn.addEventListener('click', function () {
+    dupModal.hide();
+    form.submit();
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

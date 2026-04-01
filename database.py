@@ -7,16 +7,31 @@ DB_PATH = os.environ.get(
     os.path.join(os.path.dirname(__file__), "jobs.db"),
 )
 
-STATUS_OPTIONS = [
-    "Select_Status", "Drafting_CV", "Submitted", "Online_assessment",
-    "Awaiting_Response", "Interview_scheduled", "Interview_inperson",
-    "Rejected", "Likely Rejected", "Offer_recieved", "Offer_rejected",
-    "Not Applying", "EOI",
+# Default statuses – used only to seed the statuses table on first run.
+DEFAULT_STATUSES = [
+    "Select_Status",
+    "Drafting_CV",
+    "Submitted",
+    "Online_Assessment",
+    "Awaiting_Response",
+    "Interview_Scheduled",
+    "Interview_In_Person",
+    "Rejected",
+    "Likely_Rejected",
+    "Offer_Received",
+    "Offer_Rejected",
+    "Not_Applying",
+    "EOI",
 ]
 
 PENDING_STATUSES = {
-    "Drafting_CV", "Submitted", "Online_assessment",
-    "Awaiting_Response", "Interview_scheduled", "Interview_inperson", "EOI",
+    "Drafting_CV",
+    "Submitted",
+    "Online_Assessment",
+    "Awaiting_Response",
+    "Interview_Scheduled",
+    "Interview_In_Person",
+    "EOI",
 }
 
 YEARS = [2023, 2024, 2025, 2026, 2027]
@@ -26,90 +41,239 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def _add_column_if_missing(c, table, column, definition):
+    """Safely add a column to an existing table (migration helper)."""
+    existing = [row[1] for row in c.execute(f"PRAGMA table_info({table})").fetchall()]
+    if column not in existing:
+        c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_db():
     conn = get_connection()
     c = conn.cursor()
 
+    # ── Applications ────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS applications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            job_desc TEXT,
-            team TEXT,
-            company TEXT,
-            date_applied TEXT,
-            status TEXT DEFAULT 'Select_Status',
-            cover_letter INTEGER DEFAULT 0,
-            resume INTEGER DEFAULT 1,
-            comment TEXT,
-            success_chance REAL DEFAULT 0,
-            link TEXT
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_desc          TEXT,
+            team              TEXT,
+            company           TEXT,
+            date_applied      TEXT,
+            status            TEXT DEFAULT 'Select_Status',
+            cover_letter      INTEGER DEFAULT 0,
+            resume            INTEGER DEFAULT 1,
+            comment           TEXT,
+            success_chance    REAL DEFAULT 0,
+            link              TEXT,
+            contact           TEXT,
+            additional_notes  TEXT,
+            status_changed_at TEXT
         )
     """)
 
+    # Migrations for databases that existed before these columns were added.
+    _add_column_if_missing(c, "applications", "contact",          "TEXT")
+    _add_column_if_missing(c, "applications", "additional_notes", "TEXT")
+    _add_column_if_missing(c, "applications", "status_changed_at","TEXT")
+
+    # ── Status history ───────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS status_history (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id INTEGER NOT NULL,
+            status         TEXT    NOT NULL,
+            changed_at     TEXT    NOT NULL,
+            FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+        )
+    """)
+
+    # ── Companies ────────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS companies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_name TEXT NOT NULL,
-            note TEXT,
-            applied_2023 INTEGER DEFAULT 0,
-            applied_2024 INTEGER DEFAULT 0,
-            applied_2025 INTEGER DEFAULT 0,
-            applied_2026 INTEGER DEFAULT 0,
-            applied_2027 INTEGER DEFAULT 0
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_name  TEXT NOT NULL,
+            note          TEXT,
+            applied_2023  INTEGER DEFAULT 0,
+            applied_2024  INTEGER DEFAULT 0,
+            applied_2025  INTEGER DEFAULT 0,
+            applied_2026  INTEGER DEFAULT 0,
+            applied_2027  INTEGER DEFAULT 0
+        )
+    """)
+
+    # ── Custom statuses ──────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS statuses (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    UNIQUE NOT NULL,
+            sort_order INTEGER DEFAULT 0
         )
     """)
 
     conn.commit()
 
-    # Seed only if tables are empty
-    row = c.execute("SELECT COUNT(*) FROM applications").fetchone()[0]
-    if row == 0:
+    # Seed statuses if empty.
+    if c.execute("SELECT COUNT(*) FROM statuses").fetchone()[0] == 0:
+        c.executemany(
+            "INSERT INTO statuses (name, sort_order) VALUES (?,?)",
+            [(name, i) for i, name in enumerate(DEFAULT_STATUSES)],
+        )
+        conn.commit()
+
+    # Migrate old status names to new normalised names in existing data.
+    _migrate_legacy_status_names(c)
+    conn.commit()
+
+    # Seed sample data only if tables are empty.
+    if c.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0:
         _seed_applications(c)
         conn.commit()
 
-    row = c.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
-    if row == 0:
+    if c.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
         _seed_companies(c)
         conn.commit()
 
     conn.close()
 
 
+def _migrate_legacy_status_names(c):
+    """Rename old inconsistently-capitalised status values to the new names."""
+    renames = {
+        "Offer_recieved":     "Offer_Received",
+        "Offer_received":     "Offer_Received",
+        "Offer_rejected":     "Offer_Rejected",
+        "Interview_scheduled":"Interview_Scheduled",
+        "Interview_inperson": "Interview_In_Person",
+        "Online_assessment":  "Online_Assessment",
+        "Awaiting_Response":  "Awaiting_Response",
+        "Likely Rejected":    "Likely_Rejected",
+        "Not Applying":       "Not_Applying",
+    }
+    for old, new in renames.items():
+        c.execute(
+            "UPDATE applications SET status=? WHERE status=?", (new, old)
+        )
+        c.execute(
+            "UPDATE status_history SET status=? WHERE status=?", (new, old)
+        )
+
+
+# ---------------------------------------------------------------------------
+# Status management
+# ---------------------------------------------------------------------------
+
+def get_status_options():
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT name FROM statuses ORDER BY sort_order, id"
+    ).fetchall()
+    conn.close()
+    return [r["name"] for r in rows]
+
+
+def add_status(name: str):
+    name = name.strip().replace(" ", "_")
+    if not name:
+        return False, "Status name cannot be empty."
+    conn = get_connection()
+    try:
+        max_order = conn.execute("SELECT MAX(sort_order) FROM statuses").fetchone()[0] or 0
+        conn.execute(
+            "INSERT INTO statuses (name, sort_order) VALUES (?,?)",
+            (name, max_order + 1),
+        )
+        conn.commit()
+        return True, f"Status '{name}' added."
+    except sqlite3.IntegrityError:
+        return False, f"Status '{name}' already exists."
+    finally:
+        conn.close()
+
+
+def delete_status(name: str):
+    """Delete a custom status. Prevents deletion if any application uses it."""
+    conn = get_connection()
+    in_use = conn.execute(
+        "SELECT COUNT(*) FROM applications WHERE status=?", (name,)
+    ).fetchone()[0]
+    if in_use:
+        conn.close()
+        return False, f"Cannot delete '{name}' — {in_use} application(s) use it."
+    conn.execute("DELETE FROM statuses WHERE name=?", (name,))
+    conn.commit()
+    conn.close()
+    return True, f"Status '{name}' deleted."
+
+
+# ---------------------------------------------------------------------------
+# Seed helpers
+# ---------------------------------------------------------------------------
+
 def _seed_applications(c):
-    # Example applications demonstrating each key status.
-    # Replace or delete these rows and add your own real applications.
+    now = datetime.now().isoformat(timespec="seconds")
     example_apps = [
-        # (job_desc, team, company, date_applied, status, cover_letter, resume, comment, success_chance, link)
-        ("Graduate Engineer", "Electrical Team", "Acme Engineering", "2025-03-10", "Submitted", 1, 1, "Applied via company portal", 0.3, "https://example.com/jobs/1"),
-        ("Graduate Engineer", "Infrastructure", "Beta Consulting", "2025-03-15", "Interview_scheduled", 1, 1, "Phone screen passed, technical interview on 2025-03-28", 0.5, ""),
-        ("Internship", "Research & Development", "Gamma Industries", "2024-07-20", "Offer_recieved", 1, 1, "Verbal offer received, awaiting written contract", 0.9, ""),
-        ("Internship", "Civil Projects", "Delta Constructions", "2024-08-01", "Rejected", 1, 1, "", 0, ""),
-        ("Graduate Engineer", "", "Epsilon Energy", "2025-02-14", "Not Applying", 0, 1, "Position requires 2+ years experience", 0, "https://example.com/jobs/5"),
+        # (job_desc, team, company, date_applied, status, cover_letter, resume,
+        #  comment, success_chance, link, contact, additional_notes, status_changed_at)
+        (
+            "Graduate Engineer", "Electrical Team", "Acme Engineering",
+            "2025-03-10", "Submitted", 1, 1,
+            "Applied via company portal", 0.3,
+            "https://example.com/jobs/1", "", "", now,
+        ),
+        (
+            "Graduate Engineer", "Infrastructure", "Beta Consulting",
+            "2025-03-15", "Interview_Scheduled", 1, 1,
+            "Phone screen passed, technical interview on 2025-03-28", 0.5,
+            "", "Jane Smith (recruiter)", "", now,
+        ),
+        (
+            "Internship", "Research & Development", "Gamma Industries",
+            "2024-07-20", "Offer_Received", 1, 1,
+            "Verbal offer received, awaiting written contract", 0.9,
+            "", "", "", now,
+        ),
+        (
+            "Internship", "Civil Projects", "Delta Constructions",
+            "2024-08-01", "Rejected", 1, 1,
+            "", 0, "", "", "", now,
+        ),
+        (
+            "Graduate Engineer", "", "Epsilon Energy",
+            "2025-02-14", "Not_Applying", 0, 1,
+            "Position requires 2+ years experience", 0,
+            "https://example.com/jobs/5", "", "", now,
+        ),
     ]
 
     sql = """INSERT INTO applications
              (job_desc, team, company, date_applied, status,
-               cover_letter, resume, comment, success_chance, link)
-             VALUES (?,?,?,?,?,?,?,?,?,?)"""
-
+              cover_letter, resume, comment, success_chance, link,
+              contact, additional_notes, status_changed_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"""
     c.executemany(sql, example_apps)
+
+    # Seed initial status history entries.
+    for row in c.execute("SELECT id, status, date_applied FROM applications").fetchall():
+        applied_dt = row["date_applied"] + "T00:00:00"
+        c.execute(
+            "INSERT INTO status_history (application_id, status, changed_at) VALUES (?,?,?)",
+            (row["id"], row["status"], applied_dt),
+        )
 
 
 def _seed_companies(c):
-    # Example companies covering different sectors.
-    # Replace or delete these rows and add your own companies.
     example_companies = [
-        # (company_name, note, applied_2023, applied_2024, applied_2025, applied_2026, applied_2027)
-        ("Acme Engineering", "Engineering Consulting", 0, 0, 1, 0, 0),
-        ("Beta Consulting", "Management Consulting", 0, 0, 1, 0, 0),
-        ("Gamma Industries", "Manufacturing", 0, 1, 0, 0, 0),
-        ("Delta Constructions", "Civil Construction", 0, 1, 0, 0, 0),
-        ("Epsilon Energy", "Energy Provider", 0, 0, 1, 0, 0),
+        ("Acme Engineering",    "Engineering Consulting", 0, 0, 1, 0, 0),
+        ("Beta Consulting",     "Management Consulting",  0, 0, 1, 0, 0),
+        ("Gamma Industries",    "Manufacturing",          0, 1, 0, 0, 0),
+        ("Delta Constructions", "Civil Construction",     0, 1, 0, 0, 0),
+        ("Epsilon Energy",      "Energy Provider",        0, 0, 1, 0, 0),
     ]
-
     c.executemany(
         """INSERT INTO companies
            (company_name, note, applied_2023, applied_2024,
@@ -118,13 +282,13 @@ def _seed_companies(c):
         example_companies,
     )
 
+
 # ---------------------------------------------------------------------------
-# Query helpers
+# Application CRUD
 # ---------------------------------------------------------------------------
 
 def get_applications(year=None, status=None):
     conn = get_connection()
-    c = conn.cursor()
     sql = "SELECT * FROM applications WHERE 1=1"
     params = []
     if year:
@@ -134,20 +298,46 @@ def get_applications(year=None, status=None):
         sql += " AND status = ?"
         params.append(status)
     sql += " ORDER BY date_applied DESC"
-    rows = c.execute(sql, params).fetchall()
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [_enrich(dict(r)) for r in rows]
 
 
 def get_application(app_id):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM applications WHERE id=?", (app_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM applications WHERE id=?", (app_id,)
+    ).fetchone()
     conn.close()
     return _enrich(dict(row)) if row else None
 
 
+def get_application_timeline(app_id):
+    """Return status history entries for a single application, oldest first."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT status, changed_at FROM status_history "
+        "WHERE application_id=? ORDER BY changed_at ASC",
+        (app_id,),
+    ).fetchall()
+    conn.close()
+    history = [dict(r) for r in rows]
+    # Compute days between consecutive entries.
+    for i, entry in enumerate(history):
+        if i == 0:
+            entry["days_since_prev"] = None
+        else:
+            try:
+                prev = datetime.fromisoformat(history[i - 1]["changed_at"])
+                curr = datetime.fromisoformat(entry["changed_at"])
+                entry["days_since_prev"] = (curr - prev).days
+            except Exception:
+                entry["days_since_prev"] = None
+    return history
+
+
 def _enrich(app):
-    """Add computed 'duration' field."""
+    """Add computed 'duration' field (days since applied)."""
     try:
         d = datetime.strptime(app["date_applied"], "%Y-%m-%d").date()
         app["duration"] = (date.today() - d).days
@@ -157,12 +347,14 @@ def _enrich(app):
 
 
 def add_application(data):
+    now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
-    conn.execute(
+    cur = conn.execute(
         """INSERT INTO applications
            (job_desc, team, company, date_applied, status,
-            cover_letter, resume, comment, success_chance, link)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            cover_letter, resume, comment, success_chance, link,
+            contact, additional_notes, status_changed_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
@@ -174,33 +366,57 @@ def add_application(data):
             data.get("comment", ""),
             float(data.get("success_chance", 0) or 0),
             data.get("link", ""),
+            data.get("contact", ""),
+            data.get("additional_notes", ""),
+            now,
         ),
+    )
+    app_id = cur.lastrowid
+    conn.execute(
+        "INSERT INTO status_history (application_id, status, changed_at) VALUES (?,?,?)",
+        (app_id, data.get("status", "Select_Status"), now),
     )
     conn.commit()
     conn.close()
+    return app_id
 
 
 def update_application(app_id, data):
+    now = datetime.now().isoformat(timespec="seconds")
+    existing = get_application(app_id)
+    new_status = data.get("status", "Select_Status")
     conn = get_connection()
     conn.execute(
         """UPDATE applications SET
            job_desc=?, team=?, company=?, date_applied=?, status=?,
-           cover_letter=?, resume=?, comment=?, success_chance=?, link=?
+           cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
+           contact=?, additional_notes=?,
+           status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END
            WHERE id=?""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
             data.get("company", ""),
             data.get("date_applied", ""),
-            data.get("status", "Select_Status"),
+            new_status,
             1 if data.get("cover_letter") else 0,
             1 if data.get("resume") else 0,
             data.get("comment", ""),
             float(data.get("success_chance", 0) or 0),
             data.get("link", ""),
+            data.get("contact", ""),
+            data.get("additional_notes", ""),
+            new_status,
+            now,
             app_id,
         ),
     )
+    # Record status change in history only when the status actually changes.
+    if existing and existing.get("status") != new_status:
+        conn.execute(
+            "INSERT INTO status_history (application_id, status, changed_at) VALUES (?,?,?)",
+            (app_id, new_status, now),
+        )
     conn.commit()
     conn.close()
 
@@ -210,6 +426,51 @@ def delete_application(app_id):
     conn.execute("DELETE FROM applications WHERE id=?", (app_id,))
     conn.commit()
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# CSV bulk import
+# ---------------------------------------------------------------------------
+
+def bulk_import_applications(rows: list[dict]) -> dict:
+    """
+    Import a list of dicts representing applications.
+    Returns {"imported": int, "skipped": int, "errors": list[str]}.
+    """
+    imported = 0
+    errors = []
+    for i, row in enumerate(rows, start=1):
+        company = (row.get("company") or "").strip()
+        if not company:
+            errors.append(f"Row {i}: 'company' is required — row skipped.")
+            continue
+        date_applied = (row.get("date_applied") or "").strip()
+        if not date_applied:
+            errors.append(f"Row {i} ({company}): 'date_applied' is required — row skipped.")
+            continue
+        # Normalise date to YYYY-MM-DD if possible.
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
+            try:
+                date_applied = datetime.strptime(date_applied, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                pass
+        add_application({
+            "job_desc":        row.get("job_desc", ""),
+            "team":            row.get("team", ""),
+            "company":         company,
+            "date_applied":    date_applied,
+            "status":          row.get("status", "Select_Status"),
+            "cover_letter":    row.get("cover_letter", ""),
+            "resume":          row.get("resume", "1"),
+            "comment":         row.get("comment", ""),
+            "success_chance":  row.get("success_chance", "0"),
+            "link":            row.get("link", ""),
+            "contact":         row.get("contact", ""),
+            "additional_notes":row.get("additional_notes", ""),
+        })
+        imported += 1
+    return {"imported": imported, "skipped": len(rows) - imported, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +486,9 @@ def get_companies():
 
 def get_company(company_id):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM companies WHERE id=?", (company_id,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM companies WHERE id=?", (company_id,)
+    ).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -290,25 +553,25 @@ def get_stats(year=None):
     total = len(apps)
     submitted = sum(
         1 for a in apps
-        if a["status"] not in ("Select_Status", "Drafting_CV", "Not Applying")
+        if a["status"] not in ("Select_Status", "Drafting_CV", "Not_Applying")
     )
     rejected = sum(1 for a in apps if "Rejected" in a["status"])
-    offers = sum(1 for a in apps if a["status"] == "Offer_recieved")
+    offers = sum(1 for a in apps if a["status"] == "Offer_Received")
     success_rate = round((offers / submitted * 100), 1) if submitted else 0
     pending = [a for a in apps if a["status"] in PENDING_STATUSES]
     return {
-        "total": total,
-        "submitted": submitted,
-        "rejected": rejected,
-        "offers": offers,
+        "total":        total,
+        "submitted":    submitted,
+        "rejected":     rejected,
+        "offers":       offers,
         "success_rate": success_rate,
-        "pending": pending,
+        "pending":      pending,
     }
 
 
 def get_status_counts(year=None):
     apps = get_applications(year=year)
-    counts = {}
+    counts: dict = {}
     for a in apps:
         counts[a["status"]] = counts.get(a["status"], 0) + 1
     return counts
@@ -334,21 +597,21 @@ def get_success_rate_per_year():
         apps = get_applications(year=y)
         submitted = sum(
             1 for a in apps
-            if a["status"] not in ("Select_Status", "Drafting_CV", "Not Applying")
+            if a["status"] not in ("Select_Status", "Drafting_CV", "Not_Applying")
         )
-        offers = sum(1 for a in apps if a["status"] == "Offer_recieved")
+        offers = sum(1 for a in apps if a["status"] == "Offer_Received")
         result[str(y)] = round((offers / submitted * 100), 1) if submitted else 0
     return result
 
 
 def get_company_note_frequency():
-    """Return top notes/sectors from companies table."""
+    """Return top sectors/notes from the companies table."""
     conn = get_connection()
     rows = conn.execute(
         "SELECT note FROM companies WHERE note IS NOT NULL AND note != ''"
     ).fetchall()
     conn.close()
-    freq = {}
+    freq: dict = {}
     for r in rows:
         note = r["note"].strip()
         if note:
