@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Settings — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+    <h4 class="mb-4"><i class="bi bi-gear-fill text-secondary me-2"></i>Settings</h4>
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-bell me-1"></i>Reminder Notifications
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('settings') }}">
+
+          <div class="mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="reminder_enabled"
+                     name="reminder_enabled" role="switch"
+                     {% if settings.get('reminder_enabled', '1') == '1' %}checked{% endif %}>
+              <label class="form-check-label" for="reminder_enabled">
+                Enable reminder notifications
+              </label>
+            </div>
+            <div class="form-text">
+              When enabled, the inbox will receive a reminder for each application
+              that has been in a pending status longer than the threshold below.
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label for="reminder_days" class="form-label fw-semibold">
+              Reminder threshold (days)
+            </label>
+            <input type="number" class="form-control" id="reminder_days"
+                   name="reminder_days" min="1" max="365"
+                   value="{{ settings.get('reminder_days', '3') }}"
+                   style="max-width:120px;">
+            <div class="form-text">
+              Default: <strong>3</strong> days. A reminder is created once per day per pending application
+              that exceeds this threshold.
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i>Save Settings
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-info-circle me-1"></i>About Reminders
+      </div>
+      <div class="card-body text-muted small">
+        <p>The built-in reminder system uses a background scheduler (APScheduler) that runs
+        inside the Flask server process. It checks for pending applications every hour and adds
+        a message to the <a href="{{ url_for('inbox') }}">Inbox</a> when the threshold is exceeded.</p>
+        <p class="mb-0">No external services, emails, or browser extensions are required. Reminders
+        are stored in the local database and visible only within this app.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

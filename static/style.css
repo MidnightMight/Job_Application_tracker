@@ -140,3 +140,9 @@ footer { background-color: #fff; margin-top: 3rem; }
   .stat-value { font-size: 1.6rem; }
   .stat-icon  { font-size: 1.4rem; }
 }
+
+/* ── Inbox / reminders ──────────────────────────────────────────────────── */
+.reminder-unread {
+  border-left: 4px solid #ffc107 !important;
+  background-color: rgba(255, 193, 7, .05);
+}
