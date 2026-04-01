@@ -58,6 +58,17 @@ logic, requirements, and design decisions originate from the repository owner.
   the server
 - **Status history** — every status change is recorded with a timestamp so the
   timeline is always accurate
+- **Reminder inbox** — background scheduler (APScheduler) flags applications that
+  have been pending longer than a configurable number of days; a bell icon with
+  an unread badge sits in the navigation bar
+- **Settings page** — configure the reminder threshold (default 3 days) and
+  toggle reminders on/off
+- **Export & backup** — download applications or the company list as CSV (with
+  optional filters), or download a full copy of the SQLite database for migration
+  to another device
+- **One-command launchers** — `launch.sh` (Linux / macOS / Unix) and
+  `launch.bat` (Windows) handle venv creation, dependency install, and server
+  start in a single step
 
 ---
 
@@ -70,13 +81,83 @@ git clone https://github.com/MidnightMight/Job_Application_tracker.git
 cd Job_Application_tracker
 ```
 
-### 2 — Create and Activate a Virtual Environment
+---
 
-**macOS / Linux**
+### 2 — Launch the App
+
+Pick the method that matches your operating system.
+
+---
+
+#### 🐧 Linux / 🍎 macOS / 🐡 Unix — `launch.sh`
+
+```bash
+bash launch.sh
+```
+
+> **Make it executable once** so you can run it directly or double-click it in
+> a file manager that opens a terminal (e.g. Nautilus, Finder with a terminal app):
+> ```bash
+> chmod +x launch.sh
+> ./launch.sh
+> ```
+
+The script automatically:
+1. Detects your OS (`Linux`, `macOS`, `FreeBSD`, `OpenBSD`, `NetBSD`, `Solaris` …)
+2. Finds the right Python 3 interpreter (`python3`, `python3.13` … `python3.10`, `python`)
+3. Creates `venv/` if it does not exist — with a platform-specific install hint on failure
+4. Activates the virtual environment
+5. Installs / verifies dependencies from `requirements.txt`
+6. Opens `http://localhost:5000` in your default browser (requires a display)
+7. Starts the server — press **Ctrl+C** to stop
+
+**Python not found?** Platform-specific install commands:
+
+| Platform | Command |
+|---|---|
+| Ubuntu / Debian | `sudo apt install python3 python3-venv` |
+| Fedora / RHEL | `sudo dnf install python3` |
+| Arch Linux | `sudo pacman -S python` |
+| macOS | `brew install python` or [python.org](https://www.python.org/downloads/) |
+| FreeBSD | `pkg install python3` |
+| OpenBSD / NetBSD | `pkg_add python3` |
+
+---
+
+#### 🪟 Windows — `launch.bat`
+
+**Double-click `launch.bat`** in File Explorer, or run it from Command Prompt /
+PowerShell.
+
+The script automatically:
+1. Tries `py` (Python Launcher for Windows), then `python3`, then `python`
+2. Creates `venv\` if it does not exist
+3. Activates the virtual environment
+4. Installs / verifies dependencies from `requirements.txt`
+5. Opens `http://localhost:5000` in your default browser
+6. Starts the server — close the window or press **Ctrl+C** to stop
+
+**Python not found?** Three ways to install it:
+
+| Method | How |
+|---|---|
+| Microsoft Store | Search **"Python 3"** — easiest, no PATH setup needed |
+| python.org installer | [python.org/downloads](https://www.python.org/downloads/) — tick **"Add Python to PATH"** |
+| winget | `winget install Python.Python.3` |
+
+---
+
+#### ⚙️ Manual Setup (any platform)
+
+If you prefer to manage the virtual environment yourself:
+
+**macOS / Linux / Unix**
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
+pip install -r requirements.txt
+python app.py
 ```
 
 **Windows (Command Prompt)**
@@ -84,6 +165,8 @@ source venv/bin/activate
 ```cmd
 python -m venv venv
 venv\Scripts\activate.bat
+pip install -r requirements.txt
+python app.py
 ```
 
 **Windows (PowerShell)**
@@ -91,48 +174,89 @@ venv\Scripts\activate.bat
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python app.py
 ```
 
-> If PowerShell blocks the script, run:
+> If PowerShell blocks the activation script, run first:
 > `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
 
-You should see `(venv)` at the start of your terminal prompt once activated.
+---
 
-### 3 — Install Dependencies
+### 3 — Open in Your Browser
 
-```bash
-pip install -r requirements.txt
 ```
-
-This installs Flask — the only runtime dependency.
-
-### 4 — Run the Application
-
-```bash
-python app.py
+http://localhost:5000
 ```
 
 The first run automatically creates `jobs.db` in the project folder and seeds it
 with five example applications and companies so you can explore the interface
 straight away.
 
-### 5 — Open in Your Browser
+---
 
+### Custom Port
+
+All launch methods respect the `PORT` environment variable (default `5000`):
+
+**Linux / macOS / Unix**
+```bash
+PORT=8080 bash launch.sh
 ```
-http://localhost:5000
+
+**Windows (Command Prompt)**
+```cmd
+set PORT=8080
+launch.bat
+```
+
+**Manual**
+```bash
+PORT=8080 python app.py          # Linux / macOS
+set PORT=8080 && python app.py   # Windows CMD
 ```
 
 ---
 
 ## Stopping the Server
 
-Press `Ctrl + C` in the terminal where the server is running.
+Press `Ctrl + C` in the terminal / Command Prompt window where the server is running.
 
-## Deactivating the Virtual Environment
+## Deactivating the Virtual Environment (manual setup only)
 
 ```bash
 deactivate
 ```
+
+---
+
+## Reminder Inbox
+
+A background scheduler checks for pending applications every hour. When an
+application has been in a pending status (e.g. `Submitted`, `Awaiting_Response`)
+for longer than the configured threshold, a reminder is added to the inbox.
+
+- The **bell icon** in the navigation bar shows a red badge with the unread count.
+- Click **Inbox** to view, follow, or dismiss reminders.
+- Configure the threshold (default **3 days**) and toggle reminders on/off via
+  **Settings** in the navigation bar.
+
+See [`FEATURES.md`](FEATURES.md) for full technical details.
+
+---
+
+## Export & Backup
+
+Click **Export** in the navigation bar to:
+
+| Export | Format | Filters available |
+|---|---|---|
+| Applications | CSV | Year, status, company name |
+| Company list | CSV | — |
+| Full database | SQLite `.db` | — |
+
+The full database download (`jobs_backup.db`) can be used to migrate to a new
+device — copy the file to the new installation folder and rename it `jobs.db`.
 
 ---
 
@@ -143,7 +267,10 @@ Job_Application_tracker/
 ├── app.py                    Flask application — all routes
 ├── database.py               SQLite schema, migrations, seed data, query helpers
 ├── run_script.py             CLI stats viewer and CSV exporter
-├── requirements.txt          Python dependencies (Flask only)
+├── requirements.txt          Python dependencies (Flask, APScheduler)
+├── launch.sh                 One-command launcher — Linux / macOS / Unix
+├── launch.bat                One-command launcher — Windows
+├── FEATURES.md               Extended feature documentation
 ├── LICENSE                   MIT Licence
 ├── README.md                 This file
 ├── templates/
@@ -155,7 +282,10 @@ Job_Application_tracker/
 │   ├── csv_import.html       Bulk CSV import with column-mapping UI
 │   ├── status_manager.html   Add / remove custom statuses
 │   ├── companies.html        Company tracker with sector chart
-│   └── company_form.html     Add / edit company
+│   ├── company_form.html     Add / edit company
+│   ├── inbox.html            Reminder inbox
+│   ├── settings.html         App settings (reminder threshold etc.)
+│   └── export.html           Export and backup page
 └── static/
     └── style.css             Custom styles, status-coloured badges, timeline
 ```
@@ -262,27 +392,18 @@ Custom statuses can be added or removed at any time via the **Statuses** page.
 
 ---
 
-## Feasibility Notes — Ways to Make This Easier to Use
+## Feasibility Notes — Future Ideas
 
-The following improvements were considered during development and are worth
-exploring in a future update:
-
-- **One-command launcher script** — a small shell or batch script that creates
-  the venv, installs dependencies and starts the server in a single step,
-  removing the need to use the terminal for day-to-day use.
 - **Packaged executable** — tools such as PyInstaller or Nuitka can bundle the
   entire application (Python runtime included) into a single `.exe` or `.app`
   binary, making installation completely dependency-free for end users.
-- **Browser extension or bookmarklet** — a simple browser extension could
-  pre-fill the Add Application form by reading the job title, company and URL
-  from whatever job board the user is viewing, dramatically reducing manual data
-  entry.
+- **Browser extension** — a Manifest V3 extension could pre-fill the Add
+  Application form by reading the job title, company and URL from job boards
+  (LinkedIn, Seek, Indeed). See [`FEATURES.md`](FEATURES.md#6-browser-extension-research)
+  for a full research summary and recommended architecture.
 - **Email / calendar integration** — parsing interview confirmation emails and
   automatically updating the application status is technically feasible using
   the Gmail or Outlook API, though it requires OAuth setup.
 - **Progressive Web App (PWA)** — adding a `manifest.json` and a minimal service
   worker would let users install the tracker to their home screen on mobile
   devices, giving it an app-like feel without any app store involvement.
-- **Automated reminders** — a background scheduler (e.g. APScheduler) could
-  send a desktop notification or email when an application has been in a pending
-  status for more than a configurable number of days.
