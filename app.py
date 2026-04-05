@@ -226,7 +226,7 @@ def bulk_action():
     raw_ids = request.form.getlist("selected_ids")
     try:
         selected_ids = [int(x) for x in raw_ids if str(x).isdigit()]
-    except Exception:
+    except ValueError:
         selected_ids = []
 
     redirect_kwargs: dict = {"year": year}

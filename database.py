@@ -486,6 +486,7 @@ def bulk_delete_applications(ids: list) -> int:
     """Delete multiple applications by ID. Returns the number of rows deleted."""
     if not ids:
         return 0
+    # placeholders is built from len(ids) — no user data is interpolated into SQL.
     placeholders = ",".join("?" for _ in ids)
     conn = get_connection()
     conn.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", ids)
@@ -503,12 +504,19 @@ def bulk_update_applications(ids: list, field: str, value) -> int:
     For status updates this also records a status_history entry for each
     application whose status actually changes.
     Returns the number of rows updated.
+
+    Security notes:
+    - ``field`` is validated against ``_BULK_UPDATE_FIELDS`` before use in SQL.
+    - ``placeholders`` is constructed solely from ``len(ids)`` — no user data
+      is ever interpolated directly into the SQL string.
+    - All actual values are passed as bound parameters (?).
     """
     if not ids:
         return 0
     if field not in _BULK_UPDATE_FIELDS:
         raise ValueError(f"bulk_update_applications: unknown field '{field}'")
 
+    # Safe: placeholders contains only literal '?' characters.
     placeholders = ",".join("?" for _ in ids)
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
@@ -522,6 +530,7 @@ def bulk_update_applications(ids: list, field: str, value) -> int:
                 ids,
             ).fetchall()
         }
+        # Safe: field is validated above; placeholders is literal '?' chars.
         conn.execute(
             f"UPDATE applications SET status=?, status_changed_at=? "
             f"WHERE id IN ({placeholders})",
@@ -535,6 +544,8 @@ def bulk_update_applications(ids: list, field: str, value) -> int:
                     (app_id, value, now),
                 )
     else:
+        # Safe: field is validated against _BULK_UPDATE_FIELDS allowlist above;
+        # placeholders contains only literal '?' characters.
         conn.execute(
             f"UPDATE applications SET {field}=? WHERE id IN ({placeholders})",
             (value, *ids),
