@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    image: job-application-tracker
+    ports:
+      - "5000:5000"
+    volumes:
+      - db_data:/data
+    environment:
+      # REQUIRED: set a strong, unique secret key before deploying
+      - SECRET_KEY=${SECRET_KEY:?Set the SECRET_KEY environment variable before starting}
+      - FLASK_DEBUG=0
+      - PORT=5000
+      - DB_PATH=/data/jobs.db
+
+volumes:
+  db_data:
