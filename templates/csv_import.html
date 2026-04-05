@@ -252,8 +252,8 @@
             <div class="text-muted small">Duplicates Skipped</div>
           </div>
           <div class="col-4">
-            <div class="fw-bold fs-3 {% if result.skipped - result.duplicates > 0 %}text-warning{% else %}text-muted{% endif %}">
-              {{ result.skipped - result.duplicates }}
+            <div class="fw-bold fs-3 {% if result.other_skipped > 0 %}text-warning{% else %}text-muted{% endif %}">
+              {{ result.other_skipped }}
             </div>
             <div class="text-muted small">Other Rows Skipped</div>
           </div>

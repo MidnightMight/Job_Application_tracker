@@ -500,9 +500,19 @@ def find_duplicate_applications(company: str, job_desc: str, date_applied: str) 
 def bulk_import_applications(rows: list[dict]) -> dict:
     """
     Import a list of dicts representing applications.
-    Returns {"imported": int, "skipped": int, "duplicates": int, "errors": list[str]}.
+    Returns {"imported": int, "skipped": int, "duplicates": int,
+             "other_skipped": int, "errors": list[str]}.
     Rows that are exact duplicates of existing records are skipped automatically.
     """
+    # Pre-fetch all existing (company, job_desc, date_applied) keys in one query
+    # to avoid an N+1 query pattern during the loop.
+    conn = get_connection()
+    existing_rows = conn.execute(
+        "SELECT LOWER(TRIM(company)), LOWER(TRIM(job_desc)), date_applied FROM applications"
+    ).fetchall()
+    conn.close()
+    existing_keys = {(r[0], r[1], r[2]) for r in existing_rows}
+
     imported = 0
     duplicates = 0
     errors = []
@@ -523,7 +533,8 @@ def bulk_import_applications(rows: list[dict]) -> dict:
             except ValueError:
                 pass
         job_desc = (row.get("job_desc") or "").strip()
-        if find_duplicate_applications(company, job_desc, date_applied):
+        lookup_key = (company.lower(), job_desc.lower(), date_applied)
+        if lookup_key in existing_keys:
             errors.append(
                 f"Row {i} ({company}): duplicate application already in database — row skipped."
             )
@@ -543,12 +554,17 @@ def bulk_import_applications(rows: list[dict]) -> dict:
             "contact":         row.get("contact", ""),
             "additional_notes":row.get("additional_notes", ""),
         })
+        # Track the newly added row so subsequent rows in the same import
+        # are also treated as duplicates if they match.
+        existing_keys.add(lookup_key)
         imported += 1
+    total_skipped = len(rows) - imported
     return {
-        "imported":   imported,
-        "skipped":    len(rows) - imported,
-        "duplicates": duplicates,
-        "errors":     errors,
+        "imported":      imported,
+        "skipped":       total_skipped,
+        "duplicates":    duplicates,
+        "other_skipped": total_skipped - duplicates,
+        "errors":        errors,
     }
 
 
