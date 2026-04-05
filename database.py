@@ -475,6 +475,24 @@ def delete_application(app_id):
     conn.close()
 
 
+def find_duplicate_applications(company: str, job_desc: str, date_applied: str) -> list[dict]:
+    """Return existing applications that match company, job_desc, and date_applied.
+
+    Comparison is case-insensitive and ignores leading/trailing whitespace.
+    """
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT id, company, job_desc, date_applied, status
+           FROM applications
+           WHERE LOWER(TRIM(company))     = LOWER(TRIM(?))
+             AND LOWER(TRIM(job_desc))    = LOWER(TRIM(?))
+             AND date_applied             = ?""",
+        (company, job_desc, date_applied),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # CSV bulk import
 # ---------------------------------------------------------------------------
@@ -482,9 +500,11 @@ def delete_application(app_id):
 def bulk_import_applications(rows: list[dict]) -> dict:
     """
     Import a list of dicts representing applications.
-    Returns {"imported": int, "skipped": int, "errors": list[str]}.
+    Returns {"imported": int, "skipped": int, "duplicates": int, "errors": list[str]}.
+    Rows that are exact duplicates of existing records are skipped automatically.
     """
     imported = 0
+    duplicates = 0
     errors = []
     for i, row in enumerate(rows, start=1):
         company = (row.get("company") or "").strip()
@@ -502,8 +522,15 @@ def bulk_import_applications(rows: list[dict]) -> dict:
                 break
             except ValueError:
                 pass
+        job_desc = (row.get("job_desc") or "").strip()
+        if find_duplicate_applications(company, job_desc, date_applied):
+            errors.append(
+                f"Row {i} ({company}): duplicate application already in database — row skipped."
+            )
+            duplicates += 1
+            continue
         add_application({
-            "job_desc":        row.get("job_desc", ""),
+            "job_desc":        job_desc,
             "team":            row.get("team", ""),
             "company":         company,
             "date_applied":    date_applied,
@@ -517,7 +544,12 @@ def bulk_import_applications(rows: list[dict]) -> dict:
             "additional_notes":row.get("additional_notes", ""),
         })
         imported += 1
-    return {"imported": imported, "skipped": len(rows) - imported, "errors": errors}
+    return {
+        "imported":   imported,
+        "skipped":    len(rows) - imported,
+        "duplicates": duplicates,
+        "errors":     errors,
+    }
 
 
 # ---------------------------------------------------------------------------

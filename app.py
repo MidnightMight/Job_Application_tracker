@@ -3,6 +3,7 @@ import csv
 import io
 import os
 import shutil
+from types import SimpleNamespace
 
 from flask import (
     Flask, flash, redirect, render_template,
@@ -133,6 +134,40 @@ def application_detail(app_id):
 @app.route("/application/add", methods=["GET", "POST"])
 def add_application():
     if request.method == "POST":
+        company     = request.form.get("company", "").strip()
+        job_desc    = request.form.get("job_desc", "").strip()
+        date_applied = request.form.get("date_applied", "").strip()
+
+        # Check for duplicates unless the user has explicitly confirmed.
+        if not request.form.get("force_add"):
+            duplicates = db.find_duplicate_applications(company, job_desc, date_applied)
+            if duplicates:
+                # Re-render the form with the submitted values preserved and
+                # trigger the duplicate-warning modal.
+                form_data = SimpleNamespace(
+                    job_desc=job_desc,
+                    company=company,
+                    team=request.form.get("team", ""),
+                    contact=request.form.get("contact", ""),
+                    date_applied=date_applied,
+                    status=request.form.get("status", "Select_Status"),
+                    success_chance=request.form.get("success_chance", "0"),
+                    link=request.form.get("link", ""),
+                    cover_letter=1 if request.form.get("cover_letter") else 0,
+                    resume=1 if request.form.get("resume") else 0,
+                    comment=request.form.get("comment", ""),
+                    additional_notes=request.form.get("additional_notes", ""),
+                )
+                return render_template(
+                    "application_form.html",
+                    app=form_data,
+                    companies=db.get_companies(),
+                    status_options=db.get_status_options(),
+                    action="Add",
+                    duplicate_warning=True,
+                    duplicates=duplicates,
+                )
+
         db.add_application(request.form)
         flash("Application added.", "success")
         year = request.form.get("date_applied", "")[:4] or "2025"
@@ -392,9 +427,12 @@ def import_csv():
             rows_to_import.append(record)
 
         result = db.bulk_import_applications(rows_to_import)
+        dup_note = (
+            f", {result['duplicates']} duplicate(s) skipped" if result["duplicates"] else ""
+        )
         flash(
             f"Import complete — {result['imported']} added, "
-            f"{result['skipped']} skipped.",
+            f"{result['skipped']} skipped{dup_note}.",
             "success" if not result["errors"] else "warning",
         )
         return render_template(

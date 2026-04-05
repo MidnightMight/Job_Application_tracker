@@ -149,6 +149,8 @@
               {{ action }} Application
             </button>
           </div>
+
+          <input type="hidden" name="force_add" id="force_add" value="0">
         </form>
       </div>
     </div>
@@ -177,6 +179,48 @@
     </div>
   </div>
 </div>
+
+<!-- Duplicate warning modal -->
+{% if duplicate_warning %}
+<div class="modal fade" id="duplicateModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content border-danger">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="bi bi-exclamation-octagon-fill me-2"></i>Duplicate Application Detected
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">An application with the same company, role, and date already exists:</p>
+        <ul class="mb-3">
+          {% for d in duplicates %}
+          <li>
+            <strong>{{ d.company }}</strong> — {{ d.job_desc or '(no role)' }}
+            on {{ d.date_applied }}
+            <span class="badge bg-secondary ms-1">{{ d.status | replace('_', ' ') }}</span>
+            <a href="{{ url_for('application_detail', app_id=d.id) }}" target="_blank"
+               class="ms-1 small text-primary">View</a>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="mb-0 text-muted small">
+          This may be a duplicate caused by accidentally submitting the form twice.
+          Click <strong>Add Anyway</strong> only if this is genuinely a new application.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <a href="javascript:history.back()" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>Cancel
+        </a>
+        <button type="button" class="btn btn-danger fw-semibold" id="forceAddBtn">
+          <i class="bi bi-plus-circle me-1"></i>Add Anyway
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -212,5 +256,21 @@ document.getElementById('submitBtn').addEventListener('click', function () {
   }
   document.getElementById('appForm').submit();
 });
+
+// Force-add: set the hidden field and re-submit.
+var forceAddBtn = document.getElementById('forceAddBtn');
+if (forceAddBtn) {
+  forceAddBtn.addEventListener('click', function () {
+    document.getElementById('force_add').value = '1';
+    document.getElementById('appForm').submit();
+  });
+}
+
+// Auto-show duplicate warning modal on page load when the server flagged one.
+{% if duplicate_warning %}
+window.addEventListener('DOMContentLoaded', function () {
+  new bootstrap.Modal(document.getElementById('duplicateModal')).show();
+});
+{% endif %}
 </script>
 {% endblock %}
