@@ -185,13 +185,17 @@ def delete_application(app_id):
 _EXCEL_EXTENSIONS = {".xlsx", ".xlsm"}
 
 
-def _excel_sheet_to_csv(workbook_bytes: bytes, sheet_name: str) -> str:
-    """Read one sheet from an Excel workbook and return it as a CSV string."""
+def _excel_sheet_to_csv(workbook_bytes: bytes, sheet_name: str, start_row: int = 1) -> str:
+    """Read one sheet from an Excel workbook and return it as a CSV string.
+
+    ``start_row`` is 1-indexed; rows before it are skipped so the first row
+    of the returned CSV is the header row chosen by the user.
+    """
     wb = openpyxl.load_workbook(io.BytesIO(workbook_bytes), read_only=True, data_only=True)
     ws = wb[sheet_name]
     out = io.StringIO()
     writer = csv.writer(out)
-    for row in ws.iter_rows(values_only=True):
+    for row in ws.iter_rows(min_row=max(1, start_row), values_only=True):
         writer.writerow([("" if cell is None else str(cell)) for cell in row])
     wb.close()
     return out.getvalue()
@@ -234,12 +238,16 @@ def import_csv():
         wb_b64 = request.form.get("wb_b64", "")
         sheet_name = request.form.get("sheet_name", "")
         filename = request.form.get("filename", "")
+        try:
+            header_row = max(1, int(request.form.get("header_row", "1") or "1"))
+        except ValueError:
+            header_row = 1
         if not wb_b64 or not sheet_name:
             flash("Sheet selection is missing. Please upload the file again.", "danger")
             return redirect(url_for("import_csv"))
         try:
             workbook_bytes = base64.b64decode(wb_b64)
-            content = _excel_sheet_to_csv(workbook_bytes, sheet_name)
+            content = _excel_sheet_to_csv(workbook_bytes, sheet_name, start_row=header_row)
         except Exception as exc:
             flash(f"Could not read sheet '{sheet_name}': {exc}", "danger")
             return redirect(url_for("import_csv"))
@@ -263,6 +271,9 @@ def import_csv():
                     break
             guessed.append(match)
 
+        source_label = f"{filename} — {sheet_name}"
+        if header_row > 1:
+            source_label += f" (starting row {header_row})"
         return render_template(
             "csv_import.html",
             stage="map",
@@ -271,7 +282,7 @@ def import_csv():
             guessed=guessed,
             csv_content=content,
             import_fields=CSV_IMPORT_FIELDS,
-            source_label=f"{filename} — {sheet_name}",
+            source_label=source_label,
         )
 
     # ── Step 1: file just uploaded — detect type and show next step ──────────
@@ -279,10 +290,10 @@ def import_csv():
         file = request.files["csv_file"]
         filename = file.filename or ""
         ext = os.path.splitext(filename)[1].lower()
+        raw_bytes = file.read()  # read once; file pointer is consumed after this
 
         # ── Excel path ───────────────────────────────────────────────────────
         if ext in _EXCEL_EXTENSIONS:
-            raw_bytes = file.read()
             try:
                 wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True)
                 sheet_names = wb.sheetnames
@@ -302,24 +313,36 @@ def import_csv():
             )
 
         # ── CSV path ─────────────────────────────────────────────────────────
-        raw_bytes = file.read()
         try:
             content = raw_bytes.decode("utf-8-sig")  # strip BOM if present
         except UnicodeDecodeError:
             content = raw_bytes.decode("latin-1")
 
+        try:
+            header_row = max(1, int(request.form.get("header_row", "1") or "1"))
+        except ValueError:
+            header_row = 1
+
         reader = csv.reader(io.StringIO(content))
+        # Skip rows before the chosen header row.
+        for _ in range(header_row - 1):
+            next(reader, None)
         headers = next(reader, [])
         if not headers:
-            flash("The uploaded CSV has no header row.", "danger")
+            flash("The uploaded file has no header row at the specified row.", "danger")
             return redirect(url_for("import_csv"))
 
+        # Rebuild csv_content starting from the header row so the import stage
+        # can read it as a plain header + data CSV without further offsets.
+        remaining_rows = list(reader)
+        csv_buf = io.StringIO()
+        csv_writer = csv.writer(csv_buf)
+        csv_writer.writerow(headers)
+        csv_writer.writerows(remaining_rows)
+        content = csv_buf.getvalue()
+
         # Read up to 5 preview rows.
-        preview_rows = []
-        for i, row in enumerate(reader):
-            if i >= 5:
-                break
-            preview_rows.append(row)
+        preview_rows = remaining_rows[:5]
 
         # Auto-guess mappings: compare lowercased CSV headers to field keys.
         field_keys = {f[0]: f[1] for f in CSV_IMPORT_FIELDS if f[0]}
@@ -333,6 +356,9 @@ def import_csv():
                     break
             guessed.append(match)
 
+        source_label = filename
+        if header_row > 1:
+            source_label += f" (starting row {header_row})"
         return render_template(
             "csv_import.html",
             stage="map",
@@ -341,7 +367,7 @@ def import_csv():
             guessed=guessed,
             csv_content=content,
             import_fields=CSV_IMPORT_FIELDS,
-            source_label=filename,
+            source_label=source_label,
         )
 
     # ── Step 2: column mapping submitted — run import ────────────────────────

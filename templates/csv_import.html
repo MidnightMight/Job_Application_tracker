@@ -46,10 +46,16 @@
             <input type="file" name="csv_file" class="form-control" accept=".csv,.txt,.xlsx,.xlsm" required>
             <div class="form-text">
               Supported formats: <strong>CSV</strong> (.csv, .txt) · <strong>Excel</strong> (.xlsx, .xlsm) ·
-              UTF-8 or ANSI for CSV · first row must be a header row · any column names are fine —
+              UTF-8 or ANSI for CSV · any column names are fine —
               you will map them to the application fields in the next step.
-              For Excel files you will be asked to choose which sheet to import.
+              For Excel files you will also choose which sheet to import.
             </div>
+          </div>
+          <div class="mb-3" style="max-width:220px;">
+            <label class="form-label fw-semibold">Header row</label>
+            <input type="number" name="header_row" class="form-control" value="1" min="1"
+                   title="Row number that contains the column headers (rows above it are skipped)">
+            <div class="form-text">Row number containing column headers. Rows above it are skipped. For Excel files this can also be set on the next screen.</div>
           </div>
           <button type="submit" class="btn btn-warning fw-semibold">
             <i class="bi bi-arrow-right-circle me-1"></i>Next: Map Columns
@@ -105,6 +111,12 @@
               <option value="{{ name }}">{{ name }}</option>
               {% endfor %}
             </select>
+          </div>
+          <div class="mb-3" style="max-width:220px;">
+            <label class="form-label fw-semibold">Header row</label>
+            <input type="number" name="header_row" class="form-control" value="1" min="1"
+                   title="Row number that contains the column headers (rows above it are skipped)">
+            <div class="form-text">Row number containing column headers. Rows above it are skipped.</div>
           </div>
           <div class="d-flex gap-2">
             <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary">
