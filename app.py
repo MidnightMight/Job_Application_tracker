@@ -139,7 +139,7 @@ def add_application():
         date_applied = request.form.get("date_applied", "").strip()
 
         # Check for duplicates unless the user has explicitly confirmed.
-        if not request.form.get("force_add"):
+        if request.form.get("force_add") != "1":
             duplicates = db.find_duplicate_applications(company, job_desc, date_applied)
             if duplicates:
                 # Re-render the form with the submitted values preserved and

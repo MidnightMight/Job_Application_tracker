@@ -475,6 +475,11 @@ def delete_application(app_id):
     conn.close()
 
 
+def _dup_key(company: str, job_desc: str, date_applied: str) -> tuple:
+    """Return a normalised key used to identify duplicate applications."""
+    return (company.strip().lower(), job_desc.strip().lower(), date_applied)
+
+
 def find_duplicate_applications(company: str, job_desc: str, date_applied: str) -> list[dict]:
     """Return existing applications that match company, job_desc, and date_applied.
 
@@ -484,10 +489,10 @@ def find_duplicate_applications(company: str, job_desc: str, date_applied: str) 
     rows = conn.execute(
         """SELECT id, company, job_desc, date_applied, status
            FROM applications
-           WHERE LOWER(TRIM(company))     = LOWER(TRIM(?))
-             AND LOWER(TRIM(job_desc))    = LOWER(TRIM(?))
+           WHERE LOWER(TRIM(company))     = ?
+             AND LOWER(TRIM(job_desc))    = ?
              AND date_applied             = ?""",
-        (company, job_desc, date_applied),
+        _dup_key(company, job_desc, date_applied),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -533,7 +538,7 @@ def bulk_import_applications(rows: list[dict]) -> dict:
             except ValueError:
                 pass
         job_desc = (row.get("job_desc") or "").strip()
-        lookup_key = (company.lower(), job_desc.lower(), date_applied)
+        lookup_key = _dup_key(company, job_desc, date_applied)
         if lookup_key in existing_keys:
             errors.append(
                 f"Row {i} ({company}): duplicate application already in database — row skipped."
