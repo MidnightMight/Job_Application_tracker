@@ -1,3 +1,4 @@
+import base64
 import csv
 import io
 import os
@@ -8,6 +9,7 @@ from flask import (
     request, url_for, send_file, Response,
 )
 from apscheduler.schedulers.background import BackgroundScheduler
+import openpyxl
 
 import database as db
 
@@ -176,8 +178,24 @@ def delete_application(app_id):
 
 
 # ---------------------------------------------------------------------------
-# CSV bulk import  (Mouser/DigiKey-style column mapping)
+# CSV / Excel bulk import  (Mouser/DigiKey-style column mapping)
 # ---------------------------------------------------------------------------
+
+# Recognised Excel file extensions.
+_EXCEL_EXTENSIONS = {".xlsx", ".xlsm"}
+
+
+def _excel_sheet_to_csv(workbook_bytes: bytes, sheet_name: str) -> str:
+    """Read one sheet from an Excel workbook and return it as a CSV string."""
+    wb = openpyxl.load_workbook(io.BytesIO(workbook_bytes), read_only=True, data_only=True)
+    ws = wb[sheet_name]
+    out = io.StringIO()
+    writer = csv.writer(out)
+    for row in ws.iter_rows(values_only=True):
+        writer.writerow([("" if cell is None else str(cell)) for cell in row])
+    wb.close()
+    return out.getvalue()
+
 
 # Application fields that can be mapped from a CSV column.
 CSV_IMPORT_FIELDS = [
@@ -200,20 +218,95 @@ CSV_IMPORT_FIELDS = [
 @app.route("/application/import", methods=["GET", "POST"])
 def import_csv():
     """
-    Step 1 (GET or first POST with a file): Upload CSV and show column-mapping UI.
-    Step 2 (POST with mapping confirmed): Run the import and show results.
+    Step 1  (GET or first POST with a file): Upload file.
+              – CSV  → proceed straight to column mapping.
+              – Excel → show sheet picker.
+    Step 1b (POST with stage='sheet'): Excel sheet selected → convert to CSV
+              and proceed to column mapping.
+    Step 2  (POST with stage='import'): Run the import and show results.
     """
     if request.method == "GET":
         return render_template("csv_import.html", stage="upload",
                                import_fields=CSV_IMPORT_FIELDS)
 
-    # ── Step 1: file just uploaded — show column mapper ─────────────────────
+    # ── Step 1b: sheet selected from an Excel file ───────────────────────────
+    if request.form.get("stage") == "sheet":
+        wb_b64 = request.form.get("wb_b64", "")
+        sheet_name = request.form.get("sheet_name", "")
+        filename = request.form.get("filename", "")
+        if not wb_b64 or not sheet_name:
+            flash("Sheet selection is missing. Please upload the file again.", "danger")
+            return redirect(url_for("import_csv"))
+        try:
+            workbook_bytes = base64.b64decode(wb_b64)
+            content = _excel_sheet_to_csv(workbook_bytes, sheet_name)
+        except Exception as exc:
+            flash(f"Could not read sheet '{sheet_name}': {exc}", "danger")
+            return redirect(url_for("import_csv"))
+
+        reader = csv.reader(io.StringIO(content))
+        headers = next(reader, [])
+        if not headers:
+            flash("The selected sheet has no header row.", "danger")
+            return redirect(url_for("import_csv"))
+
+        preview_rows = [row for i, row in enumerate(reader) if i < 5]
+
+        field_keys = {f[0]: f[1] for f in CSV_IMPORT_FIELDS if f[0]}
+        guessed = []
+        for h in headers:
+            normalised = h.lower().replace(" ", "_").replace("-", "_")
+            match = ""
+            for key in field_keys:
+                if key in normalised or normalised in key:
+                    match = key
+                    break
+            guessed.append(match)
+
+        return render_template(
+            "csv_import.html",
+            stage="map",
+            headers=headers,
+            preview_rows=preview_rows,
+            guessed=guessed,
+            csv_content=content,
+            import_fields=CSV_IMPORT_FIELDS,
+            source_label=f"{filename} — {sheet_name}",
+        )
+
+    # ── Step 1: file just uploaded — detect type and show next step ──────────
     if "csv_file" in request.files and request.files["csv_file"].filename:
         file = request.files["csv_file"]
+        filename = file.filename or ""
+        ext = os.path.splitext(filename)[1].lower()
+
+        # ── Excel path ───────────────────────────────────────────────────────
+        if ext in _EXCEL_EXTENSIONS:
+            raw_bytes = file.read()
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True)
+                sheet_names = wb.sheetnames
+                wb.close()
+            except Exception as exc:
+                flash(f"Could not open the Excel file: {exc}", "danger")
+                return redirect(url_for("import_csv"))
+
+            wb_b64 = base64.b64encode(raw_bytes).decode("ascii")
+            return render_template(
+                "csv_import.html",
+                stage="sheet",
+                sheet_names=sheet_names,
+                wb_b64=wb_b64,
+                filename=filename,
+                import_fields=CSV_IMPORT_FIELDS,
+            )
+
+        # ── CSV path ─────────────────────────────────────────────────────────
+        raw_bytes = file.read()
         try:
-            content = file.read().decode("utf-8-sig")  # strip BOM if present
+            content = raw_bytes.decode("utf-8-sig")  # strip BOM if present
         except UnicodeDecodeError:
-            content = file.read().decode("latin-1")
+            content = raw_bytes.decode("latin-1")
 
         reader = csv.reader(io.StringIO(content))
         headers = next(reader, [])
@@ -248,6 +341,7 @@ def import_csv():
             guessed=guessed,
             csv_content=content,
             import_fields=CSV_IMPORT_FIELDS,
+            source_label=filename,
         )
 
     # ── Step 2: column mapping submitted — run import ────────────────────────

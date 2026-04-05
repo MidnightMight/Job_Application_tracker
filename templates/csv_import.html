@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Import Applications from CSV — Job Tracker{% endblock %}
+{% block title %}Import Applications — Job Tracker{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h2 class="fw-bold mb-0">
-    <i class="bi bi-upload text-warning me-2"></i>Bulk Import from CSV
+    <i class="bi bi-upload text-warning me-2"></i>Bulk Import from CSV / Excel
   </h2>
   <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
@@ -14,13 +14,13 @@
 <!-- Progress indicator -->
 <div class="d-flex align-items-center gap-3 mb-4">
   <div class="d-flex align-items-center gap-2">
-    <div class="step-circle {% if stage == 'upload' %}step-active{% else %}step-done{% endif %}">1</div>
-    <span class="fw-semibold {% if stage != 'upload' %}text-muted{% endif %}">Upload File</span>
+    <div class="step-circle {% if stage in ('upload', 'sheet') %}step-active{% else %}step-done{% endif %}">1</div>
+    <span class="fw-semibold {% if stage not in ('upload', 'sheet') %}text-muted{% endif %}">Upload File</span>
   </div>
   <div class="step-line"></div>
   <div class="d-flex align-items-center gap-2">
     <div class="step-circle {% if stage == 'map' %}step-active{% elif stage == 'result' %}step-done{% endif %}">2</div>
-    <span class="fw-semibold {% if stage == 'upload' %}text-muted{% endif %}">Map Columns</span>
+    <span class="fw-semibold {% if stage == 'upload' or stage == 'sheet' %}text-muted{% endif %}">Map Columns</span>
   </div>
   <div class="step-line"></div>
   <div class="d-flex align-items-center gap-2">
@@ -37,16 +37,18 @@
   <div class="col-lg-7">
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-transparent fw-semibold">
-        <i class="bi bi-file-earmark-arrow-up text-primary me-2"></i>Select your CSV file
+        <i class="bi bi-file-earmark-arrow-up text-primary me-2"></i>Select your file
       </div>
       <div class="card-body">
         <form method="post" enctype="multipart/form-data">
           <div class="mb-3">
-            <label class="form-label fw-semibold">CSV File</label>
-            <input type="file" name="csv_file" class="form-control" accept=".csv,.txt" required>
+            <label class="form-label fw-semibold">CSV or Excel File</label>
+            <input type="file" name="csv_file" class="form-control" accept=".csv,.txt,.xlsx,.xlsm" required>
             <div class="form-text">
-              UTF-8 or ANSI encoded · first row must be a header row · any column names are fine —
+              Supported formats: <strong>CSV</strong> (.csv, .txt) · <strong>Excel</strong> (.xlsx, .xlsm) ·
+              UTF-8 or ANSI for CSV · first row must be a header row · any column names are fine —
               you will map them to the application fields in the next step.
+              For Excel files you will be asked to choose which sheet to import.
             </div>
           </div>
           <button type="submit" class="btn btn-warning fw-semibold">
@@ -77,6 +79,49 @@
 {% endif %}
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- STAGE 1b — Sheet Picker (Excel only)                                  -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+{% if stage == 'sheet' %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent fw-semibold">
+        <i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>
+        Select a Sheet — <span class="text-muted fw-normal">{{ filename }}</span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Your Excel workbook contains {{ sheet_names | length }} sheet(s).
+          Choose the sheet whose first row is a header row with the data you want to import.
+        </p>
+        <form method="post">
+          <input type="hidden" name="stage" value="sheet">
+          <input type="hidden" name="wb_b64" value="{{ wb_b64 }}">
+          <input type="hidden" name="filename" value="{{ filename }}">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Worksheet</label>
+            <select name="sheet_name" class="form-select" required>
+              {% for name in sheet_names %}
+              <option value="{{ name }}">{{ name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>Start Over
+            </a>
+            <button type="submit" class="btn btn-warning fw-semibold">
+              <i class="bi bi-arrow-right-circle me-1"></i>Next: Map Columns
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
 <!-- STAGE 2 — Map Columns                                                 -->
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 {% if stage == 'map' %}
@@ -87,11 +132,14 @@
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-transparent fw-semibold">
       <i class="bi bi-arrows-collapse text-primary me-2"></i>
-      Map CSV Columns to Application Fields
+      Map Columns to Application Fields
+      {% if source_label %}
+      <span class="text-muted fw-normal small ms-2">— {{ source_label }}</span>
+      {% endif %}
     </div>
     <div class="card-body p-0">
       <p class="px-3 pt-3 text-muted small mb-0">
-        For each column detected in your CSV, choose which application field it contains.
+        For each column detected in your file, choose which application field it contains.
         Select <em>"(ignore this column)"</em> to skip a column.
         Columns marked <span class="text-danger fw-semibold">*</span> are required for every row.
       </p>
@@ -102,7 +150,7 @@
           <thead class="table-dark">
             <tr>
               <th class="ps-3" style="width:5%">#</th>
-              <th style="width:25%">CSV Column Header</th>
+              <th style="width:25%">Column Header</th>
               <th style="width:30%">Map to Application Field</th>
               <th>Preview (first {{ preview_rows | length }} rows)</th>
             </tr>
@@ -156,7 +204,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p class="mb-1">The following fields are mapped to more than one CSV column:</p>
+        <p class="mb-1">The following fields are mapped to more than one column:</p>
         <ul id="dupList" class="mb-0 text-danger fw-semibold"></ul>
         <p class="mt-2 mb-0 text-muted small">Only the last mapped column will be used. Consider setting the others to "ignore".</p>
       </div>
