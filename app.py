@@ -213,6 +213,81 @@ def delete_application(app_id):
 
 
 # ---------------------------------------------------------------------------
+# Bulk actions (multi-select in year view)
+# ---------------------------------------------------------------------------
+
+@app.route("/applications/bulk-action", methods=["POST"])
+def bulk_action():
+    """Handle bulk operations (delete / set-field) on multiple applications."""
+    action      = request.form.get("action", "")
+    year        = request.form.get("year",   "2025")
+    status_filter = request.form.get("status_filter", "")
+
+    raw_ids = request.form.getlist("selected_ids")
+    try:
+        selected_ids = [int(x) for x in raw_ids if str(x).isdigit()]
+    except Exception:
+        selected_ids = []
+
+    redirect_kwargs: dict = {"year": year}
+    if status_filter:
+        redirect_kwargs["status"] = status_filter
+
+    if not selected_ids:
+        flash("No applications selected.", "warning")
+        return redirect(url_for("year_view", **redirect_kwargs))
+
+    if action == "delete":
+        count = db.bulk_delete_applications(selected_ids)
+        flash(f"Deleted {count} application(s).", "warning")
+
+    elif action == "set_status":
+        new_status = request.form.get("bulk_status", "").strip()
+        if not new_status:
+            flash("Please choose a status.", "warning")
+        else:
+            count = db.bulk_update_applications(selected_ids, "status", new_status)
+            flash(
+                f"Status set to '{new_status.replace('_', ' ')}' "
+                f"for {count} application(s).",
+                "success",
+            )
+
+    elif action == "set_date_applied":
+        new_date = request.form.get("bulk_date_applied", "").strip()
+        if not new_date:
+            flash("Please enter a date.", "warning")
+        else:
+            count = db.bulk_update_applications(selected_ids, "date_applied", new_date)
+            flash(f"Date Applied set to {new_date} for {count} application(s).", "success")
+
+    elif action == "set_last_contact":
+        new_date = request.form.get("bulk_last_contact", "").strip()
+        if not new_date:
+            flash("Please enter a date.", "warning")
+        else:
+            count = db.bulk_update_applications(selected_ids, "last_contact_date", new_date)
+            flash(f"Last Contact set to {new_date} for {count} application(s).", "success")
+
+    elif action == "set_cover_letter":
+        value = 1 if request.form.get("bulk_cover_letter") == "1" else 0
+        label = "Yes" if value else "No"
+        count = db.bulk_update_applications(selected_ids, "cover_letter", value)
+        flash(f"Cover Letter set to {label} for {count} application(s).", "success")
+
+    elif action == "set_resume":
+        value = 1 if request.form.get("bulk_resume") == "1" else 0
+        label = "Yes" if value else "No"
+        count = db.bulk_update_applications(selected_ids, "resume", value)
+        flash(f"Resume set to {label} for {count} application(s).", "success")
+
+    else:
+        flash("Unknown bulk action.", "warning")
+
+    return redirect(url_for("year_view", **redirect_kwargs))
+
+
+# ---------------------------------------------------------------------------
 # CSV / Excel bulk import  (Mouser/DigiKey-style column mapping)
 # ---------------------------------------------------------------------------
 

@@ -72,6 +72,23 @@
               </div>
             </div>
 
+            <!-- Last Contact Date -->
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-telephone-fill text-info me-1"></i>Last Contact Date
+              </label>
+              <div class="input-group">
+                <input type="date" name="last_contact_date" id="last_contact_date"
+                       class="form-control"
+                       value="{{ app.last_contact_date if app and app.last_contact_date else '' }}">
+                <button type="button" class="btn btn-outline-secondary today-btn"
+                        data-target="last_contact_date" title="Set to today">
+                  <i class="bi bi-calendar-check me-1"></i>Today
+                </button>
+              </div>
+              <div class="form-text">When you last heard from / contacted the company.</div>
+            </div>
+
             <!-- Status -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">Status</label>

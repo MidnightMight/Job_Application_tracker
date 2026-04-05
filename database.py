@@ -47,9 +47,12 @@ def get_connection():
 
 _ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings"}
 _ALLOWED_COLUMNS = {
-    "contact", "additional_notes", "status_changed_at",
+    "contact", "additional_notes", "status_changed_at", "last_contact_date",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0"}
+
+# Fields that may be updated via the bulk-action route.
+_BULK_UPDATE_FIELDS = {"status", "cover_letter", "resume", "date_applied", "last_contact_date"}
 
 
 def _add_column_if_missing(c, table: str, column: str, definition: str):
@@ -90,14 +93,16 @@ def init_db():
             link              TEXT,
             contact           TEXT,
             additional_notes  TEXT,
-            status_changed_at TEXT
+            status_changed_at TEXT,
+            last_contact_date TEXT
         )
     """)
 
     # Migrations for databases that existed before these columns were added.
-    _add_column_if_missing(c, "applications", "contact",          "TEXT")
-    _add_column_if_missing(c, "applications", "additional_notes", "TEXT")
-    _add_column_if_missing(c, "applications", "status_changed_at","TEXT")
+    _add_column_if_missing(c, "applications", "contact",           "TEXT")
+    _add_column_if_missing(c, "applications", "additional_notes",  "TEXT")
+    _add_column_if_missing(c, "applications", "status_changed_at", "TEXT")
+    _add_column_if_missing(c, "applications", "last_contact_date", "TEXT")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""
@@ -400,8 +405,8 @@ def add_application(data):
         """INSERT INTO applications
            (job_desc, team, company, date_applied, status,
             cover_letter, resume, comment, success_chance, link,
-            contact, additional_notes, status_changed_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            contact, additional_notes, status_changed_at, last_contact_date)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
@@ -416,6 +421,7 @@ def add_application(data):
             data.get("contact", ""),
             data.get("additional_notes", ""),
             now,
+            data.get("last_contact_date") or None,
         ),
     )
     app_id = cur.lastrowid
@@ -437,7 +443,7 @@ def update_application(app_id, data):
         """UPDATE applications SET
            job_desc=?, team=?, company=?, date_applied=?, status=?,
            cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
-           contact=?, additional_notes=?,
+           contact=?, additional_notes=?, last_contact_date=?,
            status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END
            WHERE id=?""",
         (
@@ -453,6 +459,7 @@ def update_application(app_id, data):
             data.get("link", ""),
             data.get("contact", ""),
             data.get("additional_notes", ""),
+            data.get("last_contact_date") or None,
             new_status,
             now,
             app_id,
@@ -473,6 +480,73 @@ def delete_application(app_id):
     conn.execute("DELETE FROM applications WHERE id=?", (app_id,))
     conn.commit()
     conn.close()
+
+
+def bulk_delete_applications(ids: list) -> int:
+    """Delete multiple applications by ID. Returns the number of rows deleted."""
+    if not ids:
+        return 0
+    placeholders = ",".join("?" for _ in ids)
+    conn = get_connection()
+    conn.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", ids)
+    count = conn.execute("SELECT changes()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
+
+
+def bulk_update_applications(ids: list, field: str, value) -> int:
+    """
+    Set ``field`` to ``value`` for all application IDs in ``ids``.
+
+    Allowed fields: status, cover_letter, resume, date_applied, last_contact_date.
+    For status updates this also records a status_history entry for each
+    application whose status actually changes.
+    Returns the number of rows updated.
+    """
+    if not ids:
+        return 0
+    if field not in _BULK_UPDATE_FIELDS:
+        raise ValueError(f"bulk_update_applications: unknown field '{field}'")
+
+    placeholders = ",".join("?" for _ in ids)
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+
+    if field == "status":
+        # Capture current statuses so we only record history for real changes.
+        existing = {
+            r["id"]: r["status"]
+            for r in conn.execute(
+                f"SELECT id, status FROM applications WHERE id IN ({placeholders})",
+                ids,
+            ).fetchall()
+        }
+        conn.execute(
+            f"UPDATE applications SET status=?, status_changed_at=? "
+            f"WHERE id IN ({placeholders})",
+            (value, now, *ids),
+        )
+        for app_id in ids:
+            if existing.get(app_id) != value:
+                conn.execute(
+                    "INSERT INTO status_history (application_id, status, changed_at) "
+                    "VALUES (?,?,?)",
+                    (app_id, value, now),
+                )
+    else:
+        conn.execute(
+            f"UPDATE applications SET {field}=? WHERE id IN ({placeholders})",
+            (value, *ids),
+        )
+
+    # Count how many rows matched (changes() only reflects the last statement).
+    count = conn.execute(
+        f"SELECT COUNT(*) FROM applications WHERE id IN ({placeholders})", ids
+    ).fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
 
 
 def _dup_key(company: str, job_desc: str, date_applied: str) -> tuple:
