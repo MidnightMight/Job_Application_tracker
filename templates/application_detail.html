@@ -57,6 +57,13 @@
             <span class="badge bg-light text-dark border ms-1">{{ app.duration }} days ago</span>
           </dd>
 
+          {% if app.last_contact_date %}
+          <dt class="col-sm-4 text-muted">
+            <i class="bi bi-telephone-fill text-info me-1"></i>Last Contact
+          </dt>
+          <dd class="col-sm-8">{{ app.last_contact_date }}</dd>
+          {% endif %}
+
           <dt class="col-sm-4 text-muted">Company</dt>
           <dd class="col-sm-8">{{ app.company }}</dd>
 

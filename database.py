@@ -47,9 +47,12 @@ def get_connection():
 
 _ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings"}
 _ALLOWED_COLUMNS = {
-    "contact", "additional_notes", "status_changed_at",
+    "contact", "additional_notes", "status_changed_at", "last_contact_date",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0"}
+
+# Fields that may be updated via the bulk-action route.
+_BULK_UPDATE_FIELDS = {"status", "cover_letter", "resume", "date_applied", "last_contact_date"}
 
 
 def _add_column_if_missing(c, table: str, column: str, definition: str):
@@ -90,14 +93,16 @@ def init_db():
             link              TEXT,
             contact           TEXT,
             additional_notes  TEXT,
-            status_changed_at TEXT
+            status_changed_at TEXT,
+            last_contact_date TEXT
         )
     """)
 
     # Migrations for databases that existed before these columns were added.
-    _add_column_if_missing(c, "applications", "contact",          "TEXT")
-    _add_column_if_missing(c, "applications", "additional_notes", "TEXT")
-    _add_column_if_missing(c, "applications", "status_changed_at","TEXT")
+    _add_column_if_missing(c, "applications", "contact",           "TEXT")
+    _add_column_if_missing(c, "applications", "additional_notes",  "TEXT")
+    _add_column_if_missing(c, "applications", "status_changed_at", "TEXT")
+    _add_column_if_missing(c, "applications", "last_contact_date", "TEXT")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""
@@ -400,8 +405,8 @@ def add_application(data):
         """INSERT INTO applications
            (job_desc, team, company, date_applied, status,
             cover_letter, resume, comment, success_chance, link,
-            contact, additional_notes, status_changed_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            contact, additional_notes, status_changed_at, last_contact_date)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
@@ -416,6 +421,7 @@ def add_application(data):
             data.get("contact", ""),
             data.get("additional_notes", ""),
             now,
+            data.get("last_contact_date") or None,
         ),
     )
     app_id = cur.lastrowid
@@ -437,7 +443,7 @@ def update_application(app_id, data):
         """UPDATE applications SET
            job_desc=?, team=?, company=?, date_applied=?, status=?,
            cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
-           contact=?, additional_notes=?,
+           contact=?, additional_notes=?, last_contact_date=?,
            status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END
            WHERE id=?""",
         (
@@ -453,6 +459,7 @@ def update_application(app_id, data):
             data.get("link", ""),
             data.get("contact", ""),
             data.get("additional_notes", ""),
+            data.get("last_contact_date") or None,
             new_status,
             now,
             app_id,
@@ -475,6 +482,107 @@ def delete_application(app_id):
     conn.close()
 
 
+def bulk_delete_applications(ids: list) -> int:
+    """Delete multiple applications by ID. Returns the number of rows deleted."""
+    if not ids:
+        return 0
+    # placeholders is built from len(ids) — no user data is interpolated into SQL.
+    placeholders = ",".join("?" for _ in ids)
+    conn = get_connection()
+    conn.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", ids)
+    count = conn.execute("SELECT changes()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
+
+
+def bulk_update_applications(ids: list, field: str, value) -> int:
+    """
+    Set ``field`` to ``value`` for all application IDs in ``ids``.
+
+    Allowed fields: status, cover_letter, resume, date_applied, last_contact_date.
+    For status updates this also records a status_history entry for each
+    application whose status actually changes.
+    Returns the number of rows updated.
+
+    Security notes:
+    - ``field`` is validated against ``_BULK_UPDATE_FIELDS`` before use in SQL.
+    - ``placeholders`` is constructed solely from ``len(ids)`` — no user data
+      is ever interpolated directly into the SQL string.
+    - All actual values are passed as bound parameters (?).
+    """
+    if not ids:
+        return 0
+    if field not in _BULK_UPDATE_FIELDS:
+        raise ValueError(f"bulk_update_applications: unknown field '{field}'")
+
+    # Safe: placeholders contains only literal '?' characters.
+    placeholders = ",".join("?" for _ in ids)
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+
+    if field == "status":
+        # Capture current statuses so we only record history for real changes.
+        existing = {
+            r["id"]: r["status"]
+            for r in conn.execute(
+                f"SELECT id, status FROM applications WHERE id IN ({placeholders})",
+                ids,
+            ).fetchall()
+        }
+        # Safe: field is validated above; placeholders is literal '?' chars.
+        conn.execute(
+            f"UPDATE applications SET status=?, status_changed_at=? "
+            f"WHERE id IN ({placeholders})",
+            (value, now, *ids),
+        )
+        for app_id in ids:
+            if existing.get(app_id) != value:
+                conn.execute(
+                    "INSERT INTO status_history (application_id, status, changed_at) "
+                    "VALUES (?,?,?)",
+                    (app_id, value, now),
+                )
+    else:
+        # Safe: field is validated against _BULK_UPDATE_FIELDS allowlist above;
+        # placeholders contains only literal '?' characters.
+        conn.execute(
+            f"UPDATE applications SET {field}=? WHERE id IN ({placeholders})",
+            (value, *ids),
+        )
+
+    # Count how many rows matched (changes() only reflects the last statement).
+    count = conn.execute(
+        f"SELECT COUNT(*) FROM applications WHERE id IN ({placeholders})", ids
+    ).fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
+
+
+def _dup_key(company: str, job_desc: str, date_applied: str) -> tuple:
+    """Return a normalised key used to identify duplicate applications."""
+    return (company.strip().lower(), job_desc.strip().lower(), date_applied)
+
+
+def find_duplicate_applications(company: str, job_desc: str, date_applied: str) -> list[dict]:
+    """Return existing applications that match company, job_desc, and date_applied.
+
+    Comparison is case-insensitive and ignores leading/trailing whitespace.
+    """
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT id, company, job_desc, date_applied, status
+           FROM applications
+           WHERE LOWER(TRIM(company))     = ?
+             AND LOWER(TRIM(job_desc))    = ?
+             AND date_applied             = ?""",
+        _dup_key(company, job_desc, date_applied),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # CSV bulk import
 # ---------------------------------------------------------------------------
@@ -482,9 +590,21 @@ def delete_application(app_id):
 def bulk_import_applications(rows: list[dict]) -> dict:
     """
     Import a list of dicts representing applications.
-    Returns {"imported": int, "skipped": int, "errors": list[str]}.
+    Returns {"imported": int, "skipped": int, "duplicates": int,
+             "other_skipped": int, "errors": list[str]}.
+    Rows that are exact duplicates of existing records are skipped automatically.
     """
+    # Pre-fetch all existing (company, job_desc, date_applied) keys in one query
+    # to avoid an N+1 query pattern during the loop.
+    conn = get_connection()
+    existing_rows = conn.execute(
+        "SELECT LOWER(TRIM(company)), LOWER(TRIM(job_desc)), date_applied FROM applications"
+    ).fetchall()
+    conn.close()
+    existing_keys = {(r[0], r[1], r[2]) for r in existing_rows}
+
     imported = 0
+    duplicates = 0
     errors = []
     for i, row in enumerate(rows, start=1):
         company = (row.get("company") or "").strip()
@@ -502,8 +622,16 @@ def bulk_import_applications(rows: list[dict]) -> dict:
                 break
             except ValueError:
                 pass
+        job_desc = (row.get("job_desc") or "").strip()
+        lookup_key = _dup_key(company, job_desc, date_applied)
+        if lookup_key in existing_keys:
+            errors.append(
+                f"Row {i} ({company}): duplicate application already in database — row skipped."
+            )
+            duplicates += 1
+            continue
         add_application({
-            "job_desc":        row.get("job_desc", ""),
+            "job_desc":        job_desc,
             "team":            row.get("team", ""),
             "company":         company,
             "date_applied":    date_applied,
@@ -516,8 +644,18 @@ def bulk_import_applications(rows: list[dict]) -> dict:
             "contact":         row.get("contact", ""),
             "additional_notes":row.get("additional_notes", ""),
         })
+        # Track the newly added row so subsequent rows in the same import
+        # are also treated as duplicates if they match.
+        existing_keys.add(lookup_key)
         imported += 1
-    return {"imported": imported, "skipped": len(rows) - imported, "errors": errors}
+    total_skipped = len(rows) - imported
+    return {
+        "imported":      imported,
+        "skipped":       total_skipped,
+        "duplicates":    duplicates,
+        "other_skipped": total_skipped - duplicates,
+        "errors":        errors,
+    }
 
 
 # ---------------------------------------------------------------------------

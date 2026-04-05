@@ -3,6 +3,7 @@ import csv
 import io
 import os
 import shutil
+from types import SimpleNamespace
 
 from flask import (
     Flask, flash, redirect, render_template,
@@ -133,6 +134,40 @@ def application_detail(app_id):
 @app.route("/application/add", methods=["GET", "POST"])
 def add_application():
     if request.method == "POST":
+        company     = request.form.get("company", "").strip()
+        job_desc    = request.form.get("job_desc", "").strip()
+        date_applied = request.form.get("date_applied", "").strip()
+
+        # Check for duplicates unless the user has explicitly confirmed.
+        if request.form.get("force_add") != "1":
+            duplicates = db.find_duplicate_applications(company, job_desc, date_applied)
+            if duplicates:
+                # Re-render the form with the submitted values preserved and
+                # trigger the duplicate-warning modal.
+                form_data = SimpleNamespace(
+                    job_desc=job_desc,
+                    company=company,
+                    team=request.form.get("team", ""),
+                    contact=request.form.get("contact", ""),
+                    date_applied=date_applied,
+                    status=request.form.get("status", "Select_Status"),
+                    success_chance=request.form.get("success_chance", "0"),
+                    link=request.form.get("link", ""),
+                    cover_letter=1 if request.form.get("cover_letter") else 0,
+                    resume=1 if request.form.get("resume") else 0,
+                    comment=request.form.get("comment", ""),
+                    additional_notes=request.form.get("additional_notes", ""),
+                )
+                return render_template(
+                    "application_form.html",
+                    app=form_data,
+                    companies=db.get_companies(),
+                    status_options=db.get_status_options(),
+                    action="Add",
+                    duplicate_warning=True,
+                    duplicates=duplicates,
+                )
+
         db.add_application(request.form)
         flash("Application added.", "success")
         year = request.form.get("date_applied", "")[:4] or "2025"
@@ -175,6 +210,81 @@ def delete_application(app_id):
     db.delete_application(app_id)
     flash("Application deleted.", "warning")
     return redirect(url_for("year_view", year=year))
+
+
+# ---------------------------------------------------------------------------
+# Bulk actions (multi-select in year view)
+# ---------------------------------------------------------------------------
+
+@app.route("/applications/bulk-action", methods=["POST"])
+def bulk_action():
+    """Handle bulk operations (delete / set-field) on multiple applications."""
+    action      = request.form.get("action", "")
+    year        = request.form.get("year",   "2025")
+    status_filter = request.form.get("status_filter", "")
+
+    raw_ids = request.form.getlist("selected_ids")
+    try:
+        selected_ids = [int(x) for x in raw_ids if str(x).isdigit()]
+    except ValueError:
+        selected_ids = []
+
+    redirect_kwargs: dict = {"year": year}
+    if status_filter:
+        redirect_kwargs["status"] = status_filter
+
+    if not selected_ids:
+        flash("No applications selected.", "warning")
+        return redirect(url_for("year_view", **redirect_kwargs))
+
+    if action == "delete":
+        count = db.bulk_delete_applications(selected_ids)
+        flash(f"Deleted {count} application(s).", "warning")
+
+    elif action == "set_status":
+        new_status = request.form.get("bulk_status", "").strip()
+        if not new_status:
+            flash("Please choose a status.", "warning")
+        else:
+            count = db.bulk_update_applications(selected_ids, "status", new_status)
+            flash(
+                f"Status set to '{new_status.replace('_', ' ')}' "
+                f"for {count} application(s).",
+                "success",
+            )
+
+    elif action == "set_date_applied":
+        new_date = request.form.get("bulk_date_applied", "").strip()
+        if not new_date:
+            flash("Please enter a date.", "warning")
+        else:
+            count = db.bulk_update_applications(selected_ids, "date_applied", new_date)
+            flash(f"Date Applied set to {new_date} for {count} application(s).", "success")
+
+    elif action == "set_last_contact":
+        new_date = request.form.get("bulk_last_contact", "").strip()
+        if not new_date:
+            flash("Please enter a date.", "warning")
+        else:
+            count = db.bulk_update_applications(selected_ids, "last_contact_date", new_date)
+            flash(f"Last Contact set to {new_date} for {count} application(s).", "success")
+
+    elif action == "set_cover_letter":
+        value = 1 if request.form.get("bulk_cover_letter") == "1" else 0
+        label = "Yes" if value else "No"
+        count = db.bulk_update_applications(selected_ids, "cover_letter", value)
+        flash(f"Cover Letter set to {label} for {count} application(s).", "success")
+
+    elif action == "set_resume":
+        value = 1 if request.form.get("bulk_resume") == "1" else 0
+        label = "Yes" if value else "No"
+        count = db.bulk_update_applications(selected_ids, "resume", value)
+        flash(f"Resume set to {label} for {count} application(s).", "success")
+
+    else:
+        flash("Unknown bulk action.", "warning")
+
+    return redirect(url_for("year_view", **redirect_kwargs))
 
 
 # ---------------------------------------------------------------------------
@@ -392,9 +502,12 @@ def import_csv():
             rows_to_import.append(record)
 
         result = db.bulk_import_applications(rows_to_import)
+        dup_note = (
+            f", {result['duplicates']} duplicate(s) skipped" if result["duplicates"] else ""
+        )
         flash(
             f"Import complete — {result['imported']} added, "
-            f"{result['skipped']} skipped.",
+            f"{result['skipped']} skipped{dup_note}.",
             "success" if not result["errors"] else "warning",
         )
         return render_template(

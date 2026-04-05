@@ -241,15 +241,21 @@
       </div>
       <div class="card-body">
         <div class="row g-3 text-center mb-3">
-          <div class="col-6">
+          <div class="col-4">
             <div class="fw-bold fs-3 text-success">{{ result.imported }}</div>
             <div class="text-muted small">Rows Imported</div>
           </div>
-          <div class="col-6">
-            <div class="fw-bold fs-3 {% if result.skipped > 0 %}text-warning{% else %}text-muted{% endif %}">
-              {{ result.skipped }}
+          <div class="col-4">
+            <div class="fw-bold fs-3 {% if result.duplicates > 0 %}text-danger{% else %}text-muted{% endif %}">
+              {{ result.duplicates }}
             </div>
-            <div class="text-muted small">Rows Skipped</div>
+            <div class="text-muted small">Duplicates Skipped</div>
+          </div>
+          <div class="col-4">
+            <div class="fw-bold fs-3 {% if result.other_skipped > 0 %}text-warning{% else %}text-muted{% endif %}">
+              {{ result.other_skipped }}
+            </div>
+            <div class="text-muted small">Other Rows Skipped</div>
           </div>
         </div>
 
