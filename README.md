@@ -260,6 +260,72 @@ device — copy the file to the new installation folder and rename it `jobs.db`.
 
 ---
 
+## 🐳 Docker
+
+### Pull and run the pre-built image (recommended)
+
+```bash
+docker run -d \
+  -p 5000:5000 \
+  -v job_tracker_data:/data \
+  -e SECRET_KEY="change-me-in-production" \
+  --name job-tracker \
+  ghcr.io/midnightmight/job_application_tracker:latest
+```
+
+Then open `http://localhost:5000`.
+
+Your database is stored in the `job_tracker_data` Docker volume and persists
+across container restarts and image updates.
+
+---
+
+### Build and run locally with Docker Compose
+
+```bash
+# Set a strong secret key first
+export SECRET_KEY="something-long-and-random"
+
+# Build the image and start the container
+docker compose up --build -d
+
+# View logs
+docker compose logs -f
+
+# Stop the container
+docker compose down
+```
+
+The database is stored in the `db_data` named volume defined in
+`docker-compose.yml`.
+
+---
+
+### Build the image manually
+
+```bash
+docker build -t job-application-tracker .
+docker run -d \
+  -p 5000:5000 \
+  -v job_tracker_data:/data \
+  -e SECRET_KEY="change-me-in-production" \
+  --name job-tracker \
+  job-application-tracker
+```
+
+---
+
+### Docker environment variables
+
+| Variable      | Default                             | Purpose                         |
+|---------------|-------------------------------------|---------------------------------|
+| `SECRET_KEY`  | `job-tracker-secret-key-change-me`  | Flask session signing key — **change this** |
+| `DB_PATH`     | `/data/jobs.db`                     | Path to the SQLite database inside the container |
+| `PORT`        | `5000`                              | Port the server listens on      |
+| `FLASK_DEBUG` | `0`                                 | Set to `1` to enable debug mode |
+
+---
+
 ## Project Structure
 
 ```
@@ -268,6 +334,9 @@ Job_Application_tracker/
 ├── database.py               SQLite schema, migrations, seed data, query helpers
 ├── run_script.py             CLI stats viewer and CSV exporter
 ├── requirements.txt          Python dependencies (Flask, APScheduler)
+├── Dockerfile                Container image definition
+├── docker-compose.yml        Compose file for one-command Docker launch
+├── .dockerignore             Files excluded from the Docker build context
 ├── launch.sh                 One-command launcher — Linux / macOS / Unix
 ├── launch.bat                One-command launcher — Windows
 ├── FEATURES.md               Extended feature documentation
