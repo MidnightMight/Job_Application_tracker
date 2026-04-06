@@ -15,6 +15,7 @@
           <i class="bi bi-robot me-2 text-warning"></i>
           <span class="fw-semibold">AI Assistant — Auto-fill from Job Description</span>
           <span class="badge bg-warning text-dark ms-2 small">Ollama</span>
+          <span id="ollamaServerBadge" class="badge ms-2 small" style="display:none;"></span>
         </span>
         <i class="bi bi-chevron-up" id="aiFillChevron"></i>
       </div>
@@ -408,9 +409,55 @@ window.addEventListener('DOMContentLoaded', function () {
   const statusDiv = document.getElementById('aiStatus');
   const chevron   = document.getElementById('aiFillChevron');
 
-  // Update chevron icon when the collapse panel toggles.
-  document.getElementById('aiFillBody').addEventListener('show.bs.collapse',  () => {
+  // ── Server status badge ────────────────────────────────────────────────
+  const serverBadge = document.getElementById('ollamaServerBadge');
+
+  function setServerBadge(state) {
+    // state: 'checking' | 'online' | 'offline'
+    serverBadge.style.display = '';
+    if (state === 'checking') {
+      serverBadge.className = 'badge ms-2 small bg-secondary';
+      serverBadge.innerHTML = '<span class="spinner-grow spinner-grow-sm me-1" style="width:.5rem;height:.5rem;" role="status"></span>Checking…';
+    } else if (state === 'online') {
+      serverBadge.className = 'badge ms-2 small bg-success';
+      serverBadge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.55rem;vertical-align:middle;"></i>Server online';
+    } else {
+      serverBadge.className = 'badge ms-2 small bg-danger';
+      serverBadge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.55rem;vertical-align:middle;"></i>Server offline';
+    }
+  }
+
+  async function checkServerStatus() {
+    setServerBadge('checking');
+    try {
+      const resp = await fetch('{{ url_for("ollama_status") }}');
+      const data = await resp.json();
+      setServerBadge(data.ok ? 'online' : 'offline');
+      if (!data.ok) {
+        // Build the offline warning using DOM APIs to avoid innerHTML with mixed content.
+        const span = document.createElement('span');
+        span.className = 'text-danger small';
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-exclamation-circle me-1';
+        const link = document.createElement('a');
+        link.href = '{{ url_for("settings", section="ai") }}';
+        link.className = 'alert-link';
+        link.textContent = 'Check AI settings.';
+        span.appendChild(icon);
+        span.appendChild(document.createTextNode('Ollama server is unreachable. '));
+        span.appendChild(link);
+        statusDiv.replaceChildren(span);
+      }
+    } catch {
+      setServerBadge('offline');
+    }
+  }
+
+  // Check on load and when the panel is expanded.
+  checkServerStatus();
+  document.getElementById('aiFillBody').addEventListener('show.bs.collapse', () => {
     chevron.className = 'bi bi-chevron-up';
+    checkServerStatus();
   });
   document.getElementById('aiFillBody').addEventListener('hide.bs.collapse', () => {
     chevron.className = 'bi bi-chevron-down';

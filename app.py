@@ -840,6 +840,29 @@ def ollama_test():
         return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
 
 
+@app.route("/api/ollama-status")
+@login_required
+def ollama_status():
+    """Lightweight ping: returns whether the configured Ollama server is reachable."""
+    if db.get_setting("ollama_enabled", "0") != "1":
+        return jsonify({"ok": False, "error": "Ollama is not enabled."})
+    ollama_url = db.get_setting("ollama_url", "http://localhost:11434").rstrip("/")
+    model = db.get_setting("ollama_model", "llama3")
+    try:
+        req = urllib.request.Request(
+            f"{ollama_url}/api/tags",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode())
+        models = [m.get("name", "") for m in data.get("models", [])]
+        return jsonify({"ok": True, "model": model, "models": models})
+    except urllib.error.URLError:
+        return jsonify({"ok": False, "error": "Server unreachable."})
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
+
+
 @app.route("/api/ai-fill", methods=["POST"])
 @login_required
 def ai_fill():
