@@ -190,6 +190,7 @@ def init_db():
             ("user_profile_skills",     ""),
             ("user_profile_experience", ""),
             ("user_profile_summary",    ""),
+            ("onboarding_complete",     "0"),
         ]
         c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
         conn.commit()
@@ -206,6 +207,8 @@ def init_db():
             ("user_profile_skills",     ""),
             ("user_profile_experience", ""),
             ("user_profile_summary",    ""),
+            # Existing installs skip onboarding — they are already set up.
+            ("onboarding_complete",     "1"),
         ]
         for key, value in migrations:
             if key not in existing_keys:
@@ -376,6 +379,21 @@ def _seed_companies(c):
            VALUES (?,?,?,?,?,?,?)""",
         example_companies,
     )
+
+
+# ---------------------------------------------------------------------------
+# Onboarding helpers
+# ---------------------------------------------------------------------------
+
+def clear_demo_data():
+    """Delete all seeded sample applications, companies, and their history."""
+    conn = get_connection()
+    conn.execute("DELETE FROM status_history WHERE application_id IN (SELECT id FROM applications)")
+    conn.execute("DELETE FROM applications")
+    conn.execute("DELETE FROM companies")
+    conn.execute("DELETE FROM reminders")
+    conn.commit()
+    conn.close()
 
 
 # ---------------------------------------------------------------------------

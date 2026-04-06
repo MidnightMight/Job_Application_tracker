@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome — Job Tracker Setup</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <style>
+    body { background: #1a1d20; }
+    .onboarding-card {
+      max-width: 600px;
+      margin: 60px auto;
+    }
+    .step-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: .9rem;
+    }
+  </style>
+</head>
+<body>
+
+<div class="onboarding-card px-3">
+
+  {# ── Flash messages ── #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }} alert-dismissible fade show mt-3" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {# ═══════════════════════════════════════════════════════════════════════ #}
+  {# STEP 1 — Welcome                                                        #}
+  {# ═══════════════════════════════════════════════════════════════════════ #}
+  {% if step == 'welcome' %}
+
+  <div class="card shadow-lg border-0 mt-4">
+    <div class="card-body p-5 text-center">
+
+      <i class="bi bi-briefcase-fill display-3 text-warning mb-3 d-block"></i>
+      <h2 class="fw-bold mb-1">Welcome to Job Tracker!</h2>
+      <p class="text-muted mb-4">Let's get you set up in a minute.</p>
+
+      {# Platform badge #}
+      {% if deployment_mode == 'docker' %}
+      <div class="alert alert-info d-inline-flex align-items-center gap-2 px-4 py-2 mb-4" role="status">
+        <i class="bi bi-boxes fs-5"></i>
+        <span><strong>Server / Docker mode</strong> — multi-user login and local AI are available.</span>
+      </div>
+      {% else %}
+      <div class="alert alert-secondary d-inline-flex align-items-center gap-2 px-4 py-2 mb-4" role="status">
+        <i class="bi bi-laptop fs-5"></i>
+        <span><strong>Local / personal mode</strong> — multi-user login and local AI are hidden
+          (not useful for a single desktop install).</span>
+      </div>
+      {% endif %}
+
+      {# Feature summary #}
+      <div class="text-start mb-4">
+        <p class="fw-semibold mb-2">What you get:</p>
+        <ul class="list-unstyled">
+          <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Track every job application in one place</li>
+          <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Status timeline, reminders &amp; inbox</li>
+          <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Company notes, CSV/Excel import &amp; export</li>
+          {% if deployment_mode == 'docker' %}
+          <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Multi-user login with per-user data</li>
+          <li class="mb-1"><i class="bi bi-check-circle-fill text-success me-2"></i>Local AI assistant via Ollama (optional)</li>
+          {% else %}
+          <li class="mb-1 text-muted"><i class="bi bi-dash-circle me-2"></i>Multi-user login (not available in local mode)</li>
+          <li class="mb-1 text-muted"><i class="bi bi-dash-circle me-2"></i>Local AI assistant (not available in local mode)</li>
+          {% endif %}
+        </ul>
+      </div>
+
+      {# Demo data note #}
+      <div class="alert alert-warning text-start mb-4 py-2">
+        <i class="bi bi-database me-1"></i>
+        <strong>Sample data loaded.</strong> The app comes with a few example applications and companies
+        so you can explore immediately. You can delete this demo data at the end of setup.
+      </div>
+
+      <a href="{{ url_for('onboarding') }}?next_step=1" class="btn btn-warning btn-lg fw-semibold px-5">
+        <i class="bi bi-arrow-right me-2"></i>Continue
+      </a>
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════ #}
+  {# STEP 2 — Admin / demo-data (submitted from 'welcome', redirected here)  #}
+  {# Shown when ?next_step=1 is in the URL (GET) or when step == 'admin'      #}
+  {# ═══════════════════════════════════════════════════════════════════════ #}
+  {% elif step == 'admin' or request.args.get('next_step') == '1' %}
+
+  <div class="card shadow-lg border-0 mt-4">
+    <div class="card-body p-5">
+
+      <div class="text-center mb-4">
+        <i class="bi bi-shield-lock-fill display-4 text-primary mb-2 d-block"></i>
+        <h3 class="fw-bold">Account &amp; Demo Data</h3>
+        <p class="text-muted">
+          {% if deployment_mode == 'docker' %}
+          Optionally create an admin account to protect your tracker with a password.
+          {% else %}
+          Choose whether to keep or clear the sample data.
+          {% endif %}
+        </p>
+      </div>
+
+      {# ── Docker: optional admin setup ── #}
+      {% if deployment_mode == 'docker' %}
+
+      {# Progress steps #}
+      <div class="d-flex align-items-center gap-2 mb-4">
+        <span class="step-badge bg-success text-white">1</span>
+        <div class="flex-grow-1" style="height:2px;background:#198754;"></div>
+        <span class="step-badge bg-primary text-white">2</span>
+        <div class="flex-grow-1" style="height:2px;background:#dee2e6;"></div>
+        <span class="step-badge bg-secondary text-white">✓</span>
+      </div>
+
+      <p class="fw-semibold mb-1"><i class="bi bi-person-plus me-1 text-primary"></i>Create admin account <span class="text-muted fw-normal small">(optional)</span></p>
+      <p class="text-muted small mb-3">
+        Leave the fields blank to skip — login will remain disabled and anyone with
+        access to the URL can use the app. You can always enable login later in
+        <strong>Settings → Users &amp; Security</strong>.
+      </p>
+
+      <form method="post" action="{{ url_for('onboarding') }}" id="onboardingForm">
+        <input type="hidden" name="action" value="setup_admin">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Username</label>
+          <input type="text" name="username" class="form-control" id="ob_username"
+                 placeholder="e.g. admin" autocomplete="username">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Password</label>
+          <input type="password" name="password" class="form-control" id="ob_password"
+                 placeholder="Min. 8 characters" autocomplete="new-password">
+        </div>
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Confirm Password</label>
+          <input type="password" name="password2" class="form-control" id="ob_password2"
+                 placeholder="Repeat password" autocomplete="new-password">
+        </div>
+
+        <hr class="my-4">
+
+        {# Demo data option #}
+        <p class="fw-semibold mb-1"><i class="bi bi-database me-1 text-warning"></i>Sample / demo data</p>
+        <p class="text-muted small mb-3">
+          The app was seeded with example applications and companies so you can explore.
+          You can delete them now to start with a clean slate.
+        </p>
+        <div class="form-check mb-4">
+          <input class="form-check-input" type="checkbox" id="clear_demo" name="clear_demo" value="1">
+          <label class="form-check-label" for="clear_demo">
+            <strong>Delete sample data</strong> — start with an empty tracker
+          </label>
+        </div>
+
+        <div class="d-flex gap-3 flex-wrap">
+          <button type="submit" class="btn btn-primary fw-semibold px-4"
+                  id="setupBtn">
+            <i class="bi bi-person-check me-1"></i>Create Account &amp; Finish
+          </button>
+          <button type="button" class="btn btn-outline-secondary px-4"
+                  id="skipBtn">
+            <i class="bi bi-skip-forward me-1"></i>Skip — no login
+          </button>
+        </div>
+      </form>
+
+      {# Hidden "skip" form #}
+      <form method="post" action="{{ url_for('onboarding') }}" id="skipForm" class="d-none">
+        <input type="hidden" name="action" value="skip">
+        <input type="hidden" name="clear_demo" id="skip_clear_demo" value="0">
+      </form>
+
+      {% else %}
+      {# ── Local mode: only the demo-data choice ── #}
+
+      <form method="post" action="{{ url_for('onboarding') }}" id="localForm">
+        <input type="hidden" name="action" value="skip">
+
+        <p class="fw-semibold mb-1"><i class="bi bi-database me-1 text-warning"></i>Sample / demo data</p>
+        <p class="text-muted small mb-3">
+          The app was seeded with example applications and companies so you can explore.
+          You can delete them now to start with a clean slate, or keep them as a reference.
+        </p>
+        <div class="form-check mb-4">
+          <input class="form-check-input" type="checkbox" id="clear_demo_local" name="clear_demo" value="1">
+          <label class="form-check-label" for="clear_demo_local">
+            <strong>Delete sample data</strong> — start with an empty tracker
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-warning fw-semibold px-5">
+          <i class="bi bi-check-lg me-1"></i>Get Started
+        </button>
+      </form>
+
+      {% endif %}{# end docker/local branch #}
+
+    </div>
+  </div>
+
+  {% endif %}{# end step selection #}
+
+  <p class="text-center text-muted small mt-3 pb-4">
+    Job Tracker &mdash; v{{ app_version }}
+  </p>
+</div>{# /onboarding-card #}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// When "Skip" is clicked: sync the clear_demo checkbox then submit the skip form.
+const skipBtn = document.getElementById('skipBtn');
+if (skipBtn) {
+  skipBtn.addEventListener('click', () => {
+    const clearChecked = document.getElementById('clear_demo').checked ? '1' : '0';
+    document.getElementById('skip_clear_demo').value = clearChecked;
+    document.getElementById('skipForm').submit();
+  });
+}
+
+// Disable the "Create Account" button if username is blank (treat as skip).
+const setupBtn  = document.getElementById('setupBtn');
+const obUser    = document.getElementById('ob_username');
+const obPass    = document.getElementById('ob_password');
+const obPass2   = document.getElementById('ob_password2');
+const obForm    = document.getElementById('onboardingForm');
+
+if (obForm) {
+  obForm.addEventListener('submit', (e) => {
+    const user = obUser.value.trim();
+    const pass = obPass.value;
+    const pass2 = obPass2.value;
+
+    // If all fields are blank, treat as a skip.
+    if (!user && !pass && !pass2) {
+      e.preventDefault();
+      const clearChecked = document.getElementById('clear_demo').checked ? '1' : '0';
+      document.getElementById('skip_clear_demo').value = clearChecked;
+      document.getElementById('skipForm').submit();
+      return;
+    }
+  });
+}
+</script>
+</body>
+</html>

@@ -16,6 +16,7 @@
          class="list-group-item list-group-item-action {% if section == 'statuses' %}active{% endif %}">
         <i class="bi bi-tags me-2"></i>Statuses
       </a>
+      {% if deployment_mode != 'local' %}
       <a href="{{ url_for('settings', section='users') }}"
          class="list-group-item list-group-item-action {% if section == 'users' %}active{% endif %}">
         <i class="bi bi-people me-2"></i>Users &amp; Security
@@ -24,6 +25,7 @@
          class="list-group-item list-group-item-action {% if section == 'ai' %}active{% endif %}">
         <i class="bi bi-robot me-2"></i>AI Assistant
       </a>
+      {% endif %}
       <a href="{{ url_for('settings', section='updates') }}"
          class="list-group-item list-group-item-action {% if section == 'updates' %}active{% endif %}">
         <i class="bi bi-arrow-repeat me-2"></i>Updates
@@ -192,6 +194,17 @@
 
     {# ── Users & Security ── #}
     {% elif section == 'users' %}
+    {% if deployment_mode == 'local' %}
+    <div class="alert alert-secondary d-flex align-items-center gap-3" role="alert">
+      <i class="bi bi-laptop fs-4 flex-shrink-0"></i>
+      <div>
+        <strong>Not available in local mode.</strong><br>
+        Multi-user login is disabled when running directly on Windows or macOS.
+        To enable it, deploy the app in Docker and set
+        <code>DEPLOYMENT_MODE=docker</code>.
+      </div>
+    </div>
+    {% else %}
     <div class="row g-4">
       <div class="col-12">
         <div class="card shadow-sm mb-4">
@@ -318,9 +331,21 @@
         </div>
       </div>
     </div>
+    {% endif %}{# end local-mode guard for users section #}
 
     {# ── AI Assistant ── #}
     {% elif section == 'ai' %}
+    {% if deployment_mode == 'local' %}
+    <div class="alert alert-secondary d-flex align-items-center gap-3" role="alert">
+      <i class="bi bi-laptop fs-4 flex-shrink-0"></i>
+      <div>
+        <strong>Not available in local mode.</strong><br>
+        The local AI assistant (Ollama) is disabled when running directly on Windows or macOS.
+        To enable it, deploy the app in Docker and set
+        <code>DEPLOYMENT_MODE=docker</code>.
+      </div>
+    </div>
+    {% else %}
     <div class="card shadow-sm mb-4">
       <div class="card-header fw-semibold d-flex align-items-center gap-2">
         <span><i class="bi bi-robot me-1"></i>Local LLM / Ollama Integration</span>
@@ -509,6 +534,7 @@
         application detail page to let you ask questions about that application.</p>
       </div>
     </div>
+    {% endif %}{# end local-mode guard for AI section #}
 
     {# ── Updates ── #}
     {% elif section == 'updates' %}
