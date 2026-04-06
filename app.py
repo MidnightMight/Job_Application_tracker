@@ -1,18 +1,26 @@
 import base64
 import csv
+import functools
 import io
+import json
 import os
 import shutil
+import urllib.error
+import urllib.request
 from types import SimpleNamespace
 
 from flask import (
     Flask, flash, redirect, render_template,
-    request, url_for, send_file, Response,
+    request, url_for, send_file, Response, session, jsonify,
 )
+from werkzeug.security import generate_password_hash, check_password_hash
 from apscheduler.schedulers.background import BackgroundScheduler
 import openpyxl
 
 import database as db
+
+APP_VERSION = "1.1.0"
+GITHUB_REPO = "MidnightMight/Job_Application_tracker"
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
@@ -20,6 +28,21 @@ app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me"
 db.init_db()
 
 app.jinja_env.globals["enumerate"] = enumerate
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def login_required(f):
+    """Decorator: redirect to login if auth is enabled and user is not logged in."""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if db.get_setting("login_enabled", "0") == "1":
+            if not session.get("user_id"):
+                return redirect(url_for("login", next=request.url))
+        return f(*args, **kwargs)
+    return decorated
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +82,41 @@ def inject_globals():
         "years": db.YEARS,
         "current_year_for_footer": date.today().year,
         "unread_reminder_count": db.get_unread_reminder_count(),
+        "login_enabled": db.get_setting("login_enabled", "0") == "1",
+        "current_user": session.get("username"),
+        "app_version": APP_VERSION,
     }
+
+
+# ---------------------------------------------------------------------------
+# Login / Logout
+# ---------------------------------------------------------------------------
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if db.get_setting("login_enabled", "0") != "1":
+        return redirect(url_for("dashboard"))
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        user = db.get_user_by_username(username)
+        if user and check_password_hash(user["password_hash"], password):
+            session["user_id"] = user["id"]
+            session["username"] = user["username"]
+            flash(f"Welcome back, {user['username']}!", "success")
+            next_url = request.form.get("next") or url_for("dashboard")
+            return redirect(next_url)
+        flash("Invalid username or password.", "danger")
+    return render_template("login.html", next=request.args.get("next", ""))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You have been logged out.", "info")
+    return redirect(url_for("login"))
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +124,7 @@ def inject_globals():
 # ---------------------------------------------------------------------------
 
 @app.route("/")
+@login_required
 def dashboard():
     current_year = 2025
     stats = db.get_stats(year=current_year)
@@ -522,25 +580,6 @@ def import_csv():
 
 
 # ---------------------------------------------------------------------------
-# Status manager
-# ---------------------------------------------------------------------------
-
-@app.route("/statuses", methods=["GET", "POST"])
-def manage_statuses():
-    if request.method == "POST":
-        action = request.form.get("action")
-        if action == "add":
-            ok, msg = db.add_status(request.form.get("name", ""))
-            flash(msg, "success" if ok else "danger")
-        elif action == "delete":
-            ok, msg = db.delete_status(request.form.get("name", ""))
-            flash(msg, "success" if ok else "danger")
-        return redirect(url_for("manage_statuses"))
-    statuses = db.get_status_options()
-    return render_template("status_manager.html", statuses=statuses)
-
-
-# ---------------------------------------------------------------------------
 # Companies
 # ---------------------------------------------------------------------------
 
@@ -617,19 +656,170 @@ def dismiss_all_reminders():
 # ---------------------------------------------------------------------------
 
 @app.route("/settings", methods=["GET", "POST"])
+@login_required
 def settings():
+    section = request.args.get("section", "general")
+
     if request.method == "POST":
-        db.set_setting("reminder_enabled", "1" if request.form.get("reminder_enabled") else "0")
-        days = request.form.get("reminder_days", "3").strip()
-        if days.isdigit() and int(days) >= 1:
-            db.set_setting("reminder_days", days)
-        else:
-            flash("Reminder days must be a positive integer.", "danger")
-            return redirect(url_for("settings"))
-        flash("Settings saved.", "success")
-        return redirect(url_for("settings"))
+        action = request.form.get("action", "save_general")
+
+        if action == "save_general":
+            db.set_setting("reminder_enabled", "1" if request.form.get("reminder_enabled") else "0")
+            days = request.form.get("reminder_days", "3").strip()
+            if days.isdigit() and int(days) >= 1:
+                db.set_setting("reminder_days", days)
+            else:
+                flash("Reminder days must be a positive integer.", "danger")
+                return redirect(url_for("settings", section="general"))
+            flash("General settings saved.", "success")
+            return redirect(url_for("settings", section="general"))
+
+        elif action == "save_security":
+            login_enabled = "1" if request.form.get("login_enabled") else "0"
+            # If turning on login, ensure at least one user exists.
+            if login_enabled == "1" and db.count_users() == 0:
+                flash("Cannot enable login — no users exist. Add a user first.", "danger")
+                return redirect(url_for("settings", section="users"))
+            db.set_setting("login_enabled", login_enabled)
+            flash("Security settings saved.", "success")
+            return redirect(url_for("settings", section="users"))
+
+        elif action == "add_status":
+            ok, msg = db.add_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="statuses"))
+
+        elif action == "delete_status":
+            ok, msg = db.delete_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="statuses"))
+
+        elif action == "add_user":
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            password2 = request.form.get("password2", "")
+            is_admin = bool(request.form.get("is_admin"))
+            if not username or not password:
+                flash("Username and password are required.", "danger")
+            elif password != password2:
+                flash("Passwords do not match.", "danger")
+            elif len(password) < 6:
+                flash("Password must be at least 6 characters.", "danger")
+            else:
+                pw_hash = generate_password_hash(password)
+                ok, msg = db.add_user(username, pw_hash, is_admin)
+                flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="users"))
+
+        elif action == "delete_user":
+            user_id = request.form.get("user_id", "")
+            if user_id.isdigit():
+                ok, msg = db.delete_user(int(user_id))
+                flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="users"))
+
+        elif action == "save_ai":
+            db.set_setting("ollama_enabled", "1" if request.form.get("ollama_enabled") else "0")
+            ollama_url = request.form.get("ollama_url", "").strip()
+            if ollama_url:
+                db.set_setting("ollama_url", ollama_url)
+            db.set_setting("ollama_model", request.form.get("ollama_model", "llama3").strip() or "llama3")
+            flash("AI settings saved.", "success")
+            return redirect(url_for("settings", section="ai"))
+
+        flash("Unknown action.", "warning")
+        return redirect(url_for("settings", section=section))
+
     current = db.get_all_settings()
-    return render_template("settings.html", settings=current)
+    statuses = db.get_status_options()
+    users = db.get_users()
+    return render_template(
+        "settings.html",
+        settings=current,
+        section=section,
+        statuses=statuses,
+        users=users,
+        app_version=APP_VERSION,
+    )
+
+
+@app.route("/settings/ollama-test", methods=["POST"])
+@login_required
+def ollama_test():
+    """AJAX: test connection to the configured Ollama server."""
+    ollama_url = request.json.get("url", db.get_setting("ollama_url", "http://localhost:11434"))
+    ollama_url = ollama_url.rstrip("/")
+    try:
+        req = urllib.request.Request(
+            f"{ollama_url}/api/tags",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+        models = [m.get("name", "") for m in data.get("models", [])]
+        return jsonify({"ok": True, "models": models})
+    except urllib.error.URLError as exc:
+        return jsonify({"ok": False, "error": str(exc.reason)})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)})
+
+
+@app.route("/settings/check-update")
+@login_required
+def check_update():
+    """AJAX: check GitHub releases for a newer version."""
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "Job-Tracker-App",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        latest_tag = data.get("tag_name", "").lstrip("v")
+        html_url = data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases")
+        is_newer = _version_is_newer(latest_tag, APP_VERSION)
+        return jsonify({
+            "ok": True,
+            "current": APP_VERSION,
+            "latest": latest_tag,
+            "update_available": is_newer,
+            "html_url": html_url,
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc), "current": APP_VERSION})
+
+
+def _version_is_newer(latest: str, current: str) -> bool:
+    """Return True if latest > current using simple numeric comparison."""
+    try:
+        l_parts = [int(x) for x in latest.split(".")]
+        c_parts = [int(x) for x in current.split(".")]
+        # Pad to same length.
+        while len(l_parts) < len(c_parts):
+            l_parts.append(0)
+        while len(c_parts) < len(l_parts):
+            c_parts.append(0)
+        return l_parts > c_parts
+    except Exception:
+        return False
+
+
+# Keep the old /statuses route working as a redirect to settings for backward compat.
+@app.route("/statuses", methods=["GET", "POST"])
+@login_required
+def manage_statuses():
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            ok, msg = db.add_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+        elif action == "delete":
+            ok, msg = db.delete_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+    return redirect(url_for("settings", section="statuses"))
 
 
 # ---------------------------------------------------------------------------

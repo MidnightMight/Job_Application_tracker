@@ -2,16 +2,47 @@
 {% block title %}Settings — Job Tracker{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-7 col-lg-6">
-    <h4 class="mb-4"><i class="bi bi-gear-fill text-secondary me-2"></i>Settings</h4>
+<h4 class="mb-4"><i class="bi bi-gear-fill text-secondary me-2"></i>Settings</h4>
 
+<div class="row g-0">
+  <!-- ── Left sidebar ─────────────────────────────────────────────────── -->
+  <div class="col-md-3 col-lg-2 mb-4 mb-md-0 pe-md-3">
+    <div class="list-group list-group-flush shadow-sm rounded">
+      <a href="{{ url_for('settings', section='general') }}"
+         class="list-group-item list-group-item-action {% if section == 'general' %}active{% endif %}">
+        <i class="bi bi-sliders me-2"></i>General
+      </a>
+      <a href="{{ url_for('settings', section='statuses') }}"
+         class="list-group-item list-group-item-action {% if section == 'statuses' %}active{% endif %}">
+        <i class="bi bi-tags me-2"></i>Statuses
+      </a>
+      <a href="{{ url_for('settings', section='users') }}"
+         class="list-group-item list-group-item-action {% if section == 'users' %}active{% endif %}">
+        <i class="bi bi-people me-2"></i>Users &amp; Security
+      </a>
+      <a href="{{ url_for('settings', section='ai') }}"
+         class="list-group-item list-group-item-action {% if section == 'ai' %}active{% endif %}">
+        <i class="bi bi-robot me-2"></i>AI Assistant
+      </a>
+      <a href="{{ url_for('settings', section='updates') }}"
+         class="list-group-item list-group-item-action {% if section == 'updates' %}active{% endif %}">
+        <i class="bi bi-arrow-repeat me-2"></i>Updates
+      </a>
+    </div>
+  </div>
+
+  <!-- ── Main content area ──────────────────────────────────────────── -->
+  <div class="col-md-9 col-lg-10">
+
+    {# ── General ── #}
+    {% if section == 'general' %}
     <div class="card shadow-sm mb-4">
       <div class="card-header fw-semibold">
         <i class="bi bi-bell me-1"></i>Reminder Notifications
       </div>
       <div class="card-body">
-        <form method="post" action="{{ url_for('settings') }}">
+        <form method="post" action="{{ url_for('settings', section='general') }}">
+          <input type="hidden" name="action" value="save_general">
 
           <div class="mb-3">
             <div class="form-check form-switch">
@@ -29,21 +60,19 @@
           </div>
 
           <div class="mb-4">
-            <label for="reminder_days" class="form-label fw-semibold">
-              Reminder threshold (days)
-            </label>
+            <label for="reminder_days" class="form-label fw-semibold">Reminder threshold (days)</label>
             <input type="number" class="form-control" id="reminder_days"
                    name="reminder_days" min="1" max="365"
                    value="{{ settings.get('reminder_days', '3') }}"
                    style="max-width:120px;">
             <div class="form-text">
-              Default: <strong>3</strong> days. A reminder is created once per day per pending application
-              that exceeds this threshold.
+              Default: <strong>3</strong> days. A reminder is created once per day per pending
+              application that exceeds this threshold.
             </div>
           </div>
 
           <button type="submit" class="btn btn-primary">
-            <i class="bi bi-save me-1"></i>Save Settings
+            <i class="bi bi-save me-1"></i>Save
           </button>
         </form>
       </div>
@@ -57,11 +86,412 @@
         <p>The built-in reminder system uses a background scheduler (APScheduler) that runs
         inside the Flask server process. It checks for pending applications every hour and adds
         a message to the <a href="{{ url_for('inbox') }}">Inbox</a> when the threshold is exceeded.</p>
-        <p class="mb-0">No external services, emails, or browser extensions are required. Reminders
-        are stored in the local database and visible only within this app.</p>
+        <p class="mb-0">No external services, emails, or browser extensions are required.</p>
       </div>
     </div>
 
-  </div>
-</div>
+    {# ── Statuses ── #}
+    {% elif section == 'statuses' %}
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold">
+            <i class="bi bi-list-ul text-primary me-2"></i>Current Statuses
+            <span class="badge bg-secondary ms-2">{{ statuses | length }}</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle mb-0">
+              <thead class="table-dark">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Status Name</th>
+                  <th>Display Label</th>
+                  <th>Badge Preview</th>
+                  <th class="text-end pe-3">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in statuses %}
+                <tr>
+                  <td class="ps-3 text-muted small">{{ loop.index }}</td>
+                  <td class="fw-semibold small">{{ s }}</td>
+                  <td class="text-muted small">{{ s | replace('_', ' ') }}</td>
+                  <td>
+                    <span class="badge status-badge status-{{ s | replace(' ', '_') }}">
+                      {{ s | replace('_', ' ') }}
+                    </span>
+                  </td>
+                  <td class="text-end pe-3">
+                    <form method="post" action="{{ url_for('settings', section='statuses') }}"
+                          class="d-inline"
+                          onsubmit="return confirm('Delete status \'{{ s }}\'? This cannot be done if any applications use it.')">
+                      <input type="hidden" name="action" value="delete_status">
+                      <input type="hidden" name="name" value="{{ s }}">
+                      <button class="btn btn-outline-danger btn-sm py-0">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold">
+            <i class="bi bi-plus-circle text-success me-2"></i>Add New Status
+          </div>
+          <div class="card-body">
+            <form method="post" action="{{ url_for('settings', section='statuses') }}">
+              <input type="hidden" name="action" value="add_status">
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Status Name</label>
+                <input type="text" name="name" class="form-control"
+                       placeholder="e.g. Technical_Test or Phone_Screen" required>
+                <div class="form-text">Spaces are converted to underscores automatically.</div>
+              </div>
+              <button type="submit" class="btn btn-success fw-semibold">
+                <i class="bi bi-plus-circle me-1"></i>Add Status
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div class="card shadow-sm mt-3">
+          <div class="card-body text-muted small">
+            <i class="bi bi-info-circle text-primary me-1"></i>
+            <strong>Note:</strong> A status cannot be deleted while any application is using it.
+            Update those applications to a different status first.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── Users & Security ── #}
+    {% elif section == 'users' %}
+    <div class="row g-4">
+      <div class="col-12">
+        <div class="card shadow-sm mb-4">
+          <div class="card-header fw-semibold">
+            <i class="bi bi-shield-lock me-1"></i>Login &amp; Password Protection
+          </div>
+          <div class="card-body">
+            <form method="post" action="{{ url_for('settings', section='users') }}">
+              <input type="hidden" name="action" value="save_security">
+              <div class="mb-3">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="login_enabled"
+                         name="login_enabled" role="switch"
+                         {% if settings.get('login_enabled', '0') == '1' %}checked{% endif %}>
+                  <label class="form-check-label" for="login_enabled">
+                    Require login to access the application
+                  </label>
+                </div>
+                <div class="form-text text-warning">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  You must have at least one user account before enabling this.
+                  If you get locked out, set <code>login_enabled</code> to <code>0</code>
+                  directly in the database.
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-save me-1"></i>Save Security Settings
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold">
+            <i class="bi bi-people me-1"></i>User Accounts
+            <span class="badge bg-secondary ms-2">{{ users | length }}</span>
+          </div>
+          {% if users %}
+          <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle mb-0">
+              <thead class="table-dark">
+                <tr>
+                  <th class="ps-3">Username</th>
+                  <th>Role</th>
+                  <th>Created</th>
+                  <th class="text-end pe-3">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for u in users %}
+                <tr>
+                  <td class="ps-3 fw-semibold">
+                    <i class="bi bi-person-circle me-1 text-muted"></i>{{ u.username }}
+                  </td>
+                  <td>
+                    {% if u.is_admin %}
+                    <span class="badge bg-warning text-dark">Admin</span>
+                    {% else %}
+                    <span class="badge bg-secondary">User</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-muted small">{{ u.created_at[:10] }}</td>
+                  <td class="text-end pe-3">
+                    <form method="post" action="{{ url_for('settings', section='users') }}"
+                          class="d-inline"
+                          onsubmit="return confirm('Delete user \'{{ u.username }}\'?')">
+                      <input type="hidden" name="action" value="delete_user">
+                      <input type="hidden" name="user_id" value="{{ u.id }}">
+                      <button class="btn btn-outline-danger btn-sm py-0">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="card-body text-muted text-center py-4">
+            <i class="bi bi-people display-6 d-block mb-2"></i>
+            No user accounts yet. Add one below.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="card shadow-sm">
+          <div class="card-header fw-semibold">
+            <i class="bi bi-person-plus text-success me-2"></i>Add New User
+          </div>
+          <div class="card-body">
+            <form method="post" action="{{ url_for('settings', section='users') }}">
+              <input type="hidden" name="action" value="add_user">
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Username</label>
+                <input type="text" name="username" class="form-control"
+                       placeholder="e.g. admin" required autocomplete="off">
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Password</label>
+                <input type="password" name="password" class="form-control"
+                       placeholder="Min. 6 characters" required autocomplete="new-password">
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Confirm Password</label>
+                <input type="password" name="password2" class="form-control"
+                       placeholder="Repeat password" required autocomplete="new-password">
+              </div>
+              <div class="mb-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin">
+                  <label class="form-check-label" for="is_admin">Admin user</label>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-success fw-semibold">
+                <i class="bi bi-person-plus me-1"></i>Add User
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# ── AI Assistant ── #}
+    {% elif section == 'ai' %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-robot me-1"></i>Local LLM / Ollama Integration
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('settings', section='ai') }}" id="aiForm">
+          <input type="hidden" name="action" value="save_ai">
+
+          <div class="mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="ollama_enabled"
+                     name="ollama_enabled" role="switch"
+                     {% if settings.get('ollama_enabled', '0') == '1' %}checked{% endif %}>
+              <label class="form-check-label" for="ollama_enabled">
+                Enable Ollama AI Assistant
+              </label>
+            </div>
+            <div class="form-text">
+              Connect to a local <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>
+              server to get AI-powered suggestions for your applications.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="ollama_url" class="form-label fw-semibold">Ollama Server URL</label>
+            <div class="input-group" style="max-width:420px;">
+              <input type="url" class="form-control" id="ollama_url" name="ollama_url"
+                     value="{{ settings.get('ollama_url', 'http://localhost:11434') }}"
+                     placeholder="http://localhost:11434">
+              <button type="button" class="btn btn-outline-secondary" id="testOllamaBtn">
+                <i class="bi bi-lightning me-1"></i>Test
+              </button>
+            </div>
+            <div id="ollamaTestResult" class="form-text mt-1"></div>
+          </div>
+
+          <div class="mb-4">
+            <label for="ollama_model" class="form-label fw-semibold">Model Name</label>
+            <input type="text" class="form-control" id="ollama_model" name="ollama_model"
+                   value="{{ settings.get('ollama_model', 'llama3') }}"
+                   placeholder="e.g. llama3, mistral, phi3"
+                   style="max-width:240px;">
+            <div class="form-text">
+              The Ollama model to use. Run <code>ollama pull llama3</code> to download it.
+              <span id="availableModels"></span>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i>Save AI Settings
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-info-circle me-1"></i>About Ollama Integration
+      </div>
+      <div class="card-body text-muted small">
+        <p>
+          <strong>Ollama</strong> lets you run large language models locally on your own machine.
+          Once configured, the AI Assistant can help you draft cover letters, summarise job
+          descriptions, or suggest improvements to your application notes — all without sending
+          data to any external cloud service.
+        </p>
+        <p>Quick start:</p>
+        <ol>
+          <li>Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener">ollama.com</a></li>
+          <li>Run <code>ollama pull llama3</code> (or another model)</li>
+          <li>Enter the server URL above (default: <code>http://localhost:11434</code>)</li>
+          <li>Click <strong>Test</strong> to verify the connection</li>
+        </ol>
+        <p class="mb-0">When enabled, an <strong>Ask AI</strong> button will appear on the
+        application detail page to let you ask questions about that application.</p>
+      </div>
+    </div>
+
+    {# ── Updates ── #}
+    {% elif section == 'updates' %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-arrow-repeat me-1"></i>Application Version &amp; Updates
+      </div>
+      <div class="card-body">
+        <dl class="row mb-3">
+          <dt class="col-sm-4">Current version</dt>
+          <dd class="col-sm-8">
+            <span class="badge bg-primary fs-6">v{{ app_version }}</span>
+          </dd>
+        </dl>
+
+        <button type="button" class="btn btn-outline-primary" id="checkUpdateBtn">
+          <i class="bi bi-cloud-arrow-down me-1"></i>Check for Updates
+        </button>
+        <div id="updateResult" class="mt-3"></div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-info-circle me-1"></i>How to Update
+      </div>
+      <div class="card-body text-muted small">
+        <p>
+          This app is open-source and hosted on GitHub. To update to the latest version:
+        </p>
+        <ol>
+          <li>Stop the running server</li>
+          <li>Run <code>git pull origin main</code> in the project directory</li>
+          <li>Install any new dependencies: <code>pip install -r requirements.txt</code></li>
+          <li>Restart the server</li>
+        </ol>
+        <p class="mb-0">If you are using Docker, rebuild the image:
+          <code>docker compose up --build -d</code></p>
+      </div>
+    </div>
+
+    {% endif %}
+  </div>{# /col main content #}
+</div>{# /row #}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Ollama test connection ────────────────────────────────────────────────
+const testBtn = document.getElementById('testOllamaBtn');
+if (testBtn) {
+  testBtn.addEventListener('click', async () => {
+    const url = document.getElementById('ollama_url').value.trim();
+    const result = document.getElementById('ollamaTestResult');
+    const models = document.getElementById('availableModels');
+    result.textContent = 'Testing connection…';
+    result.className = 'form-text mt-1 text-muted';
+    try {
+      const resp = await fetch('{{ url_for("ollama_test") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url}),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        result.textContent = '✓ Connected successfully!';
+        result.className = 'form-text mt-1 text-success';
+        if (data.models && data.models.length) {
+          models.textContent = ' Available: ' + data.models.join(', ');
+        }
+      } else {
+        result.textContent = '✗ Connection failed: ' + (data.error || 'unknown error');
+        result.className = 'form-text mt-1 text-danger';
+      }
+    } catch (e) {
+      result.textContent = '✗ Request error: ' + e.message;
+      result.className = 'form-text mt-1 text-danger';
+    }
+  });
+}
+
+// ── Update checker ─────────────────────────────────────────────────────
+const checkBtn = document.getElementById('checkUpdateBtn');
+if (checkBtn) {
+  checkBtn.addEventListener('click', async () => {
+    const div = document.getElementById('updateResult');
+    div.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Checking…</span>';
+    try {
+      const resp = await fetch('{{ url_for("check_update") }}');
+      const data = await resp.json();
+      if (!data.ok) {
+        div.innerHTML = `<div class="alert alert-warning py-2">Could not reach GitHub: ${data.error || 'unknown error'}</div>`;
+        return;
+      }
+      if (data.update_available) {
+        div.innerHTML = `
+          <div class="alert alert-success py-2">
+            <i class="bi bi-arrow-up-circle me-1"></i>
+            A new version <strong>v${data.latest}</strong> is available!
+            <a href="${data.html_url}" target="_blank" rel="noopener" class="alert-link ms-2">
+              View release notes <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+          </div>`;
+      } else {
+        div.innerHTML = `<div class="alert alert-info py-2">
+          <i class="bi bi-check-circle me-1"></i>
+          You are running the latest version (v${data.current}).
+        </div>`;
+      }
+    } catch (e) {
+      div.innerHTML = `<div class="alert alert-danger py-2">Error: ${e.message}</div>`;
+    }
+  });
+}
+</script>
 {% endblock %}

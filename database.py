@@ -45,7 +45,7 @@ def get_connection():
     return conn
 
 
-_ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings"}
+_ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings", "users"}
 _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at", "last_contact_date",
 }
@@ -158,6 +158,17 @@ def init_db():
         )
     """)
 
+    # ── Users ─────────────────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_admin      INTEGER DEFAULT 0,
+            created_at    TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
 
     # Seed default settings if the table is empty.
@@ -165,8 +176,25 @@ def init_db():
         default_settings = [
             ("reminder_enabled", "1"),
             ("reminder_days",    "3"),
+            ("login_enabled",    "0"),
+            ("ollama_enabled",   "0"),
+            ("ollama_url",       "http://localhost:11434"),
+            ("ollama_model",     "llama3"),
         ]
         c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
+        conn.commit()
+    else:
+        # Migrate: add new settings keys if missing (for existing installs).
+        existing_keys = {r[0] for r in c.execute("SELECT key FROM settings").fetchall()}
+        migrations = [
+            ("login_enabled",    "0"),
+            ("ollama_enabled",   "0"),
+            ("ollama_url",       "http://localhost:11434"),
+            ("ollama_model",     "llama3"),
+        ]
+        for key, value in migrations:
+            if key not in existing_keys:
+                c.execute("INSERT INTO settings (key, value) VALUES (?,?)", (key, value))
         conn.commit()
 
     # Seed statuses if empty.
@@ -906,3 +934,65 @@ def get_unread_reminder_count() -> int:
     ).fetchone()[0]
     conn.close()
     return count
+
+
+# ---------------------------------------------------------------------------
+# User management
+# ---------------------------------------------------------------------------
+
+def get_users() -> list:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, username, is_admin, created_at FROM users ORDER BY created_at"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def count_users() -> int:
+    conn = get_connection()
+    n = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    conn.close()
+    return n
+
+
+def add_user(username: str, password_hash: str, is_admin: bool = False) -> tuple[bool, str]:
+    username = username.strip()
+    if not username:
+        return False, "Username cannot be empty."
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?,?,?,?)",
+            (username, password_hash, 1 if is_admin else 0, now),
+        )
+        conn.commit()
+        return True, f"User '{username}' added."
+    except sqlite3.IntegrityError:
+        return False, f"Username '{username}' already exists."
+    finally:
+        conn.close()
+
+
+def delete_user(user_id: int) -> tuple[bool, str]:
+    conn = get_connection()
+    row = conn.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False, "User not found."
+    username = row["username"]
+    conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True, f"User '{username}' deleted."
+
+
+def get_user_by_username(username: str) -> dict | None:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, username, password_hash, is_admin FROM users WHERE username=?",
+        (username,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
