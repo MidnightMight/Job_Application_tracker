@@ -69,6 +69,10 @@ logic, requirements, and design decisions originate from the repository owner.
 - **One-command launchers** — `launch.sh` (Linux / macOS / Unix) and
   `launch.bat` (Windows) handle venv creation, dependency install, and server
   start in a single step
+- **Progressive Web App (PWA)** — a `manifest.json` and service worker let
+  users add the tracker to their home screen on Android and iOS; the app loads
+  from cache when offline so previously visited pages remain accessible without
+  a network connection
 
 ---
 
@@ -473,6 +477,13 @@ Custom statuses can be added or removed at any time via the **Statuses** page.
 - **Email / calendar integration** — parsing interview confirmation emails and
   automatically updating the application status is technically feasible using
   the Gmail or Outlook API, though it requires OAuth setup.
-- **Progressive Web App (PWA)** — adding a `manifest.json` and a minimal service
-  worker would let users install the tracker to their home screen on mobile
-  devices, giving it an app-like feel without any app store involvement.
+- **REST API** — a JSON endpoint (`POST /api/applications`, protected by an
+  API key) would enable browser-extension integration, mobile shortcuts, and
+  third-party automation tools.
+- **Dark / light theme toggle** — a user-selectable colour scheme (stored in
+  settings or `localStorage`) would improve usability for users who prefer a
+  light interface.
+- **Bulk status update** — selecting multiple rows in a year view and changing
+  their status in one action would speed up post-rejection cleanup.
+- **Global search** — a single search bar that queries company, job title, and
+  notes across all years would make it faster to locate older applications.

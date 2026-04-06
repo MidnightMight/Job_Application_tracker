@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <!-- Rounded dark background -->
+  <rect width="192" height="192" rx="38" fill="#212529"/>
+  <!-- Briefcase body -->
+  <rect x="38" y="84" width="116" height="78" rx="10" fill="#FFC107"/>
+  <!-- Briefcase handle (open rectangle outline) -->
+  <path d="M68 84V70a28 28 0 0 1 56 0v14" fill="none" stroke="#FFC107" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Center latch -->
+  <rect x="82" y="116" width="28" height="14" rx="4" fill="#212529"/>
+</svg>
