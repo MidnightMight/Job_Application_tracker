@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Job Tracker</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="bg-light d-flex align-items-center min-vh-100">
+
+<div class="container" style="max-width:420px;">
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-briefcase-fill text-warning display-5"></i>
+        <h4 class="fw-bold mt-2">Job Tracker</h4>
+        <p class="text-muted small">Sign in to continue</p>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for cat, msg in messages %}
+            <div class="alert alert-{{ cat }} py-2 small">{{ msg }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="post">
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="mb-3">
+          <label for="username" class="form-label fw-semibold">Username</label>
+          <input type="text" class="form-control" id="username" name="username"
+                 autofocus required autocomplete="username">
+        </div>
+        <div class="mb-4">
+          <label for="password" class="form-label fw-semibold">Password</label>
+          <input type="password" class="form-control" id="password" name="password"
+                 required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-warning w-100 fw-semibold">
+          <i class="bi bi-box-arrow-in-right me-1"></i>Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <footer class="text-center text-muted py-3 small">
+    Job Tracker &mdash;
+    <a href="https://github.com/MidnightMight" target="_blank" rel="noopener" class="text-muted">MidnightMight</a>
+    &amp; GitHub Copilot
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

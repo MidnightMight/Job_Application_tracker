@@ -45,7 +45,7 @@ def get_connection():
     return conn
 
 
-_ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings"}
+_ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings", "users"}
 _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at", "last_contact_date",
 }
@@ -125,9 +125,14 @@ def init_db():
             applied_2024  INTEGER DEFAULT 0,
             applied_2025  INTEGER DEFAULT 0,
             applied_2026  INTEGER DEFAULT 0,
-            applied_2027  INTEGER DEFAULT 0
+            applied_2027  INTEGER DEFAULT 0,
+            user_id       INTEGER
         )
     """)
+    # Migrate existing companies tables that lack the user_id column.
+    _col_names = [r[1] for r in c.execute("PRAGMA table_info(companies)").fetchall()]
+    if "user_id" not in _col_names:
+        c.execute("ALTER TABLE companies ADD COLUMN user_id INTEGER")
 
     # ── Custom statuses ──────────────────────────────────────────────────────
     c.execute("""
@@ -158,15 +163,53 @@ def init_db():
         )
     """)
 
+    # ── Users ─────────────────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_admin      INTEGER DEFAULT 0,
+            created_at    TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
 
     # Seed default settings if the table is empty.
     if c.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0:
         default_settings = [
-            ("reminder_enabled", "1"),
-            ("reminder_days",    "3"),
+            ("reminder_enabled",        "1"),
+            ("reminder_days",           "3"),
+            ("login_enabled",           "0"),
+            ("ollama_enabled",          "0"),
+            ("ollama_url",              "http://localhost:11434"),
+            ("ollama_model",            "llama3"),
+            ("company_pool_enabled",    "0"),
+            ("ai_fit_enabled",          "0"),
+            ("user_profile_skills",     ""),
+            ("user_profile_experience", ""),
+            ("user_profile_summary",    ""),
         ]
         c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
+        conn.commit()
+    else:
+        # Migrate: add new settings keys if missing (for existing installs).
+        existing_keys = {r[0] for r in c.execute("SELECT key FROM settings").fetchall()}
+        migrations = [
+            ("login_enabled",           "0"),
+            ("ollama_enabled",          "0"),
+            ("ollama_url",              "http://localhost:11434"),
+            ("ollama_model",            "llama3"),
+            ("company_pool_enabled",    "0"),
+            ("ai_fit_enabled",          "0"),
+            ("user_profile_skills",     ""),
+            ("user_profile_experience", ""),
+            ("user_profile_summary",    ""),
+        ]
+        for key, value in migrations:
+            if key not in existing_keys:
+                c.execute("INSERT INTO settings (key, value) VALUES (?,?)", (key, value))
         conn.commit()
 
     # Seed statuses if empty.
@@ -662,11 +705,35 @@ def bulk_import_applications(rows: list[dict]) -> dict:
 # Companies
 # ---------------------------------------------------------------------------
 
-def get_companies():
+def get_companies(user_id: int | None = None, pool_enabled: bool = True):
+    """Return companies visible to the given user.
+
+    When pool_enabled is True (or login is not in use), all companies are
+    returned regardless of owner.  When pool_enabled is False, only companies
+    owned by user_id or with no owner (user_id IS NULL) are returned.
+
+    In the pooled view the ``note`` (sector) of companies owned by OTHER users
+    is blanked out so private annotations are not exposed across accounts.
+    """
     conn = get_connection()
     rows = conn.execute("SELECT * FROM companies ORDER BY company_name").fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        owner = d.get("user_id")
+        # Ownership filter when pooling is off.
+        if not pool_enabled and user_id is not None:
+            if owner is not None and owner != user_id:
+                continue
+        # In a pooled view, hide notes/sectors that belong to other users.
+        if pool_enabled and user_id is not None and owner is not None and owner != user_id:
+            d["note"] = None          # redact sector note of foreign records
+            d["_pooled_from_other"] = True
+        else:
+            d["_pooled_from_other"] = False
+        result.append(d)
+    return result
 
 
 def get_company(company_id):
@@ -678,13 +745,13 @@ def get_company(company_id):
     return dict(row) if row else None
 
 
-def add_company(data):
+def add_company(data, user_id: int | None = None):
     conn = get_connection()
     conn.execute(
         """INSERT INTO companies
            (company_name, note, applied_2023, applied_2024,
-            applied_2025, applied_2026, applied_2027)
-           VALUES (?,?,?,?,?,?,?)""",
+            applied_2025, applied_2026, applied_2027, user_id)
+           VALUES (?,?,?,?,?,?,?,?)""",
         (
             data.get("company_name", ""),
             data.get("note", ""),
@@ -693,6 +760,7 @@ def add_company(data):
             1 if data.get("applied_2025") else 0,
             1 if data.get("applied_2026") else 0,
             1 if data.get("applied_2027") else 0,
+            user_id,
         ),
     )
     conn.commit()
@@ -727,6 +795,30 @@ def delete_company(company_id):
     conn.execute("DELETE FROM companies WHERE id=?", (company_id,))
     conn.commit()
     conn.close()
+
+
+def bulk_delete_companies(ids: list) -> int:
+    """Delete multiple companies by ID. Returns number of rows deleted."""
+    if not ids:
+        return 0
+    # Validate every ID at the DB layer regardless of caller validation.
+    safe_ids = []
+    for raw in ids:
+        try:
+            n = int(raw)
+            if n > 0:
+                safe_ids.append(n)
+        except (TypeError, ValueError):
+            pass
+    if not safe_ids:
+        return 0
+    placeholders = ",".join("?" for _ in safe_ids)
+    conn = get_connection()
+    conn.execute(f"DELETE FROM companies WHERE id IN ({placeholders})", safe_ids)
+    count = conn.execute("SELECT changes()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -906,3 +998,65 @@ def get_unread_reminder_count() -> int:
     ).fetchone()[0]
     conn.close()
     return count
+
+
+# ---------------------------------------------------------------------------
+# User management
+# ---------------------------------------------------------------------------
+
+def get_users() -> list:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, username, is_admin, created_at FROM users ORDER BY created_at"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def count_users() -> int:
+    conn = get_connection()
+    n = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    conn.close()
+    return n
+
+
+def add_user(username: str, password_hash: str, is_admin: bool = False) -> tuple[bool, str]:
+    username = username.strip()
+    if not username:
+        return False, "Username cannot be empty."
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?,?,?,?)",
+            (username, password_hash, 1 if is_admin else 0, now),
+        )
+        conn.commit()
+        return True, f"User '{username}' added."
+    except sqlite3.IntegrityError:
+        return False, f"Username '{username}' already exists."
+    finally:
+        conn.close()
+
+
+def delete_user(user_id: int) -> tuple[bool, str]:
+    conn = get_connection()
+    row = conn.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
+    if not row:
+        conn.close()
+        return False, "User not found."
+    username = row["username"]
+    conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    return True, f"User '{username}' deleted."
+
+
+def get_user_by_username(username: str) -> dict | None:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, username, password_hash, is_admin FROM users WHERE username=?",
+        (username,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None

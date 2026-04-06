@@ -1,18 +1,31 @@
 import base64
 import csv
+import functools
 import io
+import json
 import os
 import shutil
+import urllib.error
+import urllib.request
 from types import SimpleNamespace
 
 from flask import (
     Flask, flash, redirect, render_template,
-    request, url_for, send_file, Response,
+    request, url_for, send_file, Response, session, jsonify,
 )
+from werkzeug.security import generate_password_hash, check_password_hash
 from apscheduler.schedulers.background import BackgroundScheduler
 import openpyxl
 
 import database as db
+
+APP_VERSION = "1.1.0"
+GITHUB_REPO = "MidnightMight/Job_Application_tracker"
+
+# Limits used in API helpers.
+_MAX_JOB_DESC_LENGTH  = 4000   # characters sent to the LLM
+_MAX_ERROR_MSG_LENGTH = 120    # characters of raw error text exposed to clients
+_MAX_PROFILE_LENGTH   = 8000   # characters stored for user profile summary from PDF
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
@@ -20,6 +33,21 @@ app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me"
 db.init_db()
 
 app.jinja_env.globals["enumerate"] = enumerate
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def login_required(f):
+    """Decorator: redirect to login if auth is enabled and user is not logged in."""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if db.get_setting("login_enabled", "0") == "1":
+            if not session.get("user_id"):
+                return redirect(url_for("login", next=request.url))
+        return f(*args, **kwargs)
+    return decorated
 
 
 # ---------------------------------------------------------------------------
@@ -55,11 +83,65 @@ if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
 @app.context_processor
 def inject_globals():
     from datetime import date
+    _profile_complete = bool(
+        db.get_setting("user_profile_skills", "").strip()
+        or db.get_setting("user_profile_experience", "").strip()
+        or db.get_setting("user_profile_summary", "").strip()
+    )
     return {
         "years": db.YEARS,
         "current_year_for_footer": date.today().year,
         "unread_reminder_count": db.get_unread_reminder_count(),
+        "login_enabled": db.get_setting("login_enabled", "0") == "1",
+        "current_user": session.get("username"),
+        "app_version": APP_VERSION,
+        "ollama_enabled": db.get_setting("ollama_enabled", "0") == "1",
+        "ai_fit_enabled": db.get_setting("ai_fit_enabled", "0") == "1",
+        "user_profile_complete": _profile_complete,
     }
+
+
+# ---------------------------------------------------------------------------
+# Login / Logout
+# ---------------------------------------------------------------------------
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if db.get_setting("login_enabled", "0") != "1":
+        return redirect(url_for("dashboard"))
+    if session.get("user_id"):
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        user = db.get_user_by_username(username)
+        if user and check_password_hash(user["password_hash"], password):
+            session["user_id"] = user["id"]
+            session["username"] = user["username"]
+            flash(f"Welcome back, {user['username']}!", "success")
+            # Only allow redirects to internal paths: must start with '/'
+            # and contain no scheme or netloc, preventing open-redirect attacks.
+            raw_next = request.form.get("next", "")
+            from urllib.parse import urlparse as _urlparse
+            _p = _urlparse(raw_next)
+            _safe = (
+                raw_next
+                and raw_next.startswith("/")
+                and not raw_next.startswith("//")
+                and not _p.netloc
+                and not _p.scheme
+            )
+            next_url = raw_next if _safe else url_for("dashboard")
+            return redirect(next_url)
+        flash("Invalid username or password.", "danger")
+    return render_template("login.html", next=request.args.get("next", ""))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You have been logged out.", "info")
+    return redirect(url_for("login"))
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +149,7 @@ def inject_globals():
 # ---------------------------------------------------------------------------
 
 @app.route("/")
+@login_required
 def dashboard():
     current_year = 2025
     stats = db.get_stats(year=current_year)
@@ -522,44 +605,40 @@ def import_csv():
 
 
 # ---------------------------------------------------------------------------
-# Status manager
-# ---------------------------------------------------------------------------
-
-@app.route("/statuses", methods=["GET", "POST"])
-def manage_statuses():
-    if request.method == "POST":
-        action = request.form.get("action")
-        if action == "add":
-            ok, msg = db.add_status(request.form.get("name", ""))
-            flash(msg, "success" if ok else "danger")
-        elif action == "delete":
-            ok, msg = db.delete_status(request.form.get("name", ""))
-            flash(msg, "success" if ok else "danger")
-        return redirect(url_for("manage_statuses"))
-    statuses = db.get_status_options()
-    return render_template("status_manager.html", statuses=statuses)
-
-
-# ---------------------------------------------------------------------------
 # Companies
 # ---------------------------------------------------------------------------
 
+def _company_view_context():
+    """Return (user_id, pool_enabled) for the current request."""
+    login_enabled = db.get_setting("login_enabled", "0") == "1"
+    pool_enabled = db.get_setting("company_pool_enabled", "0") == "1"
+    user_id = session.get("user_id") if login_enabled else None
+    return user_id, pool_enabled
+
+
 @app.route("/companies")
+@login_required
 def companies():
-    companies_list = db.get_companies()
+    user_id, pool_enabled = _company_view_context()
+    companies_list = db.get_companies(user_id=user_id, pool_enabled=pool_enabled)
     sector_freq = db.get_company_note_frequency()
     return render_template(
         "companies.html",
         companies=companies_list,
         years=db.YEARS,
         sector_freq=sector_freq,
+        pool_enabled=pool_enabled,
+        current_user_id=user_id,
     )
 
 
 @app.route("/company/add", methods=["GET", "POST"])
+@login_required
 def add_company():
     if request.method == "POST":
-        db.add_company(request.form)
+        login_enabled = db.get_setting("login_enabled", "0") == "1"
+        user_id = session.get("user_id") if login_enabled else None
+        db.add_company(request.form, user_id=user_id)
         flash("Company added successfully.", "success")
         return redirect(url_for("companies"))
     return render_template(
@@ -568,6 +647,7 @@ def add_company():
 
 
 @app.route("/company/edit/<int:company_id>", methods=["GET", "POST"])
+@login_required
 def edit_company(company_id):
     company = db.get_company(company_id)
     if not company:
@@ -583,9 +663,31 @@ def edit_company(company_id):
 
 
 @app.route("/company/delete/<int:company_id>", methods=["POST"])
+@login_required
 def delete_company(company_id):
     db.delete_company(company_id)
     flash("Company deleted.", "warning")
+    return redirect(url_for("companies"))
+
+
+@app.route("/companies/bulk-delete", methods=["POST"])
+@login_required
+def bulk_delete_companies():
+    raw_ids = request.form.getlist("selected_ids")
+    # Accept only numeric strings to avoid injection; convert to int safely.
+    selected_ids = []
+    for x in raw_ids:
+        try:
+            n = int(x)
+            if n > 0:
+                selected_ids.append(n)
+        except (ValueError, TypeError):
+            pass
+    if not selected_ids:
+        flash("No companies selected.", "warning")
+        return redirect(url_for("companies"))
+    count = db.bulk_delete_companies(selected_ids)
+    flash(f"Deleted {count} company record(s).", "warning")
     return redirect(url_for("companies"))
 
 
@@ -617,19 +719,432 @@ def dismiss_all_reminders():
 # ---------------------------------------------------------------------------
 
 @app.route("/settings", methods=["GET", "POST"])
+@login_required
 def settings():
+    section = request.args.get("section", "general")
+
     if request.method == "POST":
-        db.set_setting("reminder_enabled", "1" if request.form.get("reminder_enabled") else "0")
-        days = request.form.get("reminder_days", "3").strip()
-        if days.isdigit() and int(days) >= 1:
-            db.set_setting("reminder_days", days)
-        else:
-            flash("Reminder days must be a positive integer.", "danger")
-            return redirect(url_for("settings"))
-        flash("Settings saved.", "success")
-        return redirect(url_for("settings"))
+        action = request.form.get("action", "save_general")
+
+        if action == "save_general":
+            db.set_setting("reminder_enabled", "1" if request.form.get("reminder_enabled") else "0")
+            days = request.form.get("reminder_days", "3").strip()
+            if days.isdigit() and int(days) >= 1:
+                db.set_setting("reminder_days", days)
+            else:
+                flash("Reminder days must be a positive integer.", "danger")
+                return redirect(url_for("settings", section="general"))
+            db.set_setting(
+                "company_pool_enabled",
+                "1" if request.form.get("company_pool_enabled") else "0",
+            )
+            flash("General settings saved.", "success")
+            return redirect(url_for("settings", section="general"))
+
+        elif action == "save_security":
+            login_enabled = "1" if request.form.get("login_enabled") else "0"
+            # If turning on login, ensure at least one user exists.
+            if login_enabled == "1" and db.count_users() == 0:
+                flash("Cannot enable login — no users exist. Add a user first.", "danger")
+                return redirect(url_for("settings", section="users"))
+            db.set_setting("login_enabled", login_enabled)
+            flash("Security settings saved.", "success")
+            return redirect(url_for("settings", section="users"))
+
+        elif action == "add_status":
+            ok, msg = db.add_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="statuses"))
+
+        elif action == "delete_status":
+            ok, msg = db.delete_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="statuses"))
+
+        elif action == "add_user":
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            password2 = request.form.get("password2", "")
+            is_admin = bool(request.form.get("is_admin"))
+            if not username or not password:
+                flash("Username and password are required.", "danger")
+            elif password != password2:
+                flash("Passwords do not match.", "danger")
+            elif len(password) < 8:
+                flash("Password must be at least 8 characters.", "danger")
+            else:
+                pw_hash = generate_password_hash(password)
+                ok, msg = db.add_user(username, pw_hash, is_admin)
+                flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="users"))
+
+        elif action == "delete_user":
+            user_id = request.form.get("user_id", "")
+            if user_id.isdigit():
+                ok, msg = db.delete_user(int(user_id))
+                flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings", section="users"))
+
+        elif action == "save_ai":
+            db.set_setting("ollama_enabled", "1" if request.form.get("ollama_enabled") else "0")
+            db.set_setting("ai_fit_enabled", "1" if request.form.get("ai_fit_enabled") else "0")
+            ollama_url = request.form.get("ollama_url", "").strip()
+            if ollama_url:
+                db.set_setting("ollama_url", ollama_url)
+            db.set_setting("ollama_model", request.form.get("ollama_model", "llama3").strip() or "llama3")
+            flash("AI settings saved.", "success")
+            return redirect(url_for("settings", section="ai"))
+
+        elif action == "save_profile":
+            db.set_setting("user_profile_skills",     request.form.get("user_profile_skills",     "").strip())
+            db.set_setting("user_profile_experience", request.form.get("user_profile_experience", "").strip())
+            db.set_setting("user_profile_summary",    request.form.get("user_profile_summary",    "").strip())
+            flash("Your profile has been saved.", "success")
+            return redirect(url_for("settings", section="ai"))
+
+        flash("Unknown action.", "warning")
+        return redirect(url_for("settings", section=section))
+
     current = db.get_all_settings()
-    return render_template("settings.html", settings=current)
+    statuses = db.get_status_options()
+    users = db.get_users()
+    return render_template(
+        "settings.html",
+        settings=current,
+        section=section,
+        statuses=statuses,
+        users=users,
+        app_version=APP_VERSION,
+    )
+
+
+@app.route("/settings/ollama-test", methods=["POST"])
+@login_required
+def ollama_test():
+    """AJAX: test connection to the configured Ollama server."""
+    ollama_url = request.json.get("url", db.get_setting("ollama_url", "http://localhost:11434"))
+    ollama_url = ollama_url.rstrip("/")
+    try:
+        req = urllib.request.Request(
+            f"{ollama_url}/api/tags",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+        models = [m.get("name", "") for m in data.get("models", [])]
+        return jsonify({"ok": True, "models": models})
+    except urllib.error.URLError:
+        # Never expose internal URL, path, or OS details to the client.
+        return jsonify({"ok": False, "error": "Could not connect to Ollama server. Check the URL and ensure the server is running."})
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
+
+
+@app.route("/api/ai-fill", methods=["POST"])
+@login_required
+def ai_fill():
+    """AJAX: send a pasted job description to Ollama and return extracted form fields."""
+    import re as _re
+
+    if db.get_setting("ollama_enabled", "0") != "1":
+        return jsonify({"ok": False, "error": "Ollama AI Assistant is not enabled in Settings."})
+
+    body = request.get_json(silent=True) or {}
+    job_description = (body.get("job_description") or "").strip()
+    if not job_description:
+        return jsonify({"ok": False, "error": "Please paste a job description first."})
+
+    ollama_url   = db.get_setting("ollama_url",   "http://localhost:11434").rstrip("/")
+    ollama_model = db.get_setting("ollama_model", "llama3")
+
+    prompt = (
+        "You are a helpful assistant that extracts structured information from job postings.\n\n"
+        "Given the job description below, return ONLY a single valid JSON object "
+        "(no markdown fences, no extra text) with these keys:\n\n"
+        '  "job_desc"  — the job title or role name (string)\n'
+        '  "company"   — the company or organisation name (string)\n'
+        '  "team"      — team, division, or department name, or "" if not stated (string)\n'
+        '  "link"      — the application or posting URL if explicitly mentioned, or "" (string)\n'
+        '  "comment"   — a concise 2–3 sentence summary of key requirements and responsibilities (string)\n\n'
+        "Job Description:\n"
+        "---\n"
+        f"{job_description[:_MAX_JOB_DESC_LENGTH]}\n"   # cap to avoid huge prompts
+        "---\n\n"
+        "JSON object:"
+    )
+
+    payload = json.dumps({
+        "model":  ollama_model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.1},   # low temp → more deterministic JSON
+    }).encode()
+
+    try:
+        req = urllib.request.Request(
+            f"{ollama_url}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            result = json.loads(resp.read().decode())
+
+        raw = (result.get("response") or "").strip()
+
+        # Strip markdown code fences if the model wrapped the output anyway.
+        fence_match = _re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
+        if fence_match:
+            raw = fence_match.group(1).strip()
+
+        # Extract the first JSON object in the response (handles preamble text).
+        obj_match = _re.search(r"\{[\s\S]+\}", raw)
+        if obj_match:
+            raw = obj_match.group(0)
+
+        fields = json.loads(raw)
+
+        # Allow only expected keys; coerce values to strings.
+        allowed = {"job_desc", "company", "team", "link", "comment"}
+        fields = {k: str(v).strip() for k, v in fields.items() if k in allowed}
+
+        return jsonify({"ok": True, "fields": fields})
+
+    except urllib.error.URLError:
+        return jsonify({"ok": False, "error": "Could not connect to the Ollama server. Is it running?"})
+    except json.JSONDecodeError:
+        return jsonify({
+            "ok": False,
+            "error": (
+                "The AI returned an unrecognised format. "
+                "Try a different model or simplify the job description."
+            ),
+        })
+    except Exception:
+        return jsonify({"ok": False, "error": "An unexpected error occurred. Please try again."})
+
+
+@app.route("/api/upload-profile-pdf", methods=["POST"])
+@login_required
+def upload_profile_pdf():
+    """AJAX: accept a PDF upload, extract its text, and store it as the user profile summary."""
+    if db.get_setting("ollama_enabled", "0") != "1":
+        return jsonify({"ok": False, "error": "Ollama AI Assistant is not enabled in Settings."})
+
+    pdf_file = request.files.get("pdf")
+    if not pdf_file or not pdf_file.filename:
+        return jsonify({"ok": False, "error": "No file received."})
+
+    filename_lower = pdf_file.filename.lower()
+    if not filename_lower.endswith(".pdf"):
+        return jsonify({"ok": False, "error": "Only PDF files are supported."})
+
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(pdf_file.read()))
+        pages_text = []
+        for page in reader.pages:
+            text = page.extract_text() or ""
+            if text.strip():
+                pages_text.append(text.strip())
+        extracted = "\n\n".join(pages_text)
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not read the PDF. Ensure it contains selectable text."})
+
+    if not extracted.strip():
+        return jsonify({"ok": False, "error": "No readable text found in the PDF. Try a text-based PDF."})
+
+    # Truncate to a reasonable size before storing.
+    extracted = extracted[:_MAX_PROFILE_LENGTH]
+
+    db.set_setting("user_profile_summary", extracted)
+    preview = extracted[:300].replace("\n", " ")
+    return jsonify({"ok": True, "preview": preview, "char_count": len(extracted)})
+
+
+@app.route("/api/ai-fit", methods=["POST"])
+@login_required
+def ai_fit():
+    """AJAX: compare user profile with a job description and return a fit analysis."""
+    import re as _re
+
+    if db.get_setting("ollama_enabled", "0") != "1":
+        return jsonify({"ok": False, "error": "Ollama AI Assistant is not enabled in Settings."})
+
+    if db.get_setting("ai_fit_enabled", "0") != "1":
+        return jsonify({"ok": False, "error": "Smart Job Fit Analysis is not enabled in Settings."})
+
+    body = request.get_json(silent=True) or {}
+    job_description = (body.get("job_description") or "").strip()
+    if not job_description:
+        return jsonify({"ok": False, "error": "No job description provided for fit analysis."})
+
+    # Build user profile from stored settings.
+    skills     = db.get_setting("user_profile_skills",     "").strip()
+    experience = db.get_setting("user_profile_experience", "").strip()
+    summary    = db.get_setting("user_profile_summary",    "").strip()
+
+    if not (skills or experience or summary):
+        return jsonify({
+            "ok": False,
+            "error": "Your profile is not set up yet. Go to Settings → AI Assistant and fill in your profile.",
+        })
+
+    profile_parts = []
+    if summary:
+        profile_parts.append(f"About me:\n{summary[:2000]}")
+    if skills:
+        profile_parts.append(f"My skills:\n{skills[:1000]}")
+    if experience:
+        profile_parts.append(f"My experience:\n{experience[:1500]}")
+    profile_text = "\n\n".join(profile_parts)
+
+    ollama_url   = db.get_setting("ollama_url",   "http://localhost:11434").rstrip("/")
+    ollama_model = db.get_setting("ollama_model", "llama3")
+
+    prompt = (
+        "You are a career advisor. Given a candidate profile and a job description, "
+        "evaluate how well the candidate fits the role.\n\n"
+        "Return ONLY a single valid JSON object (no markdown fences, no extra text) with these keys:\n\n"
+        '  "fit_score"        — integer 0–100 representing overall fit percentage\n'
+        '  "verdict"          — one of: "Strong Fit", "Good Fit", "Moderate Fit", "Weak Fit", "Not a Fit"\n'
+        '  "matching_skills"  — list of skills/qualities the candidate has that match the role (list of strings, max 6)\n'
+        '  "skill_gaps"       — list of key requirements the candidate appears to lack (list of strings, max 5)\n'
+        '  "recommendation"   — 2–3 sentence personalised recommendation for the candidate (string)\n\n'
+        "Candidate Profile:\n"
+        "---\n"
+        f"{profile_text}\n"
+        "---\n\n"
+        "Job Description:\n"
+        "---\n"
+        f"{job_description[:_MAX_JOB_DESC_LENGTH]}\n"
+        "---\n\n"
+        "JSON object:"
+    )
+
+    payload = json.dumps({
+        "model":   ollama_model,
+        "prompt":  prompt,
+        "stream":  False,
+        "options": {"temperature": 0.2},
+    }).encode()
+
+    try:
+        req = urllib.request.Request(
+            f"{ollama_url}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            result = json.loads(resp.read().decode())
+
+        raw = (result.get("response") or "").strip()
+
+        # Strip markdown fences if present.
+        fence_match = _re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
+        if fence_match:
+            raw = fence_match.group(1).strip()
+
+        # Extract first JSON object.
+        obj_match = _re.search(r"\{[\s\S]+\}", raw)
+        if obj_match:
+            raw = obj_match.group(0)
+
+        analysis = json.loads(raw)
+
+        # Validate and sanitise the expected keys.
+        _VERDICT_VALUES = {"Strong Fit", "Good Fit", "Moderate Fit", "Weak Fit", "Not a Fit"}
+        fit_score = analysis.get("fit_score", 0)
+        try:
+            fit_score = max(0, min(100, int(fit_score)))
+        except (TypeError, ValueError):
+            fit_score = 0
+
+        verdict = str(analysis.get("verdict", "Moderate Fit"))
+        if verdict not in _VERDICT_VALUES:
+            verdict = "Moderate Fit"
+
+        matching_skills = [str(s)[:100] for s in (analysis.get("matching_skills") or [])[:6]]
+        skill_gaps      = [str(s)[:100] for s in (analysis.get("skill_gaps")      or [])[:5]]
+        recommendation  = str(analysis.get("recommendation", ""))[:600]
+
+        return jsonify({
+            "ok": True,
+            "fit_score":       fit_score,
+            "verdict":         verdict,
+            "matching_skills": matching_skills,
+            "skill_gaps":      skill_gaps,
+            "recommendation":  recommendation,
+        })
+
+    except urllib.error.URLError:
+        return jsonify({"ok": False, "error": "Could not connect to the Ollama server. Is it running?"})
+    except json.JSONDecodeError:
+        return jsonify({
+            "ok": False,
+            "error": "The AI returned an unrecognised format. Try a different model.",
+        })
+    except Exception:
+        return jsonify({"ok": False, "error": "An unexpected error occurred during fit analysis."})
+
+
+@app.route("/settings/check-update")
+@login_required
+def check_update():
+    """AJAX: check GitHub releases for a newer version."""
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "Job-Tracker-App",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        latest_tag = data.get("tag_name", "").lstrip("v")
+        html_url = data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases")
+        is_newer = _version_is_newer(latest_tag, APP_VERSION)
+        return jsonify({
+            "ok": True,
+            "current": APP_VERSION,
+            "latest": latest_tag,
+            "update_available": is_newer,
+            "html_url": html_url,
+        })
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not reach GitHub to check for updates.", "current": APP_VERSION})
+
+
+def _version_is_newer(latest: str, current: str) -> bool:
+    """Return True if latest > current using simple numeric comparison."""
+    try:
+        l_parts = [int(x) for x in latest.split(".")]
+        c_parts = [int(x) for x in current.split(".")]
+        # Pad to same length.
+        while len(l_parts) < len(c_parts):
+            l_parts.append(0)
+        while len(c_parts) < len(l_parts):
+            c_parts.append(0)
+        return l_parts > c_parts
+    except Exception:
+        return False
+
+
+# Keep the old /statuses route working as a redirect to settings for backward compat.
+@app.route("/statuses", methods=["GET", "POST"])
+@login_required
+def manage_statuses():
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            ok, msg = db.add_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+        elif action == "delete":
+            ok, msg = db.delete_status(request.form.get("name", ""))
+            flash(msg, "success" if ok else "danger")
+    return redirect(url_for("settings", section="statuses"))
 
 
 # ---------------------------------------------------------------------------
