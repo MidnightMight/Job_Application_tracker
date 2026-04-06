@@ -11,6 +11,9 @@ COPY . .
 RUN mkdir -p /data
 ENV DB_PATH=/data/jobs.db
 
+# Mark this as a server/Docker deployment to enable multi-user and AI features.
+ENV DEPLOYMENT_MODE=docker
+
 EXPOSE 5000
 
 CMD ["python", "app.py"]

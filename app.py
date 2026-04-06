@@ -4,6 +4,7 @@ import functools
 import io
 import json
 import os
+import platform as _platform_module
 import shutil
 import urllib.error
 import urllib.request
@@ -27,10 +28,36 @@ _MAX_JOB_DESC_LENGTH  = 4000   # characters sent to the LLM
 _MAX_ERROR_MSG_LENGTH = 120    # characters of raw error text exposed to clients
 _MAX_PROFILE_LENGTH   = 8000   # characters stored for user profile summary from PDF
 
+
+def _detect_deployment_mode() -> str:
+    """Return 'docker' (full features) or 'local' (single-user, no AI).
+
+    Precedence:
+    1. DEPLOYMENT_MODE env var (explicit override)
+    2. Presence of /.dockerenv (running inside a container)
+    3. DB_PATH env var set (Docker Compose / container typically sets this)
+    4. OS: Windows or macOS → 'local'; Linux/other → 'docker'
+    """
+    explicit = os.environ.get("DEPLOYMENT_MODE", "").lower()
+    if explicit in ("docker", "local"):
+        return explicit
+    if os.path.exists("/.dockerenv"):
+        return "docker"
+    if os.environ.get("DB_PATH"):
+        return "docker"
+    system = _platform_module.system()
+    if system in ("Windows", "Darwin"):
+        return "local"
+    return "docker"
+
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
 
 db.init_db()
+
+# Compute once at startup; available everywhere as DEPLOYMENT_MODE.
+DEPLOYMENT_MODE: str = _detect_deployment_mode()
 
 app.jinja_env.globals["enumerate"] = enumerate
 
@@ -98,7 +125,90 @@ def inject_globals():
         "ollama_enabled": db.get_setting("ollama_enabled", "0") == "1",
         "ai_fit_enabled": db.get_setting("ai_fit_enabled", "0") == "1",
         "user_profile_complete": _profile_complete,
+        "deployment_mode": DEPLOYMENT_MODE,
     }
+
+
+# ---------------------------------------------------------------------------
+# Onboarding (first-run setup)
+# ---------------------------------------------------------------------------
+
+# Endpoints that must remain accessible before onboarding is complete.
+_ONBOARDING_EXEMPT = {"onboarding", "static", "login", "logout"}
+
+
+@app.before_request
+def _check_onboarding():
+    """Redirect every request to /onboarding until the first-run wizard is done."""
+    if request.endpoint in _ONBOARDING_EXEMPT or request.endpoint is None:
+        return
+    if db.get_setting("onboarding_complete", "0") == "0":
+        return redirect(url_for("onboarding"))
+
+
+@app.route("/onboarding", methods=["GET", "POST"])
+def onboarding():
+    # Already completed — go to dashboard.
+    if db.get_setting("onboarding_complete", "0") == "1":
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+
+        if action == "setup_admin":
+            # Validate and create the admin user, then enable login.
+            username = request.form.get("username", "").strip()
+            password = request.form.get("password", "")
+            password2 = request.form.get("password2", "")
+            clear_demo = request.form.get("clear_demo") == "1"
+
+            errors = []
+            if not username:
+                errors.append("Username is required.")
+            if not password:
+                errors.append("Password is required.")
+            elif len(password) < 8:
+                errors.append("Password must be at least 8 characters.")
+            elif password != password2:
+                errors.append("Passwords do not match.")
+
+            if errors:
+                for e in errors:
+                    flash(e, "danger")
+                return render_template("onboarding.html", step="admin",
+                                       deployment_mode=DEPLOYMENT_MODE)
+
+            pw_hash = generate_password_hash(password)
+            ok, msg = db.add_user(username, pw_hash, is_admin=True)
+            if not ok:
+                flash(msg, "danger")
+                return render_template("onboarding.html", step="admin",
+                                       deployment_mode=DEPLOYMENT_MODE)
+
+            db.set_setting("login_enabled", "1")
+            session["user_id"] = db.get_user_by_username(username)["id"]
+            session["username"] = username
+
+            if clear_demo:
+                db.clear_demo_data()
+
+            db.set_setting("onboarding_complete", "1")
+            flash(f"Welcome, {username}! Your account has been created and login is enabled.", "success")
+            return redirect(url_for("dashboard"))
+
+        elif action == "skip":
+            # No admin account; login stays disabled.
+            clear_demo = request.form.get("clear_demo") == "1"
+            if clear_demo:
+                db.clear_demo_data()
+            db.set_setting("onboarding_complete", "1")
+            flash("Welcome to Job Tracker! You can set up login any time in Settings.", "info")
+            return redirect(url_for("dashboard"))
+
+        # Unknown action — fall through to render.
+
+    return render_template("onboarding.html", step="welcome",
+                           deployment_mode=DEPLOYMENT_MODE)
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +277,20 @@ def dashboard():
         current_year=current_year,
         years=db.YEARS,
     )
+
+
+# ---------------------------------------------------------------------------
+# Global search
+# ---------------------------------------------------------------------------
+
+@app.route("/search")
+@login_required
+def search():
+    query = request.args.get("q", "").strip()
+    results = []
+    if len(query) >= 2:
+        results = db.search_applications(query)
+    return render_template("search.html", query=query, results=results)
 
 
 # ---------------------------------------------------------------------------
@@ -742,6 +866,9 @@ def settings():
             return redirect(url_for("settings", section="general"))
 
         elif action == "save_security":
+            if DEPLOYMENT_MODE == "local":
+                flash("Login / multi-user settings are not available in local mode.", "warning")
+                return redirect(url_for("settings", section="users"))
             login_enabled = "1" if request.form.get("login_enabled") else "0"
             # If turning on login, ensure at least one user exists.
             if login_enabled == "1" and db.count_users() == 0:
@@ -762,6 +889,9 @@ def settings():
             return redirect(url_for("settings", section="statuses"))
 
         elif action == "add_user":
+            if DEPLOYMENT_MODE == "local":
+                flash("User management is not available in local mode.", "warning")
+                return redirect(url_for("settings", section="users"))
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             password2 = request.form.get("password2", "")
@@ -779,6 +909,9 @@ def settings():
             return redirect(url_for("settings", section="users"))
 
         elif action == "delete_user":
+            if DEPLOYMENT_MODE == "local":
+                flash("User management is not available in local mode.", "warning")
+                return redirect(url_for("settings", section="users"))
             user_id = request.form.get("user_id", "")
             if user_id.isdigit():
                 ok, msg = db.delete_user(int(user_id))
@@ -786,6 +919,9 @@ def settings():
             return redirect(url_for("settings", section="users"))
 
         elif action == "save_ai":
+            if DEPLOYMENT_MODE == "local":
+                flash("AI settings are not available in local mode.", "warning")
+                return redirect(url_for("settings", section="ai"))
             db.set_setting("ollama_enabled", "1" if request.form.get("ollama_enabled") else "0")
             db.set_setting("ai_fit_enabled", "1" if request.form.get("ai_fit_enabled") else "0")
             ollama_url = request.form.get("ollama_url", "").strip()
@@ -796,6 +932,9 @@ def settings():
             return redirect(url_for("settings", section="ai"))
 
         elif action == "save_profile":
+            if DEPLOYMENT_MODE == "local":
+                flash("AI profile settings are not available in local mode.", "warning")
+                return redirect(url_for("settings", section="ai"))
             db.set_setting("user_profile_skills",     request.form.get("user_profile_skills",     "").strip())
             db.set_setting("user_profile_experience", request.form.get("user_profile_experience", "").strip())
             db.set_setting("user_profile_summary",    request.form.get("user_profile_summary",    "").strip())
