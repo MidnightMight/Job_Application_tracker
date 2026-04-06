@@ -190,7 +190,6 @@
     const checked = rowChecks().filter(c => c.checked);
     const n = checked.length;
     numSpan.textContent = n;
-    countSpan.style.removeProperty('display');
     countSpan.style.display = n > 0 ? 'inline' : 'none';
     deleteBtn.disabled = n === 0;
   }
@@ -219,10 +218,12 @@
 })();
 
 // ── Single delete via hidden form ─────────────────────────────────────
+// Base URL is server-rendered to avoid coupling JS to route structure.
+const DELETE_BASE_URL = {{ url_for('delete_company', company_id=0) | tojson }}.replace('/0', '/');
 function deleteSingle(id, name) {
   if (!confirm('Delete company \'' + name + '\'?')) return;
   const form = document.getElementById('singleDeleteForm');
-  form.action = '/company/delete/' + id;
+  form.action = DELETE_BASE_URL + id;
   form.submit();
 }
 </script>

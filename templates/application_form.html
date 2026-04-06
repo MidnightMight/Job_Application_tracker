@@ -48,7 +48,7 @@
     {% endif %}
 
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-dark text-white fw-semibold">
+      <div class="card-header bg-dark text-white fw-semibold" id="appFormCardHeader">
         <i class="bi bi-{% if action == 'Add' %}plus-circle{% else %}pencil{% endif %} me-2"></i>
         {{ action }} Application
       </div>
@@ -398,7 +398,7 @@ window.addEventListener('DOMContentLoaded', function () {
             Please review the values and adjust if needed before saving.
           </div>`;
         // Scroll the main form into view so the user can see the filled fields.
-        document.querySelector('.card-header.bg-dark').scrollIntoView({behavior:'smooth', block:'start'});
+        document.getElementById('appFormCardHeader').scrollIntoView({behavior:'smooth', block:'start'});
       } else {
         statusDiv.innerHTML = '<span class="text-warning small"><i class="bi bi-question-circle me-1"></i>AI responded but could not extract any fields. Try pasting more of the job description.</span>';
       }

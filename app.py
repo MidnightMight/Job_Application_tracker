@@ -22,6 +22,10 @@ import database as db
 APP_VERSION = "1.1.0"
 GITHUB_REPO = "MidnightMight/Job_Application_tracker"
 
+# Limits used in API helpers.
+_MAX_JOB_DESC_LENGTH  = 4000   # characters sent to the LLM
+_MAX_ERROR_MSG_LENGTH = 120    # characters of raw error text exposed to clients
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
 
@@ -107,11 +111,15 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             flash(f"Welcome back, {user['username']}!", "success")
+            # Only allow redirects to internal paths: must start with '/'
+            # and contain no scheme or netloc, preventing open-redirect attacks.
             raw_next = request.form.get("next", "")
-            # Only allow redirects to internal paths (no scheme/host).
             from urllib.parse import urlparse as _urlparse
-            parsed = _urlparse(raw_next)
-            next_url = raw_next if (raw_next and not parsed.netloc and not parsed.scheme) else url_for("dashboard")
+            _p = _urlparse(raw_next)
+            if raw_next and raw_next.startswith("/") and not _p.netloc and not _p.scheme:
+                next_url = raw_next
+            else:
+                next_url = url_for("dashboard")
             return redirect(next_url)
         flash("Invalid username or password.", "danger")
     return render_template("login.html", next=request.args.get("next", ""))
@@ -809,7 +817,7 @@ def ollama_test():
         # Return a safe generic message — do not expose internal stack details.
         reason = str(exc.reason) if hasattr(exc, "reason") else "Connection error"
         # Strip any path info to avoid leaking server internals.
-        safe_reason = reason.split("\n")[0][:120]
+        safe_reason = reason.split("\n")[0][:_MAX_ERROR_MSG_LENGTH]
         return jsonify({"ok": False, "error": safe_reason})
     except Exception:
         return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
@@ -843,7 +851,7 @@ def ai_fill():
         '  "comment"   — a concise 2–3 sentence summary of key requirements and responsibilities (string)\n\n'
         "Job Description:\n"
         "---\n"
-        f"{job_description[:4000]}\n"   # cap to avoid huge prompts
+        f"{job_description[:_MAX_JOB_DESC_LENGTH]}\n"   # cap to avoid huge prompts
         "---\n\n"
         "JSON object:"
     )
