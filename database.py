@@ -179,13 +179,17 @@ def init_db():
     # Seed default settings if the table is empty.
     if c.execute("SELECT COUNT(*) FROM settings").fetchone()[0] == 0:
         default_settings = [
-            ("reminder_enabled",    "1"),
-            ("reminder_days",       "3"),
-            ("login_enabled",       "0"),
-            ("ollama_enabled",      "0"),
-            ("ollama_url",          "http://localhost:11434"),
-            ("ollama_model",        "llama3"),
-            ("company_pool_enabled","0"),
+            ("reminder_enabled",        "1"),
+            ("reminder_days",           "3"),
+            ("login_enabled",           "0"),
+            ("ollama_enabled",          "0"),
+            ("ollama_url",              "http://localhost:11434"),
+            ("ollama_model",            "llama3"),
+            ("company_pool_enabled",    "0"),
+            ("ai_fit_enabled",          "0"),
+            ("user_profile_skills",     ""),
+            ("user_profile_experience", ""),
+            ("user_profile_summary",    ""),
         ]
         c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
         conn.commit()
@@ -193,11 +197,15 @@ def init_db():
         # Migrate: add new settings keys if missing (for existing installs).
         existing_keys = {r[0] for r in c.execute("SELECT key FROM settings").fetchall()}
         migrations = [
-            ("login_enabled",       "0"),
-            ("ollama_enabled",      "0"),
-            ("ollama_url",          "http://localhost:11434"),
-            ("ollama_model",        "llama3"),
-            ("company_pool_enabled","0"),
+            ("login_enabled",           "0"),
+            ("ollama_enabled",          "0"),
+            ("ollama_url",              "http://localhost:11434"),
+            ("ollama_model",            "llama3"),
+            ("company_pool_enabled",    "0"),
+            ("ai_fit_enabled",          "0"),
+            ("user_profile_skills",     ""),
+            ("user_profile_experience", ""),
+            ("user_profile_summary",    ""),
         ]
         for key, value in migrations:
             if key not in existing_keys:

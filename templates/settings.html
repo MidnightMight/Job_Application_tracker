@@ -369,8 +369,114 @@
             </div>
           </div>
 
+          <hr class="my-3">
+
+          <div class="mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="ai_fit_enabled"
+                     name="ai_fit_enabled" role="switch"
+                     {% if settings.get('ai_fit_enabled', '0') == '1' %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="ai_fit_enabled">
+                <i class="bi bi-person-check me-1 text-success"></i>Enable Smart Job Fit Analysis
+              </label>
+            </div>
+            <div class="form-text">
+              After filling a job application with AI, the assistant will compare the job requirements
+              with your personal profile and give you a match score, skill gaps, and a recommendation
+              on whether this is a good fit for you.
+            </div>
+          </div>
+
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-save me-1"></i>Save AI Settings
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {# ── User Profile card — shown when ai_fit_enabled is on ── #}
+    <div class="card shadow-sm mb-4" id="profileCard"
+         {% if settings.get('ai_fit_enabled', '0') != '1' %}style="display:none"{% endif %}>
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>
+          <i class="bi bi-person-badge me-1 text-success"></i>Your Profile
+          {% set _has_profile = settings.get('user_profile_skills','') or settings.get('user_profile_experience','') or settings.get('user_profile_summary','') %}
+          {% if _has_profile %}
+          <span class="badge bg-success ms-2">
+            <i class="bi bi-check-circle me-1"></i>Profile saved
+          </span>
+          {% else %}
+          <span class="badge bg-warning text-dark ms-2">
+            <i class="bi bi-exclamation-circle me-1"></i>Profile not set
+          </span>
+          {% endif %}
+        </span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Fill in your details below so the AI can compare your background against job descriptions.
+          You can also upload a PDF CV/résumé and the app will extract the text automatically.
+          <strong>Your data stays on your machine — nothing is sent to the cloud.</strong>
+        </p>
+
+        {# PDF upload #}
+        <div class="mb-4 p-3 border rounded bg-light">
+          <label class="form-label fw-semibold mb-2">
+            <i class="bi bi-file-earmark-pdf text-danger me-1"></i>Upload CV / Résumé (PDF)
+          </label>
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <input type="file" class="form-control" id="profilePdfInput" accept=".pdf"
+                   style="max-width:320px;">
+            <button type="button" class="btn btn-outline-danger" id="uploadPdfBtn">
+              <i class="bi bi-upload me-1"></i>Extract &amp; Fill Summary
+            </button>
+            <div id="pdfUploadSpinner" class="d-none">
+              <div class="spinner-border spinner-border-sm text-danger" role="status"></div>
+              <span class="text-muted small ms-1">Reading PDF…</span>
+            </div>
+          </div>
+          <div id="pdfUploadResult" class="mt-2"></div>
+        </div>
+
+        {# Manual profile form #}
+        <form method="post" action="{{ url_for('settings', section='ai') }}">
+          <input type="hidden" name="action" value="save_profile">
+
+          <div class="mb-3">
+            <label for="user_profile_skills" class="form-label fw-semibold">
+              Skills
+            </label>
+            <textarea class="form-control" id="user_profile_skills" name="user_profile_skills"
+                      rows="3"
+                      placeholder="e.g. Python, SQL, project management, AutoCAD, teamwork, communication…">{{ settings.get('user_profile_skills', '') }}</textarea>
+            <div class="form-text">List your key skills, tools, and technologies, one per line or comma-separated.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="user_profile_experience" class="form-label fw-semibold">
+              Prior Experience
+            </label>
+            <textarea class="form-control" id="user_profile_experience" name="user_profile_experience"
+                      rows="4"
+                      placeholder="e.g. 2 years as an electrical engineer at XYZ, internship at ABC Corp on power systems…">{{ settings.get('user_profile_experience', '') }}</textarea>
+            <div class="form-text">Briefly describe your work history, internships, and notable projects.</div>
+          </div>
+
+          <div class="mb-4">
+            <label for="user_profile_summary" class="form-label fw-semibold">
+              About Me / Professional Summary
+            </label>
+            <textarea class="form-control" id="user_profile_summary" name="user_profile_summary"
+                      rows="4"
+                      placeholder="e.g. Recent electrical engineering graduate passionate about renewable energy, seeking graduate roles in design or project delivery…">{{ settings.get('user_profile_summary', '') }}</textarea>
+            <div class="form-text">
+              A brief summary of who you are and what you are looking for. Uploading a PDF above
+              will replace this field automatically.
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-person-check me-1"></i>Save Profile
           </button>
         </form>
       </div>
@@ -479,7 +585,66 @@ if (testBtn) {
   });
 }
 
-// ── Update checker ─────────────────────────────────────────────────────
+// ── Toggle profile card visibility when ai_fit_enabled changes ─────────
+const fitToggle    = document.getElementById('ai_fit_enabled');
+const profileCard  = document.getElementById('profileCard');
+if (fitToggle && profileCard) {
+  fitToggle.addEventListener('change', () => {
+    profileCard.style.display = fitToggle.checked ? '' : 'none';
+  });
+}
+
+// ── PDF profile upload ────────────────────────────────────────────────
+const uploadBtn     = document.getElementById('uploadPdfBtn');
+const pdfInput      = document.getElementById('profilePdfInput');
+const pdfSpinner    = document.getElementById('pdfUploadSpinner');
+const pdfResult     = document.getElementById('pdfUploadResult');
+const summaryField  = document.getElementById('user_profile_summary');
+
+if (uploadBtn) {
+  uploadBtn.addEventListener('click', async () => {
+    const file = pdfInput && pdfInput.files[0];
+    if (!file) {
+      pdfResult.innerHTML = '<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Please select a PDF file first.</span>';
+      return;
+    }
+    uploadBtn.disabled = true;
+    pdfSpinner.classList.remove('d-none');
+    pdfResult.innerHTML = '';
+
+    const formData = new FormData();
+    formData.append('pdf', file);
+
+    try {
+      const resp = await fetch('{{ url_for("upload_profile_pdf") }}', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        if (summaryField) summaryField.value = data.preview + (data.char_count > 300 ? '\n…[truncated]' : '');
+        pdfResult.innerHTML = `<div class="alert alert-success py-2 small mt-1">
+          <i class="bi bi-check-circle me-1"></i>
+          Extracted <strong>${data.char_count}</strong> characters from PDF.
+          The summary field has been updated — save your profile to keep it.
+        </div>`;
+      } else {
+        pdfResult.innerHTML = `<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>${escHtml(data.error)}</span>`;
+      }
+    } catch (e) {
+      pdfResult.innerHTML = `<span class="text-danger small">Upload failed: ${escHtml(e.message)}</span>`;
+    } finally {
+      uploadBtn.disabled = false;
+      pdfSpinner.classList.add('d-none');
+    }
+  });
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 const checkBtn = document.getElementById('checkUpdateBtn');
 if (checkBtn) {
   checkBtn.addEventListener('click', async () => {
