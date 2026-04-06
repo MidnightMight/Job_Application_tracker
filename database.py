@@ -388,7 +388,7 @@ def _seed_companies(c):
 def clear_demo_data():
     """Delete all seeded sample applications, companies, and their history."""
     conn = get_connection()
-    conn.execute("DELETE FROM status_history WHERE application_id IN (SELECT id FROM applications)")
+    conn.execute("DELETE FROM status_history")
     conn.execute("DELETE FROM applications")
     conn.execute("DELETE FROM companies")
     conn.execute("DELETE FROM reminders")
