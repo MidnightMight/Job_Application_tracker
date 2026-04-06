@@ -1,4 +1,3 @@
-import base64
 import csv
 import functools
 import io
@@ -6,8 +5,10 @@ import json
 import os
 import platform as _platform_module
 import shutil
+import tempfile
 import urllib.error
 import urllib.request
+import uuid
 from types import SimpleNamespace
 
 from flask import (
@@ -53,6 +54,8 @@ def _detect_deployment_mode() -> str:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
+# Allow uploads up to 32 MB (covers large .xlsm files with embedded macros/images).
+app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
 
 db.init_db()
 
@@ -506,6 +509,37 @@ def bulk_action():
 # Recognised Excel file extensions.
 _EXCEL_EXTENSIONS = {".xlsx", ".xlsm"}
 
+# Directory used to stash uploaded workbooks between request steps.
+_UPLOAD_TMP_DIR = os.path.join(tempfile.gettempdir(), "job_tracker_uploads")
+os.makedirs(_UPLOAD_TMP_DIR, exist_ok=True)
+
+
+def _save_upload_tmp(data: bytes) -> str:
+    """Write *data* to a temporary file and return its path."""
+    path = os.path.join(_UPLOAD_TMP_DIR, f"{uuid.uuid4().hex}.bin")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+    except Exception:
+        _delete_upload_tmp(path)
+        raise
+    return path
+
+
+def _load_upload_tmp(path: str) -> bytes:
+    """Read and return the bytes stored at *path*."""
+    with open(path, "rb") as fh:
+        return fh.read()
+
+
+def _delete_upload_tmp(path: str) -> None:
+    """Remove the temporary upload file, ignoring errors."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
 
 def _excel_sheet_to_csv(workbook_bytes: bytes, sheet_name: str, start_row: int = 1) -> str:
     """Read one sheet from an Excel workbook and return it as a CSV string.
@@ -557,22 +591,27 @@ def import_csv():
 
     # ── Step 1b: sheet selected from an Excel file ───────────────────────────
     if request.form.get("stage") == "sheet":
-        wb_b64 = request.form.get("wb_b64", "")
         sheet_name = request.form.get("sheet_name", "")
-        filename = request.form.get("filename", "")
+        wb_info = session.get("import_wb")
+        if not wb_info or not sheet_name:
+            flash("Sheet selection is missing. Please upload the file again.", "danger")
+            return redirect(url_for("import_csv"))
+        filename = wb_info.get("filename", "")
+        wb_path = wb_info.get("path", "")
         try:
             header_row = max(1, int(request.form.get("header_row", "1") or "1"))
         except ValueError:
             header_row = 1
-        if not wb_b64 or not sheet_name:
-            flash("Sheet selection is missing. Please upload the file again.", "danger")
-            return redirect(url_for("import_csv"))
         try:
-            workbook_bytes = base64.b64decode(wb_b64)
+            workbook_bytes = _load_upload_tmp(wb_path)
             content = _excel_sheet_to_csv(workbook_bytes, sheet_name, start_row=header_row)
         except Exception as exc:
             flash(f"Could not read sheet '{sheet_name}': {exc}", "danger")
             return redirect(url_for("import_csv"))
+        finally:
+            # Clean up the temporary file now that we've converted it.
+            _delete_upload_tmp(wb_path)
+            session.pop("import_wb", None)
 
         reader = csv.reader(io.StringIO(content))
         headers = next(reader, [])
@@ -580,7 +619,7 @@ def import_csv():
             flash("The selected sheet has no header row.", "danger")
             return redirect(url_for("import_csv"))
 
-        preview_rows = [row for i, row in enumerate(reader) if i < 5]
+        preview_rows = [row for i, row in enumerate(reader) if i < 10]
 
         field_keys = {f[0]: f[1] for f in CSV_IMPORT_FIELDS if f[0]}
         guessed = []
@@ -624,12 +663,15 @@ def import_csv():
                 flash(f"Could not open the Excel file: {exc}", "danger")
                 return redirect(url_for("import_csv"))
 
-            wb_b64 = base64.b64encode(raw_bytes).decode("ascii")
+            # Save the workbook to a temp file so we don't have to roundtrip
+            # the raw bytes through a hidden form field (which can exceed the
+            # request-size limit for large .xlsm files).
+            wb_path = _save_upload_tmp(raw_bytes)
+            session["import_wb"] = {"path": wb_path, "filename": filename}
             return render_template(
                 "csv_import.html",
                 stage="sheet",
                 sheet_names=sheet_names,
-                wb_b64=wb_b64,
                 filename=filename,
                 import_fields=CSV_IMPORT_FIELDS,
             )
@@ -664,7 +706,7 @@ def import_csv():
         content = csv_buf.getvalue()
 
         # Read up to 5 preview rows.
-        preview_rows = remaining_rows[:5]
+        preview_rows = remaining_rows[:10]
 
         # Auto-guess mappings: compare lowercased CSV headers to field keys.
         field_keys = {f[0]: f[1] for f in CSV_IMPORT_FIELDS if f[0]}
