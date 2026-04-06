@@ -106,7 +106,11 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             flash(f"Welcome back, {user['username']}!", "success")
-            next_url = request.form.get("next") or url_for("dashboard")
+            raw_next = request.form.get("next", "")
+            # Only allow redirects to internal paths (no scheme/host).
+            from urllib.parse import urlparse as _urlparse
+            parsed = _urlparse(raw_next)
+            next_url = raw_next if (raw_next and not parsed.netloc and not parsed.scheme) else url_for("dashboard")
             return redirect(next_url)
         flash("Invalid username or password.", "danger")
     return render_template("login.html", next=request.args.get("next", ""))
@@ -649,10 +653,15 @@ def delete_company(company_id):
 @login_required
 def bulk_delete_companies():
     raw_ids = request.form.getlist("selected_ids")
-    try:
-        selected_ids = [int(x) for x in raw_ids if str(x).isdigit()]
-    except ValueError:
-        selected_ids = []
+    # Accept only numeric strings to avoid injection; convert to int safely.
+    selected_ids = []
+    for x in raw_ids:
+        try:
+            n = int(x)
+            if n > 0:
+                selected_ids.append(n)
+        except (ValueError, TypeError):
+            pass
     if not selected_ids:
         flash("No companies selected.", "warning")
         return redirect(url_for("companies"))
@@ -740,8 +749,8 @@ def settings():
                 flash("Username and password are required.", "danger")
             elif password != password2:
                 flash("Passwords do not match.", "danger")
-            elif len(password) < 6:
-                flash("Password must be at least 6 characters.", "danger")
+            elif len(password) < 8:
+                flash("Password must be at least 8 characters.", "danger")
             else:
                 pw_hash = generate_password_hash(password)
                 ok, msg = db.add_user(username, pw_hash, is_admin)
@@ -796,9 +805,13 @@ def ollama_test():
         models = [m.get("name", "") for m in data.get("models", [])]
         return jsonify({"ok": True, "models": models})
     except urllib.error.URLError as exc:
-        return jsonify({"ok": False, "error": str(exc.reason)})
-    except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)})
+        # Return a safe generic message — do not expose internal stack details.
+        reason = str(exc.reason) if hasattr(exc, "reason") else "Connection error"
+        # Strip any path info to avoid leaking server internals.
+        safe_reason = reason.split("\n")[0][:120]
+        return jsonify({"ok": False, "error": safe_reason})
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
 
 
 @app.route("/settings/check-update")
@@ -825,8 +838,8 @@ def check_update():
             "update_available": is_newer,
             "html_url": html_url,
         })
-    except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc), "current": APP_VERSION})
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not reach GitHub to check for updates.", "current": APP_VERSION})
 
 
 def _version_is_newer(latest: str, current: str) -> bool:
