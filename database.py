@@ -801,9 +801,20 @@ def bulk_delete_companies(ids: list) -> int:
     """Delete multiple companies by ID. Returns number of rows deleted."""
     if not ids:
         return 0
-    placeholders = ",".join("?" for _ in ids)
+    # Validate every ID at the DB layer regardless of caller validation.
+    safe_ids = []
+    for raw in ids:
+        try:
+            n = int(raw)
+            if n > 0:
+                safe_ids.append(n)
+        except (TypeError, ValueError):
+            pass
+    if not safe_ids:
+        return 0
+    placeholders = ",".join("?" for _ in safe_ids)
     conn = get_connection()
-    conn.execute(f"DELETE FROM companies WHERE id IN ({placeholders})", ids)
+    conn.execute(f"DELETE FROM companies WHERE id IN ({placeholders})", safe_ids)
     count = conn.execute("SELECT changes()").fetchone()[0]
     conn.commit()
     conn.close()

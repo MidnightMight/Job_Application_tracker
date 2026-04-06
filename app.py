@@ -25,6 +25,7 @@ GITHUB_REPO = "MidnightMight/Job_Application_tracker"
 # Limits used in API helpers.
 _MAX_JOB_DESC_LENGTH  = 4000   # characters sent to the LLM
 _MAX_ERROR_MSG_LENGTH = 120    # characters of raw error text exposed to clients
+_MAX_PROFILE_LENGTH   = 8000   # characters stored for user profile summary from PDF
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
@@ -123,10 +124,14 @@ def login():
             raw_next = request.form.get("next", "")
             from urllib.parse import urlparse as _urlparse
             _p = _urlparse(raw_next)
-            if raw_next and raw_next.startswith("/") and not _p.netloc and not _p.scheme:
-                next_url = raw_next
-            else:
-                next_url = url_for("dashboard")
+            _safe = (
+                raw_next
+                and raw_next.startswith("/")
+                and not raw_next.startswith("//")
+                and not _p.netloc
+                and not _p.scheme
+            )
+            next_url = raw_next if _safe else url_for("dashboard")
             return redirect(next_url)
         flash("Invalid username or password.", "danger")
     return render_template("login.html", next=request.args.get("next", ""))
@@ -828,12 +833,9 @@ def ollama_test():
             data = json.loads(resp.read().decode())
         models = [m.get("name", "") for m in data.get("models", [])]
         return jsonify({"ok": True, "models": models})
-    except urllib.error.URLError as exc:
-        # Return a safe generic message — do not expose internal stack details.
-        reason = str(exc.reason) if hasattr(exc, "reason") else "Connection error"
-        # Strip any path info to avoid leaking server internals.
-        safe_reason = reason.split("\n")[0][:_MAX_ERROR_MSG_LENGTH]
-        return jsonify({"ok": False, "error": safe_reason})
+    except urllib.error.URLError:
+        # Never expose internal URL, path, or OS details to the client.
+        return jsonify({"ok": False, "error": "Could not connect to Ollama server. Check the URL and ensure the server is running."})
     except Exception:
         return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
 
@@ -953,7 +955,6 @@ def upload_profile_pdf():
         return jsonify({"ok": False, "error": "No readable text found in the PDF. Try a text-based PDF."})
 
     # Truncate to a reasonable size before storing.
-    _MAX_PROFILE_LENGTH = 8000
     extracted = extracted[:_MAX_PROFILE_LENGTH]
 
     db.set_setting("user_profile_summary", extracted)
