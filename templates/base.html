@@ -75,7 +75,7 @@
       <!-- Global search -->
       <form class="d-flex me-2 my-1 my-lg-0" action="{{ url_for('search') }}" method="get" role="search">
         <div class="input-group input-group-sm">
-          <input type="search" name="q" class="form-control form-control-sm bg-dark text-light border-secondary"
+          <input type="search" name="q" class="form-control form-control-sm navbar-search-input"
                  placeholder="Search…" aria-label="Search applications"
                  value="{{ request.args.get('q', '') if request.endpoint == 'search' else '' }}"
                  style="min-width:130px;max-width:200px;"

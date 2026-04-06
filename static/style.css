@@ -147,7 +147,19 @@ footer { background-color: #fff; margin-top: 3rem; }
   background-color: rgba(255, 193, 7, .05);
 }
 
-/* ── Dark mode overrides ────────────────────────────────────────────────── */
+/* Navbar search — adapts to dark/light theme */
+.navbar-search-input {
+  background-color: rgba(255,255,255,.1);
+  color: #fff;
+  border-color: rgba(255,255,255,.2);
+}
+.navbar-search-input::placeholder { color: rgba(255,255,255,.6); }
+.navbar-search-input:focus {
+  background-color: rgba(255,255,255,.15);
+  color: #fff;
+  border-color: rgba(255,255,255,.4);
+  box-shadow: none;
+}
 [data-bs-theme="dark"] body   { background-color: #0d1117; }
 [data-bs-theme="dark"] footer { background-color: #161b22; border-color: #30363d !important; }
 
@@ -161,7 +173,7 @@ footer { background-color: #fff; margin-top: 3rem; }
 
 [data-bs-theme="dark"] .reminder-unread { background-color: rgba(255, 193, 7, .10); }
 
-/* Boost row-colour opacity slightly so they stay visible on a dark background */
+/* Boost row-color opacity slightly so they stay visible on a dark background */
 [data-bs-theme="dark"] .app-row-Offer_Received      { background-color: rgba( 25, 135,  84, .15) !important; }
 [data-bs-theme="dark"] .app-row-Interview_Scheduled { background-color: rgba(255, 193,   7, .12) !important; }
 [data-bs-theme="dark"] .app-row-Interview_In_Person { background-color: rgba(232,  62, 140, .12) !important; }

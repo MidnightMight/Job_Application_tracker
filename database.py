@@ -419,7 +419,7 @@ def get_applications(year=None, status=None):
 def search_applications(query: str, year: int | None = None) -> list:
     """Search applications across company, role, team, comment, notes, and contact."""
     conn = get_connection()
-    like = f"%{query}%"
+    like_pattern = f"%{query}%"
     sql = """
         SELECT * FROM applications
         WHERE (
@@ -431,7 +431,7 @@ def search_applications(query: str, year: int | None = None) -> list:
             contact          LIKE ?
         )
     """
-    params: list = [like] * 6
+    params: list = [like_pattern] * 6
     if year:
         sql += " AND strftime('%Y', date_applied) = ?"
         params.append(str(year))
