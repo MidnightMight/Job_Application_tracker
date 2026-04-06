@@ -416,6 +416,31 @@ def get_applications(year=None, status=None):
     return [_enrich(dict(r)) for r in rows]
 
 
+def search_applications(query: str, year: int | None = None) -> list:
+    """Search applications across company, role, team, comment, notes, and contact."""
+    conn = get_connection()
+    like = f"%{query}%"
+    sql = """
+        SELECT * FROM applications
+        WHERE (
+            company          LIKE ? OR
+            job_desc         LIKE ? OR
+            team             LIKE ? OR
+            comment          LIKE ? OR
+            additional_notes LIKE ? OR
+            contact          LIKE ?
+        )
+    """
+    params: list = [like] * 6
+    if year:
+        sql += " AND strftime('%Y', date_applied) = ?"
+        params.append(str(year))
+    sql += " ORDER BY date_applied DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [_enrich(dict(r)) for r in rows]
+
+
 def get_application(app_id):
     conn = get_connection()
     row = conn.execute(

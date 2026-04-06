@@ -280,6 +280,20 @@ def dashboard():
 
 
 # ---------------------------------------------------------------------------
+# Global search
+# ---------------------------------------------------------------------------
+
+@app.route("/search")
+@login_required
+def search():
+    query = request.args.get("q", "").strip()
+    results = []
+    if len(query) >= 2:
+        results = db.search_applications(query)
+    return render_template("search.html", query=query, results=results)
+
+
+# ---------------------------------------------------------------------------
 # Year view
 # ---------------------------------------------------------------------------
 

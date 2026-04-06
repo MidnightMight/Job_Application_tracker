@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html lang="en-AU">
 <head>
+  <!-- Apply stored theme before any CSS to prevent flash of wrong theme -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('jt-theme') || 'light';
+        document.documentElement.setAttribute('data-bs-theme', t);
+      } catch (e) {}
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Job Tracker{% endblock %}</title>
@@ -62,7 +71,29 @@
           </a>
         </li>
       </ul>
+
+      <!-- Global search -->
+      <form class="d-flex me-2 my-1 my-lg-0" action="{{ url_for('search') }}" method="get" role="search">
+        <div class="input-group input-group-sm">
+          <input type="search" name="q" class="form-control form-control-sm bg-dark text-light border-secondary"
+                 placeholder="Search…" aria-label="Search applications"
+                 value="{{ request.args.get('q', '') if request.endpoint == 'search' else '' }}"
+                 style="min-width:130px;max-width:200px;"
+                 autocomplete="off">
+          <button type="submit" class="btn btn-outline-secondary btn-sm" title="Search applications">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </form>
+
       <div class="d-flex gap-2 align-items-center">
+        <!-- Theme toggle -->
+        <button type="button" id="themeToggleBtn"
+                class="btn btn-outline-light btn-sm" title="Toggle dark / light theme"
+                aria-label="Toggle colour theme">
+          <i id="themeIcon" class="bi bi-moon-stars-fill"></i>
+        </button>
+
         <a href="{{ url_for('inbox') }}" class="btn btn-outline-light btn-sm position-relative" title="Reminder Inbox">
           <i class="bi bi-bell me-1"></i>Inbox
           {% if unread_reminder_count > 0 %}
@@ -120,6 +151,26 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 {% block scripts %}{% endblock %}
 <script>
+  // ── Theme toggle ──────────────────────────────────────────────────────────
+  (function () {
+    var btn  = document.getElementById('themeToggleBtn');
+    var icon = document.getElementById('themeIcon');
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-bs-theme', theme);
+      try { localStorage.setItem('jt-theme', theme); } catch (e) {}
+      icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+    }
+
+    // Sync icon with whatever theme was applied during page load.
+    applyTheme(document.documentElement.getAttribute('data-bs-theme') || 'light');
+
+    btn.addEventListener('click', function () {
+      var current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+    });
+  })();
+
   {% if deployment_mode != 'local' %}
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/sw.js', { scope: '/' })

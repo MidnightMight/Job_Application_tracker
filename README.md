@@ -50,6 +50,12 @@ logic, requirements, and design decisions originate from the repository owner.
 - **Bulk CSV import** — upload any CSV file then map each column to an application
   field (Mouser / DigiKey-style column-mapping UI) with a preview and
   duplicate-field warning
+- **Bulk operations** — select multiple rows in a year view and set status, date,
+  cover letter, resume, or delete in one action; useful for post-rejection cleanup
+- **Global search** — a single search bar in the navbar queries company, job title,
+  team, comment, notes, and contact across all years
+- **Dark / light theme** — toggle between dark and light colour schemes with the
+  🌙 / ☀️ button in the navbar; preference is saved per browser
 - **CRUD** — add, edit and delete applications and companies; required-field
   validation modal on submission
 - **Today button** — one-click fill for every date field alongside the native
@@ -76,6 +82,9 @@ logic, requirements, and design decisions originate from the repository owner.
 - **AI server status** — when Ollama is enabled, a live green/red badge in the
   AI Fill panel header and the Settings AI card shows whether the server is
   reachable before you try to use it
+- **First-run onboarding** — a setup wizard on first launch lets you create an
+  admin account and clear the demo data; multi-user login and AI features are
+  automatically hidden on local (Windows / macOS) installs
 
 ---
 
@@ -349,21 +358,26 @@ Job_Application_tracker/
 ├── FEATURES.md               Extended feature documentation
 ├── LICENSE                   MIT Licence
 ├── README.md                 This file
+├── docs/
+│   ├── admin-guide.md        Admin setup, Docker, maintenance, multi-user, troubleshooting
+│   └── user-guide.md         How to add jobs, bulk operations, search, export, AI, and more
 ├── templates/
-│   ├── base.html             Bootstrap 5 layout and navigation
+│   ├── base.html             Bootstrap 5 layout, navbar (with search + theme toggle)
 │   ├── dashboard.html        Main dashboard with Chart.js charts
-│   ├── year_view.html        Per-year application table and pipeline bar
+│   ├── year_view.html        Per-year application table with bulk-action toolbar
 │   ├── application_form.html Add / edit application (with validation modal)
 │   ├── application_detail.html  Full detail with status timeline and notes
+│   ├── search.html           Global search results page
 │   ├── csv_import.html       Bulk CSV import with column-mapping UI
 │   ├── status_manager.html   Add / remove custom statuses
 │   ├── companies.html        Company tracker with sector chart
 │   ├── company_form.html     Add / edit company
 │   ├── inbox.html            Reminder inbox
-│   ├── settings.html         App settings (reminder threshold etc.)
+│   ├── onboarding.html       First-run setup wizard
+│   ├── settings.html         App settings (reminder threshold, users, AI)
 │   └── export.html           Export and backup page
 ├── static/
-│   ├── style.css             Custom styles, status-coloured badges, timeline
+│   ├── style.css             Custom styles, status-coloured badges, timeline, dark-mode overrides
 │   ├── manifest.json         PWA Web App Manifest
 │   ├── sw.js                 PWA service worker (caching + offline support)
 │   └── icons/                PWA app icons (SVG, 192 × 192 PNG, 512 × 512 PNG)
@@ -471,6 +485,17 @@ Custom statuses can be added or removed at any time via the **Statuses** page.
 
 ---
 
+## Documentation
+
+The `docs/` folder contains detailed guides:
+
+| File | Contents |
+|---|---|
+| [`docs/admin-guide.md`](docs/admin-guide.md) | Deployment, Docker, environment variables, multi-user setup, database maintenance, updates, and troubleshooting |
+| [`docs/user-guide.md`](docs/user-guide.md) | Adding jobs, editing, bulk operations, global search, statuses, reminders, import/export, AI assistant, and theme toggle |
+
+---
+
 ## Feasibility Notes — Future Ideas
 
 - **Packaged executable** — tools such as PyInstaller or Nuitka can bundle the
@@ -486,10 +511,3 @@ Custom statuses can be added or removed at any time via the **Statuses** page.
 - **REST API** — a JSON endpoint (`POST /api/applications`, protected by an
   API key) would enable browser-extension integration, mobile shortcuts, and
   third-party automation tools.
-- **Dark / light theme toggle** — a user-selectable colour scheme (stored in
-  settings or `localStorage`) would improve usability for users who prefer a
-  light interface.
-- **Bulk status update** — selecting multiple rows in a year view and changing
-  their status in one action would speed up post-rejection cleanup.
-- **Global search** — a single search bar that queries company, job title, and
-  notes across all years would make it faster to locate older applications.
