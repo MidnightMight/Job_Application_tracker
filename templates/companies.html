@@ -5,11 +5,26 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
   <h2 class="fw-bold mb-0">
     <i class="bi bi-building text-warning me-2"></i>Company Tracker
+    {% if pool_enabled %}
+    <span class="badge bg-info text-dark fs-6 ms-2" title="Company pool is enabled — all users share this list">
+      <i class="bi bi-people-fill me-1"></i>Pooled
+    </span>
+    {% endif %}
   </h2>
   <a href="{{ url_for('add_company') }}" class="btn btn-warning">
     <i class="bi bi-plus-circle me-1"></i>Add Company
   </a>
 </div>
+
+{% if pool_enabled %}
+<div class="alert alert-info py-2 small">
+  <i class="bi bi-info-circle me-1"></i>
+  <strong>Company Pool is active.</strong>
+  You are viewing the combined company list. Rows marked with
+  <i class="bi bi-people-fill text-info"></i> belong to other users — their private notes are hidden.
+  <a href="{{ url_for('settings', section='general') }}" class="alert-link">Manage in Settings</a>.
+</div>
+{% endif %}
 
 <!-- Sector Frequency Chart -->
 <div class="row g-3 mb-4">
@@ -47,16 +62,34 @@
   </div>
 </div>
 
-<!-- Company Table -->
+<!-- Company Table with Bulk Delete -->
+<form method="post" action="{{ url_for('bulk_delete_companies') }}" id="bulkForm">
 <div class="card border-0 shadow-sm">
-  <div class="card-header bg-transparent fw-semibold">
-    <i class="bi bi-table me-2"></i>All Companies
-    <span class="badge bg-secondary ms-2">{{ companies | length }}</span>
+  <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="fw-semibold">
+      <i class="bi bi-table me-2"></i>All Companies
+      <span class="badge bg-secondary ms-2">{{ companies | length }}</span>
+    </span>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="text-muted small" id="selectedCount" style="display:none!important;">
+        <span id="selNum">0</span> selected
+      </span>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="selectAllBtn">
+        <i class="bi bi-check2-all me-1"></i>Select All
+      </button>
+      <button type="submit" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled
+              onclick="return confirm('Delete the selected companies? This cannot be undone.')">
+        <i class="bi bi-trash me-1"></i>Delete Selected
+      </button>
+    </div>
   </div>
   <div class="table-responsive">
     <table class="table table-hover table-sm align-middle mb-0">
       <thead class="table-dark">
         <tr>
+          <th class="ps-3" style="width:42px;">
+            <input type="checkbox" class="form-check-input" id="checkAll" title="Select all">
+          </th>
           <th>#</th>
           <th>Company</th>
           <th>Sector / Note</th>
@@ -68,10 +101,26 @@
       </thead>
       <tbody>
         {% for c in companies %}
-        <tr>
+        <tr class="{% if c._pooled_from_other %}table-light{% endif %}">
+          <td class="ps-3">
+            <input type="checkbox" class="form-check-input row-check" name="selected_ids"
+                   value="{{ c.id }}"
+                   {% if c._pooled_from_other %}disabled title="Cannot bulk-delete another user's company"{% endif %}>
+          </td>
           <td class="text-muted small">{{ loop.index }}</td>
-          <td class="fw-semibold">{{ c.company_name }}</td>
-          <td class="text-muted small">{{ c.note or '—' }}</td>
+          <td class="fw-semibold">
+            {% if c._pooled_from_other %}
+            <i class="bi bi-people-fill text-info me-1" title="From another user's list"></i>
+            {% endif %}
+            {{ c.company_name }}
+          </td>
+          <td class="text-muted small">
+            {% if c._pooled_from_other %}
+            <span class="text-muted fst-italic">— (private)</span>
+            {% else %}
+            {{ c.note or '—' }}
+            {% endif %}
+          </td>
           {% for y in years %}
           <td class="text-center">
             {% if c['applied_' + y|string] %}
@@ -82,18 +131,18 @@
           </td>
           {% endfor %}
           <td class="text-nowrap">
+            {% if not c._pooled_from_other %}
             <a href="{{ url_for('edit_company', company_id=c.id) }}"
                class="btn btn-outline-primary btn-sm py-0 me-1">
               <i class="bi bi-pencil"></i>
             </a>
-            <form method="post"
-                  action="{{ url_for('delete_company', company_id=c.id) }}"
-                  class="d-inline"
-                  onsubmit="return confirm('Delete {{ c.company_name }}?')">
-              <button class="btn btn-outline-danger btn-sm py-0">
-                <i class="bi bi-trash"></i>
-              </button>
-            </form>
+            <button type="button" class="btn btn-outline-danger btn-sm py-0"
+                    onclick="deleteSingle({{ c.id }}, '{{ c.company_name | replace("'", "\\'") }}')">
+              <i class="bi bi-trash"></i>
+            </button>
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -101,11 +150,19 @@
     </table>
   </div>
 </div>
+</form>
+
+<!-- Hidden single-delete helper form -->
+<form method="post" id="singleDeleteForm" style="display:none;">
+  <input type="hidden" name="selected_ids" id="singleDeleteId">
+</form>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function () {
+  // ── Sector chart ───────────────────────────────────────────────────────
   const labels = {{ sector_freq.keys() | list | tojson }};
   const data   = {{ sector_freq.values() | list | tojson }};
   const colors = [
@@ -120,6 +177,53 @@
     options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } },
       scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
   });
+
+  // ── Bulk-select logic ──────────────────────────────────────────────────
+  const checkAll   = document.getElementById('checkAll');
+  const selectBtn  = document.getElementById('selectAllBtn');
+  const deleteBtn  = document.getElementById('bulkDeleteBtn');
+  const countSpan  = document.getElementById('selectedCount');
+  const numSpan    = document.getElementById('selNum');
+  const rowChecks  = () => [...document.querySelectorAll('.row-check:not(:disabled)')];
+
+  function updateBulkUI() {
+    const checked = rowChecks().filter(c => c.checked);
+    const n = checked.length;
+    numSpan.textContent = n;
+    countSpan.style.removeProperty('display');
+    countSpan.style.display = n > 0 ? 'inline' : 'none';
+    deleteBtn.disabled = n === 0;
+  }
+
+  checkAll.addEventListener('change', () => {
+    rowChecks().forEach(c => { c.checked = checkAll.checked; });
+    updateBulkUI();
+  });
+
+  let allSelected = false;
+  selectBtn.addEventListener('click', () => {
+    allSelected = !allSelected;
+    rowChecks().forEach(c => { c.checked = allSelected; });
+    checkAll.checked = allSelected;
+    selectBtn.innerHTML = allSelected
+      ? '<i class="bi bi-x-circle me-1"></i>Deselect All'
+      : '<i class="bi bi-check2-all me-1"></i>Select All';
+    updateBulkUI();
+  });
+
+  document.querySelectorAll('.row-check').forEach(c =>
+    c.addEventListener('change', updateBulkUI)
+  );
+
+  updateBulkUI();
 })();
+
+// ── Single delete via hidden form ─────────────────────────────────────
+function deleteSingle(id, name) {
+  if (!confirm('Delete company \'' + name + '\'?')) return;
+  const form = document.getElementById('singleDeleteForm');
+  form.action = '/company/delete/' + id;
+  form.submit();
+}
 </script>
 {% endblock %}

@@ -583,22 +583,37 @@ def import_csv():
 # Companies
 # ---------------------------------------------------------------------------
 
+def _company_view_context():
+    """Return (user_id, pool_enabled) for the current request."""
+    login_enabled = db.get_setting("login_enabled", "0") == "1"
+    pool_enabled = db.get_setting("company_pool_enabled", "0") == "1"
+    user_id = session.get("user_id") if login_enabled else None
+    return user_id, pool_enabled
+
+
 @app.route("/companies")
+@login_required
 def companies():
-    companies_list = db.get_companies()
+    user_id, pool_enabled = _company_view_context()
+    companies_list = db.get_companies(user_id=user_id, pool_enabled=pool_enabled)
     sector_freq = db.get_company_note_frequency()
     return render_template(
         "companies.html",
         companies=companies_list,
         years=db.YEARS,
         sector_freq=sector_freq,
+        pool_enabled=pool_enabled,
+        current_user_id=user_id,
     )
 
 
 @app.route("/company/add", methods=["GET", "POST"])
+@login_required
 def add_company():
     if request.method == "POST":
-        db.add_company(request.form)
+        login_enabled = db.get_setting("login_enabled", "0") == "1"
+        user_id = session.get("user_id") if login_enabled else None
+        db.add_company(request.form, user_id=user_id)
         flash("Company added successfully.", "success")
         return redirect(url_for("companies"))
     return render_template(
@@ -607,6 +622,7 @@ def add_company():
 
 
 @app.route("/company/edit/<int:company_id>", methods=["GET", "POST"])
+@login_required
 def edit_company(company_id):
     company = db.get_company(company_id)
     if not company:
@@ -622,9 +638,26 @@ def edit_company(company_id):
 
 
 @app.route("/company/delete/<int:company_id>", methods=["POST"])
+@login_required
 def delete_company(company_id):
     db.delete_company(company_id)
     flash("Company deleted.", "warning")
+    return redirect(url_for("companies"))
+
+
+@app.route("/companies/bulk-delete", methods=["POST"])
+@login_required
+def bulk_delete_companies():
+    raw_ids = request.form.getlist("selected_ids")
+    try:
+        selected_ids = [int(x) for x in raw_ids if str(x).isdigit()]
+    except ValueError:
+        selected_ids = []
+    if not selected_ids:
+        flash("No companies selected.", "warning")
+        return redirect(url_for("companies"))
+    count = db.bulk_delete_companies(selected_ids)
+    flash(f"Deleted {count} company record(s).", "warning")
     return redirect(url_for("companies"))
 
 
@@ -671,6 +704,10 @@ def settings():
             else:
                 flash("Reminder days must be a positive integer.", "danger")
                 return redirect(url_for("settings", section="general"))
+            db.set_setting(
+                "company_pool_enabled",
+                "1" if request.form.get("company_pool_enabled") else "0",
+            )
             flash("General settings saved.", "success")
             return redirect(url_for("settings", section="general"))
 
