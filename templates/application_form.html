@@ -4,6 +4,49 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-9">
+
+    {# ── AI Fill Panel (only shown when Ollama is enabled) ───────────────── #}
+    {% if ollama_enabled and action == 'Add' %}
+    <div class="card border-0 shadow-sm mb-3" id="aiFillCard">
+      <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center"
+           style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#aiFillBody"
+           aria-expanded="true">
+        <span>
+          <i class="bi bi-robot me-2 text-warning"></i>
+          <span class="fw-semibold">AI Assistant — Auto-fill from Job Description</span>
+          <span class="badge bg-warning text-dark ms-2 small">Ollama</span>
+        </span>
+        <i class="bi bi-chevron-up" id="aiFillChevron"></i>
+      </div>
+      <div class="collapse show" id="aiFillBody">
+        <div class="card-body">
+          <p class="text-muted small mb-2">
+            Paste the full job description below and click <strong>Fill with AI</strong>.
+            The AI will extract the role, company, team, and other details directly into the form.
+            You can review and adjust the values before saving.
+          </p>
+          <div class="mb-3">
+            <textarea id="aiJobDesc" class="form-control font-monospace" rows="6"
+                      placeholder="Paste the job posting text here…&#10;&#10;e.g. &quot;We are seeking a Graduate Engineer to join our Electrical team at Acme Corp…&quot;"></textarea>
+          </div>
+          <div class="d-flex align-items-center gap-3">
+            <button type="button" class="btn btn-warning fw-semibold" id="aiFillBtn">
+              <i class="bi bi-robot me-1"></i>Fill with AI
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="aiClearBtn">
+              <i class="bi bi-eraser me-1"></i>Clear
+            </button>
+            <div id="aiSpinner" class="d-none">
+              <div class="spinner-border spinner-border-sm text-warning me-1" role="status"></div>
+              <span class="text-muted small">Thinking…</span>
+            </div>
+          </div>
+          <div id="aiStatus" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-dark text-white fw-semibold">
         <i class="bi bi-{% if action == 'Add' %}plus-circle{% else %}pencil{% endif %} me-2"></i>
@@ -42,7 +85,7 @@
             <!-- Team -->
             <div class="col-md-6">
               <label class="form-label fw-semibold">Team / Division</label>
-              <input type="text" name="team" class="form-control"
+              <input type="text" name="team" id="team" class="form-control"
                      value="{{ app.team if app else '' }}"
                      placeholder="e.g. Building Electrical, Graduate Programme">
             </div>
@@ -114,7 +157,7 @@
             <!-- Link -->
             <div class="col-12">
               <label class="form-label fw-semibold">Application Link</label>
-              <input type="url" name="link" class="form-control"
+              <input type="url" name="link" id="link" class="form-control"
                      value="{{ app.link if app else '' }}"
                      placeholder="https://…">
             </div>
@@ -143,7 +186,7 @@
             <!-- Comments -->
             <div class="col-12">
               <label class="form-label fw-semibold">Comments / Notes</label>
-              <textarea name="comment" class="form-control" rows="3"
+              <textarea name="comment" id="comment" class="form-control" rows="3"
                         placeholder="Interview details, follow-up actions, recruiter name…">{{ app.comment if app else '' }}</textarea>
             </div>
 
@@ -288,6 +331,103 @@ if (forceAddBtn) {
 window.addEventListener('DOMContentLoaded', function () {
   new bootstrap.Modal(document.getElementById('duplicateModal')).show();
 });
+{% endif %}
+
+// ── AI Fill panel ─────────────────────────────────────────────────────────
+{% if ollama_enabled and action == 'Add' %}
+(function () {
+  const fillBtn   = document.getElementById('aiFillBtn');
+  const clearBtn  = document.getElementById('aiClearBtn');
+  const textarea  = document.getElementById('aiJobDesc');
+  const spinner   = document.getElementById('aiSpinner');
+  const statusDiv = document.getElementById('aiStatus');
+  const chevron   = document.getElementById('aiFillChevron');
+
+  // Update chevron icon when the collapse panel toggles.
+  document.getElementById('aiFillBody').addEventListener('show.bs.collapse',  () => {
+    chevron.className = 'bi bi-chevron-up';
+  });
+  document.getElementById('aiFillBody').addEventListener('hide.bs.collapse', () => {
+    chevron.className = 'bi bi-chevron-down';
+  });
+
+  clearBtn.addEventListener('click', () => {
+    textarea.value = '';
+    statusDiv.innerHTML = '';
+  });
+
+  fillBtn.addEventListener('click', async () => {
+    const jd = textarea.value.trim();
+    if (!jd) {
+      statusDiv.innerHTML = '<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Please paste a job description first.</span>';
+      return;
+    }
+
+    fillBtn.disabled = true;
+    spinner.classList.remove('d-none');
+    statusDiv.innerHTML = '';
+
+    try {
+      const resp = await fetch('{{ url_for("ai_fill") }}', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({job_description: jd}),
+      });
+      const data = await resp.json();
+
+      if (!data.ok) {
+        statusDiv.innerHTML = `<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>${escHtml(data.error)}</span>`;
+        return;
+      }
+
+      const f = data.fields;
+      const filled = [];
+
+      // Map returned fields to form inputs.
+      if (f.job_desc)  { setField('job_desc',  f.job_desc);  filled.push('Role');    }
+      if (f.company)   { setField('company',   f.company);   filled.push('Company'); }
+      if (f.team)      { setField('team',      f.team);      filled.push('Team');    }
+      if (f.link)      { setField('link',      f.link);      filled.push('Link');    }
+      if (f.comment)   { setField('comment',   f.comment);   filled.push('Comments');}
+
+      if (filled.length) {
+        statusDiv.innerHTML = `
+          <div class="alert alert-success py-2 small mb-0">
+            <i class="bi bi-check-circle me-1"></i>
+            AI filled: <strong>${filled.join(', ')}</strong>.
+            Please review the values and adjust if needed before saving.
+          </div>`;
+        // Scroll the main form into view so the user can see the filled fields.
+        document.querySelector('.card-header.bg-dark').scrollIntoView({behavior:'smooth', block:'start'});
+      } else {
+        statusDiv.innerHTML = '<span class="text-warning small"><i class="bi bi-question-circle me-1"></i>AI responded but could not extract any fields. Try pasting more of the job description.</span>';
+      }
+
+    } catch (err) {
+      statusDiv.innerHTML = `<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>Request failed: ${escHtml(err.message)}</span>`;
+    } finally {
+      fillBtn.disabled = false;
+      spinner.classList.add('d-none');
+    }
+  });
+
+  function setField(id, value) {
+    const el = document.getElementById(id);
+    if (!el || !value) return;
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      el.value = value;
+      // Briefly highlight the field so the user notices the change.
+      el.classList.add('border-warning');
+      setTimeout(() => el.classList.remove('border-warning'), 2500);
+    }
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
 {% endif %}
 </script>
 {% endblock %}

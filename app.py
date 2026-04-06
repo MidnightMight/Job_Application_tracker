@@ -85,6 +85,7 @@ def inject_globals():
         "login_enabled": db.get_setting("login_enabled", "0") == "1",
         "current_user": session.get("username"),
         "app_version": APP_VERSION,
+        "ollama_enabled": db.get_setting("ollama_enabled", "0") == "1",
     }
 
 
@@ -812,6 +813,90 @@ def ollama_test():
         return jsonify({"ok": False, "error": safe_reason})
     except Exception:
         return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
+
+
+@app.route("/api/ai-fill", methods=["POST"])
+@login_required
+def ai_fill():
+    """AJAX: send a pasted job description to Ollama and return extracted form fields."""
+    import re as _re
+
+    if db.get_setting("ollama_enabled", "0") != "1":
+        return jsonify({"ok": False, "error": "Ollama AI Assistant is not enabled in Settings."})
+
+    body = request.get_json(silent=True) or {}
+    job_description = (body.get("job_description") or "").strip()
+    if not job_description:
+        return jsonify({"ok": False, "error": "Please paste a job description first."})
+
+    ollama_url   = db.get_setting("ollama_url",   "http://localhost:11434").rstrip("/")
+    ollama_model = db.get_setting("ollama_model", "llama3")
+
+    prompt = (
+        "You are a helpful assistant that extracts structured information from job postings.\n\n"
+        "Given the job description below, return ONLY a single valid JSON object "
+        "(no markdown fences, no extra text) with these keys:\n\n"
+        '  "job_desc"  — the job title or role name (string)\n'
+        '  "company"   — the company or organisation name (string)\n'
+        '  "team"      — team, division, or department name, or "" if not stated (string)\n'
+        '  "link"      — the application or posting URL if explicitly mentioned, or "" (string)\n'
+        '  "comment"   — a concise 2–3 sentence summary of key requirements and responsibilities (string)\n\n'
+        "Job Description:\n"
+        "---\n"
+        f"{job_description[:4000]}\n"   # cap to avoid huge prompts
+        "---\n\n"
+        "JSON object:"
+    )
+
+    payload = json.dumps({
+        "model":  ollama_model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.1},   # low temp → more deterministic JSON
+    }).encode()
+
+    try:
+        req = urllib.request.Request(
+            f"{ollama_url}/api/generate",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            result = json.loads(resp.read().decode())
+
+        raw = (result.get("response") or "").strip()
+
+        # Strip markdown code fences if the model wrapped the output anyway.
+        fence_match = _re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
+        if fence_match:
+            raw = fence_match.group(1).strip()
+
+        # Extract the first JSON object in the response (handles preamble text).
+        obj_match = _re.search(r"\{[\s\S]+\}", raw)
+        if obj_match:
+            raw = obj_match.group(0)
+
+        fields = json.loads(raw)
+
+        # Allow only expected keys; coerce values to strings.
+        allowed = {"job_desc", "company", "team", "link", "comment"}
+        fields = {k: str(v).strip() for k, v in fields.items() if k in allowed}
+
+        return jsonify({"ok": True, "fields": fields})
+
+    except urllib.error.URLError:
+        return jsonify({"ok": False, "error": "Could not connect to the Ollama server. Is it running?"})
+    except json.JSONDecodeError:
+        return jsonify({
+            "ok": False,
+            "error": (
+                "The AI returned an unrecognised format. "
+                "Try a different model or simplify the job description."
+            ),
+        })
+    except Exception:
+        return jsonify({"ok": False, "error": "An unexpected error occurred. Please try again."})
 
 
 @app.route("/settings/check-update")
