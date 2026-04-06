@@ -12,6 +12,8 @@ This document describes the extended features added to the Job Application Track
 4. [Export & Backup](#4-export--backup)
 5. [One-Command Launcher Scripts](#5-one-command-launcher-scripts)
 6. [Browser Extension Research](#6-browser-extension-research)
+7. [Progressive Web App (PWA)](#7-progressive-web-app-pwa)
+8. [AI Server Status Indicator](#8-ai-server-status-indicator)
 
 ---
 
@@ -270,4 +272,87 @@ This is documented here so it can be implemented in a future iteration without n
 
 ---
 
-*FEATURES.md — last updated 2026-04-01*
+## 7. Progressive Web App (PWA)
+
+The tracker ships with a full PWA implementation, allowing users to install it to their home screen on Android, iOS, and desktop without any app store involvement.
+
+### Files added
+
+| File | Purpose |
+|---|---|
+| `static/manifest.json` | Web App Manifest — app name, icons, display mode, theme colour |
+| `static/sw.js` | Service worker — caching strategy and offline support |
+| `static/icons/icon.svg` | SVG app icon (used by modern browsers) |
+| `static/icons/icon-192.png` | 192 × 192 PNG icon (required by Android / Chrome) |
+| `static/icons/icon-512.png` | 512 × 512 PNG icon (required for splash screen) |
+
+### How to install
+
+**Android (Chrome):**
+1. Open the app in Chrome at `http://localhost:5000` (or your server address).
+2. Tap the three-dot menu → **Add to Home screen**.
+3. Confirm — the tracker now appears as a standalone app.
+
+**iOS (Safari):**
+1. Open the app in Safari.
+2. Tap the Share icon → **Add to Home Screen**.
+
+**Desktop (Chrome / Edge):**
+Click the install icon (⊕) in the address bar, or use the browser menu → **Install Job Application Tracker**.
+
+### Caching strategy
+
+The service worker uses two strategies:
+
+| Request type | Strategy | Notes |
+|---|---|---|
+| Navigation (HTML pages) | Network-first + cache fallback | Previously visited pages load offline |
+| Static assets (CSS, JS, fonts, images) | Cache-first + background update | Instant loads; cache refreshed on next visit |
+| API calls (`/api/*`) | Network-only | Never cached — always live data |
+| POST / PUT / DELETE | Network-only | Mutations always go to the server |
+
+### Cache versioning
+
+The cache is named `job-tracker-v1`. Incrementing the version string in `sw.js` causes the old cache to be deleted on the next activation, ensuring users get updated assets after a code change.
+
+---
+
+## 8. AI Server Status Indicator
+
+When the Ollama AI assistant is enabled, a live server status badge is shown in two places so users know immediately whether the AI is reachable before attempting to use it.
+
+### Where it appears
+
+**Application Form — AI Fill panel header:**
+A small badge next to the "AI Assistant" heading shows one of three states:
+
+| Badge | Meaning |
+|---|---|
+| 🟡 *Checking…* (grey spinner) | Ping in progress — shown briefly on page load |
+| 🟢 *Server online* (green) | Ollama is reachable at the configured URL |
+| 🔴 *Server offline* (red) | Ollama could not be reached; a help link to Settings is shown below the panel |
+
+The status is checked once on page load and again each time the panel is expanded from its collapsed state.
+
+**Settings → AI Assistant — card header:**
+The same green/red badge appears next to the "Local LLM / Ollama Integration" heading when Ollama is enabled. The check runs automatically on page load (no need to click "Test" first). The "Test" button still works and updates the badge after a manual re-check.
+
+### API endpoint
+
+`GET /api/ollama-status`
+
+Returns:
+
+```json
+// Online
+{"ok": true, "model": "llama3", "models": ["llama3", "mistral"]}
+
+// Offline or disabled
+{"ok": false, "error": "Server unreachable."}
+```
+
+The endpoint is protected by `@login_required` and never exposes internal server paths or OS details in error messages.
+
+---
+
+*FEATURES.md — last updated 2026-04-06*

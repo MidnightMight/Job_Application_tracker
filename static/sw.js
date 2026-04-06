@@ -81,12 +81,11 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(request).then(cached => {
       if (cached) {
-        // Return cache immediately; refresh in background
-        const network = fetch(request).then(response => {
+        // Return cache immediately; refresh in background (fire-and-forget)
+        fetch(request).then(response => {
           if (response.ok) {
             caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
           }
-          return response;
         }).catch(() => {});
         return cached;
       }

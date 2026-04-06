@@ -73,6 +73,9 @@ logic, requirements, and design decisions originate from the repository owner.
   users add the tracker to their home screen on Android and iOS; the app loads
   from cache when offline so previously visited pages remain accessible without
   a network connection
+- **AI server status** — when Ollama is enabled, a live green/red badge in the
+  AI Fill panel header and the Settings AI card shows whether the server is
+  reachable before you try to use it
 
 ---
 
@@ -359,8 +362,11 @@ Job_Application_tracker/
 │   ├── inbox.html            Reminder inbox
 │   ├── settings.html         App settings (reminder threshold etc.)
 │   └── export.html           Export and backup page
-└── static/
-    └── style.css             Custom styles, status-coloured badges, timeline
+├── static/
+│   ├── style.css             Custom styles, status-coloured badges, timeline
+│   ├── manifest.json         PWA Web App Manifest
+│   ├── sw.js                 PWA service worker (caching + offline support)
+│   └── icons/                PWA app icons (SVG, 192 × 192 PNG, 512 × 512 PNG)
 ```
 
 ---

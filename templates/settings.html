@@ -322,8 +322,13 @@
     {# ── AI Assistant ── #}
     {% elif section == 'ai' %}
     <div class="card shadow-sm mb-4">
-      <div class="card-header fw-semibold">
-        <i class="bi bi-robot me-1"></i>Local LLM / Ollama Integration
+      <div class="card-header fw-semibold d-flex align-items-center gap-2">
+        <span><i class="bi bi-robot me-1"></i>Local LLM / Ollama Integration</span>
+        {% if settings.get('ollama_enabled', '0') == '1' %}
+        <span id="ollamaSettingsStatusBadge" class="badge bg-secondary small">
+          <span class="spinner-grow spinner-grow-sm me-1" style="width:.5rem;height:.5rem;" role="status"></span>Checking…
+        </span>
+        {% endif %}
       </div>
       <div class="card-body">
         <form method="post" action="{{ url_for('settings', section='ai') }}" id="aiForm">
@@ -554,6 +559,19 @@
 <script>
 // ── Ollama test connection ────────────────────────────────────────────────
 const testBtn = document.getElementById('testOllamaBtn');
+
+function updateSettingsStatusBadge(ok) {
+  const badge = document.getElementById('ollamaSettingsStatusBadge');
+  if (!badge) return;
+  if (ok) {
+    badge.className = 'badge bg-success small';
+    badge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.55rem;vertical-align:middle;"></i>Online';
+  } else {
+    badge.className = 'badge bg-danger small';
+    badge.innerHTML = '<i class="bi bi-circle-fill me-1" style="font-size:.55rem;vertical-align:middle;"></i>Offline';
+  }
+}
+
 if (testBtn) {
   testBtn.addEventListener('click', async () => {
     const url = document.getElementById('ollama_url').value.trim();
@@ -574,16 +592,36 @@ if (testBtn) {
         if (data.models && data.models.length) {
           models.textContent = ' Available: ' + data.models.join(', ');
         }
+        updateSettingsStatusBadge(true);
       } else {
         result.textContent = '✗ Connection failed: ' + (data.error || 'unknown error');
         result.className = 'form-text mt-1 text-danger';
+        updateSettingsStatusBadge(false);
       }
     } catch (e) {
       result.textContent = '✗ Request error: ' + e.message;
       result.className = 'form-text mt-1 text-danger';
+      updateSettingsStatusBadge(false);
     }
   });
 }
+
+// ── Auto-ping on AI settings page load ──────────────────────────────────
+(async function autoCheckStatus() {
+  const badge = document.getElementById('ollamaSettingsStatusBadge');
+  if (!badge) return;  // not on AI section or ollama disabled
+  try {
+    const resp = await fetch('{{ url_for("ollama_status") }}');
+    const data = await resp.json();
+    updateSettingsStatusBadge(data.ok);
+    if (data.ok && data.models && data.models.length) {
+      const modelsSpan = document.getElementById('availableModels');
+      if (modelsSpan) modelsSpan.textContent = ' Available: ' + data.models.join(', ');
+    }
+  } catch {
+    updateSettingsStatusBadge(false);
+  }
+})();
 
 // ── Toggle profile card visibility when ai_fit_enabled changes ─────────
 const fitToggle    = document.getElementById('ai_fit_enabled');
