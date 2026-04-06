@@ -207,6 +207,11 @@ def onboarding():
 
         # Unknown action — fall through to render.
 
+    # Advance to step 2 when the Continue button passes ?next_step=1.
+    if request.args.get("next_step") == "1":
+        return render_template("onboarding.html", step="admin",
+                               deployment_mode=DEPLOYMENT_MODE)
+
     return render_template("onboarding.html", step="welcome",
                            deployment_mode=DEPLOYMENT_MODE)
 
