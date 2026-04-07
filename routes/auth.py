@@ -1,6 +1,8 @@
 """Authentication: login_required decorator and login/logout routes."""
 
 import functools
+import re as _re
+from urllib.parse import urlparse as _urlparse
 
 from flask import (
     Blueprint, flash, redirect, render_template,
@@ -11,6 +13,22 @@ from werkzeug.security import check_password_hash
 import db
 
 bp = Blueprint("auth", __name__)
+
+_SAFE_NEXT_RE = _re.compile(r'^/[a-zA-Z0-9/_\-.?=&%+#]*$')
+
+
+def _safe_redirect(url: str) -> str:
+    """Return url if it is a safe relative path, otherwise return the dashboard."""
+    if (
+        url
+        and len(url) <= 2048
+        and _SAFE_NEXT_RE.match(url)
+        and not url.startswith("//")
+    ):
+        parsed = _urlparse(url)
+        if not parsed.netloc and not parsed.scheme:
+            return url
+    return url_for("dashboard.dashboard")
 
 
 def login_required(f):
@@ -38,17 +56,9 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             flash(f"Welcome back, {user['username']}!", "success")
+            # Only redirect to a safe relative URL; fall back to dashboard.
             raw_next = request.form.get("next", "")
-            from urllib.parse import urlparse as _urlparse
-            _p = _urlparse(raw_next)
-            _safe = (
-                raw_next
-                and raw_next.startswith("/")
-                and not raw_next.startswith("//")
-                and not _p.netloc
-                and not _p.scheme
-            )
-            next_url = raw_next if _safe else url_for("dashboard.dashboard")
+            next_url = _safe_redirect(raw_next)
             return redirect(next_url)
         flash("Invalid username or password.", "danger")
     return render_template("login.html", next=request.args.get("next", ""))

@@ -36,7 +36,9 @@ def add_application():
         team        = request.form.get("team", "").strip()
 
         if request.form.get("force_add") != "1":
-            duplicates = db.find_duplicate_applications(company, job_desc, date_applied, team)
+            duplicates = db.find_duplicate_applications(
+                company, job_desc, date_applied, team=team
+            )
             if duplicates:
                 form_data = SimpleNamespace(
                     job_desc=job_desc,
