@@ -107,21 +107,25 @@ def restore_db():
 
     # Save the upload to a temp file for validation
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
     try:
         uploaded.save(tmp.name)
-        tmp.close()
 
         # Validate that the file is a SQLite database
         try:
             conn = sqlite3.connect(tmp.name)
-            conn.execute("PRAGMA integrity_check")
+            result = conn.execute("PRAGMA integrity_check").fetchone()
             conn.close()
+            if not result or result[0] != "ok":
+                raise sqlite3.DatabaseError("integrity check failed")
         except sqlite3.DatabaseError:
             flash("The uploaded file does not appear to be a valid SQLite database.", "danger")
             return redirect(url_for("export.export_page"))
 
         # Back up the current database before overwriting
-        backup_path = db.DB_PATH + ".bak"
+        backup_path = os.path.join(
+            os.path.dirname(db.DB_PATH), os.path.basename(db.DB_PATH) + ".bak"
+        )
         shutil.copy2(db.DB_PATH, backup_path)
 
         # Replace the current database
