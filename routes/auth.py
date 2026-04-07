@@ -1,8 +1,6 @@
 """Authentication: login_required decorator and login/logout routes."""
 
 import functools
-import re as _re
-from urllib.parse import urlparse as _urlparse
 
 from flask import (
     Blueprint, flash, redirect, render_template,
@@ -14,37 +12,28 @@ import db
 
 bp = Blueprint("auth", __name__)
 
-_SAFE_NEXT_RE = _re.compile(r'^/[a-zA-Z0-9/_\-.?=&%+#]*$')
+# Only paths starting with / and containing safe URL characters are allowed.
+_PATH_OK_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    "0123456789/_-.?=&%+#"
+)
 
 
-def _safe_redirect(url: str) -> str:
-    """Return url if it is a safe relative path, otherwise return the dashboard.
+def _safe_path(path: str) -> str | None:
+    """Return path if it is a safe relative URL path, otherwise None.
 
-    Validates the ``next`` parameter to prevent open redirect attacks.
-    The URL is reconstructed from its parsed components so that no raw
-    user-supplied string is ever passed directly to ``redirect()``.
+    The path must:
+    - Start with exactly one forward slash (not //)
+    - Contain only explicitly-allowed characters
+    - Not include a scheme or netloc
     """
-    fallback = url_for("dashboard.dashboard")
-    if not url or len(url) > 2048:
-        return fallback
-    if not _SAFE_NEXT_RE.match(url):
-        return fallback
-    if url.startswith("//"):
-        return fallback
-    parsed = _urlparse(url)
-    # Reject anything with a scheme or netloc (e.g. //evil.com, https://…).
-    if parsed.scheme or parsed.netloc:
-        return fallback
-    # Reconstruct from parsed components — never returns the raw string.
-    safe = parsed.path
-    if parsed.query:
-        safe += "?" + parsed.query
-    if parsed.fragment:
-        safe += "#" + parsed.fragment
-    # Final guard: the reconstructed path must still pass our regex.
-    if not _SAFE_NEXT_RE.match(safe):
-        return fallback
-    return safe
+    if not path or not path.startswith("/") or path.startswith("//"):
+        return None
+    if len(path) > 2048:
+        return None
+    if not all(c in _PATH_OK_CHARS for c in path):
+        return None
+    return path
 
 
 def login_required(f):
@@ -53,7 +42,9 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if db.get_setting("login_enabled", "0") == "1":
             if not session.get("user_id"):
-                return redirect(url_for("auth.login", next=request.url))
+                # Store only the server-side path (never user-provided input).
+                session["login_next"] = request.path
+                return redirect(url_for("auth.login"))
         return f(*args, **kwargs)
     return decorated
 
@@ -72,12 +63,12 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             flash(f"Welcome back, {user['username']}!", "success")
-            # Only redirect to a safe relative URL; fall back to dashboard.
-            raw_next = request.form.get("next", "")
-            next_url = _safe_redirect(raw_next)
-            return redirect(next_url)
+            # Retrieve the server-stored path; never use form/query input for redirect.
+            stored_path = session.pop("login_next", None)
+            safe = _safe_path(stored_path) if stored_path else None
+            return redirect(safe or url_for("dashboard.dashboard"))
         flash("Invalid username or password.", "danger")
-    return render_template("login.html", next=request.args.get("next", ""))
+    return render_template("login.html")
 
 
 @bp.route("/logout")
