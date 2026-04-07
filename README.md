@@ -405,10 +405,10 @@ docker run -d \
 
 ```
 Job_Application_tracker/
-├── app.py                    Flask application — all routes
-├── database.py               SQLite schema, migrations, seed data, query helpers
+├── app.py                    Thin Flask entry point — registers blueprints, context processor, scheduler
+├── database.py               Backward-compat shim — re-exports everything from db/
 ├── run_script.py             CLI stats viewer and CSV exporter
-├── requirements.txt          Python dependencies (Flask, APScheduler)
+├── requirements.txt          Python dependencies (Flask, APScheduler, openpyxl, pypdf)
 ├── Dockerfile                Container image definition
 ├── docker-compose.yml        Compose file for one-command Docker launch
 ├── .dockerignore             Files excluded from the Docker build context
@@ -417,29 +417,57 @@ Job_Application_tracker/
 ├── FEATURES.md               Extended feature documentation
 ├── LICENSE                   MIT Licence
 ├── README.md                 This file
+│
+├── db/                       Database layer (SQLite) — split by concern
+│   ├── __init__.py           Re-exports all public symbols
+│   ├── connection.py         get_connection(), DB_PATH, constants, get_dynamic_years()
+│   ├── init_db.py            init_db(), schema migrations, seeding
+│   ├── applications.py       Application CRUD, duplicate detection (incl. team), bulk import
+│   ├── companies.py          Company CRUD, auto-add-from-application
+│   ├── statuses.py           get_status_options(), PROTECTED_STATUSES, add/delete_status
+│   ├── users.py              User management (add, delete, authenticate)
+│   ├── settings.py           get_setting(), set_setting(), get_all_settings()
+│   ├── stats.py              Stats aggregation, get_dynamic_years()
+│   └── reminders.py          Inbox / reminder helpers
+│
+├── routes/                   Flask Blueprints — one per area of the app
+│   ├── __init__.py
+│   ├── auth.py               login_required decorator, /login, /logout
+│   ├── dashboard.py          /, /search, /year/<year>
+│   ├── applications.py       /application/add|edit|delete|<id>, /bulk-action
+│   ├── import_.py            /application/import (CSV + Excel column-mapping)
+│   ├── companies.py          /companies, /company/add|edit|delete, /bulk-delete
+│   ├── inbox.py              /inbox, /inbox/dismiss, /inbox/dismiss-all
+│   ├── settings_routes.py    /settings, /settings/ollama-test, /check-update
+│   ├── api.py                /api/ai-fill, /api/ai-fit, /api/ai-fit-save, /api/ollama-status
+│   ├── export.py             /export, /export/applications|companies|db
+│   └── onboarding.py         /onboarding (first-run wizard)
+│
 ├── docs/
 │   ├── admin-guide.md        Admin setup, Docker, maintenance, multi-user, troubleshooting
 │   └── user-guide.md         How to add jobs, bulk operations, search, export, AI, and more
+│
 ├── templates/
 │   ├── base.html             Bootstrap 5 layout, navbar (with search + theme toggle)
 │   ├── dashboard.html        Main dashboard with Chart.js charts
 │   ├── year_view.html        Per-year application table with bulk-action toolbar
-│   ├── application_form.html Add / edit application (with validation modal)
-│   ├── application_detail.html  Full detail with status timeline and notes
+│   ├── application_form.html Add / edit (AI fill + fit panel, industry, expiry date)
+│   ├── application_detail.html  Full detail with timeline, fit analysis, last_modified_at
 │   ├── search.html           Global search results page
 │   ├── csv_import.html       Bulk CSV import with column-mapping UI
-│   ├── status_manager.html   Add / remove custom statuses
-│   ├── companies.html        Company tracker with sector chart
-│   ├── company_form.html     Add / edit company
+│   ├── status_manager.html   Add / remove custom statuses (protected statuses locked)
+│   ├── companies.html        Company tracker with industry/sector chart
+│   ├── company_form.html     Add / edit company (with industry field)
 │   ├── inbox.html            Reminder inbox
 │   ├── onboarding.html       First-run setup wizard
-│   ├── settings.html         App settings (reminder threshold, users, AI)
+│   ├── settings.html         App settings (reminder threshold, users, AI, statuses)
 │   └── export.html           Export and backup page
-├── static/
-│   ├── style.css             Custom styles, status-coloured badges, timeline, dark-mode overrides
-│   ├── manifest.json         PWA Web App Manifest
-│   ├── sw.js                 PWA service worker (caching + offline support)
-│   └── icons/                PWA app icons (SVG, 192 × 192 PNG, 512 × 512 PNG)
+│
+└── static/
+    ├── style.css             Custom styles, status badges, timeline, dark-mode overrides
+    ├── manifest.json         PWA Web App Manifest
+    ├── sw.js                 PWA service worker (caching + offline support)
+    └── icons/                PWA app icons (SVG, 192 × 192 PNG, 512 × 512 PNG)
 ```
 
 ---
@@ -570,3 +598,57 @@ The `docs/` folder contains detailed guides:
 - **REST API** — a JSON endpoint (`POST /api/applications`, protected by an
   API key) would enable browser-extension integration, mobile shortcuts, and
   third-party automation tools.
+
+---
+
+## Default Status Values (updated)
+
+Two new protected statuses have been added:
+
+| Status                 | Meaning                                           | Protected |
+|------------------------|---------------------------------------------------|-----------|
+| `Select_Status`        | Placeholder — not yet categorised                 | 🔒        |
+| `Drafting_Application` | Preparing the full application                    | 🔒        |
+| `Drafting_CV`          | Preparing application materials                   |           |
+| `Submitted`            | Application submitted / applied                   | 🔒        |
+| `Online_Assessment`    | Online test or coding challenge received           |           |
+| `Awaiting_Response`    | Waiting to hear back                              |           |
+| `Interview_Scheduled`  | Interview date confirmed                          |           |
+| `Interview_In_Person`  | In-person interview stage                         |           |
+| `Offer_Received`       | Offer received                                    | 🔒        |
+| `Offer_Rejected`       | Offer declined                                    | 🔒        |
+| `Rejected`             | Application unsuccessful                          | 🔒        |
+| `Likely_Rejected`      | No response for an extended period                |           |
+| `Not_Applying`         | Decided not to proceed                            | 🔒        |
+| `Job_Expired`          | Job advert has closed / expired                   | 🔒        |
+| `EOI`                  | Expression of interest submitted                  |           |
+
+Protected statuses show a 🔒 badge in the Settings → Statuses page and cannot be deleted.
+
+---
+
+## Changelog
+
+### v1.2.0 — Modular refactor + AI storage + data improvements
+
+#### Architecture
+- **Refactored into packages** — `app.py` reduced from ~1447 lines to ~170 lines; database code split into `db/` (9 modules); routes split into `routes/` (10 Flask Blueprints); `database.py` kept as a backward-compat re-export shim.
+
+#### AI Improvements
+- **AI fit results now stored in DB** — `ai_fit_score`, `ai_fit_verdict`, `ai_matching_skills`, `ai_skill_gaps`, `ai_recommendation` columns added to `applications`; saved automatically via `/api/ai-fit-save` when analysis completes in the browser.
+- **AI fill + fit panel in Edit mode** — the AI assistant panel is no longer restricted to the "Add" form; you can paste a new job description and re-run analysis when editing.
+- **Append to Notes** — a button appears after fit analysis to append a formatted summary (verdict, score, matching skills, gaps, recommendation) to the Additional Notes textarea.
+
+#### Data Model
+- **`industry` field on applications and companies** — optional industry/sector field on the application form; automatically propagated to the linked company record.
+- **`job_expiry_date` field** — record the date the job advertisement closes; a gentle hint appears if you set status to "Submitted" without filling this in.
+- **`last_modified_at` tracking** — `update_application()` compares all fields before saving and only updates the `last_modified_at` timestamp when at least one field has genuinely changed, preventing spurious edits from polluting the modification log.
+- **Auto-add company** — saving an application automatically creates the company in the Companies table if it doesn't already exist (using the application's industry value if provided).
+- **Dynamic year navigation** — the year list in the navbar is now derived from actual application dates plus the current calendar year, instead of a hardcoded static list.
+
+#### Status Management
+- **Protected statuses** — eight core statuses (`Select_Status`, `Drafting_Application`, `Submitted`, `Rejected`, `Offer_Received`, `Offer_Rejected`, `Not_Applying`, `Job_Expired`) show a 🔒 badge in Settings and cannot be deleted.
+- **New defaults** — `Drafting_Application` and `Job_Expired` are seeded on first run and added automatically to existing installs.
+
+#### Duplicate Detection
+- **Team included in dup check** — `find_duplicate_applications()` now considers the `team` field; same company + same title + same date but a **different team** is treated as a distinct application.
