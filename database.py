@@ -10,6 +10,7 @@ DB_PATH = os.environ.get(
 # Default statuses – used only to seed the statuses table on first run.
 DEFAULT_STATUSES = [
     "Select_Status",
+    "Drafting_Application",
     "Drafting_CV",
     "Submitted",
     "Online_Assessment",
@@ -21,10 +22,24 @@ DEFAULT_STATUSES = [
     "Offer_Received",
     "Offer_Rejected",
     "Not_Applying",
+    "Job_Expired",
     "EOI",
 ]
 
+# Statuses that must never be deleted — they are core workflow states.
+PROTECTED_STATUSES = frozenset({
+    "Select_Status",
+    "Drafting_Application",
+    "Submitted",
+    "Rejected",
+    "Offer_Received",
+    "Offer_Rejected",
+    "Not_Applying",
+    "Job_Expired",
+})
+
 PENDING_STATUSES = {
+    "Drafting_Application",
     "Drafting_CV",
     "Submitted",
     "Online_Assessment",
@@ -34,7 +49,31 @@ PENDING_STATUSES = {
     "EOI",
 }
 
+# YEARS is kept for backwards-compat; prefer get_dynamic_years() in views.
 YEARS = [2023, 2024, 2025, 2026, 2027]
+
+
+def get_dynamic_years() -> list[int]:
+    """Return a sorted list of years to display in navigation.
+
+    Includes every year that has at least one application plus the current
+    calendar year.  Falls back to the static YEARS list if the DB is empty.
+    """
+    current = date.today().year
+    try:
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT DISTINCT CAST(strftime('%Y', date_applied) AS INTEGER) AS yr "
+            "FROM applications WHERE date_applied IS NOT NULL AND date_applied != '' "
+            "ORDER BY yr"
+        ).fetchall()
+        conn.close()
+        years_from_db = [r["yr"] for r in rows if r["yr"]]
+    except Exception:
+        years_from_db = []
+
+    year_set = set(years_from_db) | {current}
+    return sorted(year_set)
 
 
 def get_connection():
@@ -48,8 +87,10 @@ def get_connection():
 _ALLOWED_TABLES  = {"applications", "companies", "status_history", "statuses", "reminders", "settings", "users"}
 _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at", "last_contact_date",
+    "ai_fit_score", "ai_fit_verdict", "ai_matching_skills", "ai_skill_gaps",
+    "ai_recommendation", "last_modified_at", "job_expiry_date",
 }
-_ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0"}
+_ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0", "INTEGER", "REAL"}
 
 # Fields that may be updated via the bulk-action route.
 _BULK_UPDATE_FIELDS = {"status", "cover_letter", "resume", "date_applied", "last_contact_date"}
@@ -94,15 +135,29 @@ def init_db():
             contact           TEXT,
             additional_notes  TEXT,
             status_changed_at TEXT,
-            last_contact_date TEXT
+            last_contact_date TEXT,
+            ai_fit_score      INTEGER,
+            ai_fit_verdict    TEXT,
+            ai_matching_skills TEXT,
+            ai_skill_gaps     TEXT,
+            ai_recommendation TEXT,
+            last_modified_at  TEXT,
+            job_expiry_date   TEXT
         )
     """)
 
     # Migrations for databases that existed before these columns were added.
-    _add_column_if_missing(c, "applications", "contact",           "TEXT")
-    _add_column_if_missing(c, "applications", "additional_notes",  "TEXT")
-    _add_column_if_missing(c, "applications", "status_changed_at", "TEXT")
-    _add_column_if_missing(c, "applications", "last_contact_date", "TEXT")
+    _add_column_if_missing(c, "applications", "contact",             "TEXT")
+    _add_column_if_missing(c, "applications", "additional_notes",    "TEXT")
+    _add_column_if_missing(c, "applications", "status_changed_at",   "TEXT")
+    _add_column_if_missing(c, "applications", "last_contact_date",   "TEXT")
+    _add_column_if_missing(c, "applications", "ai_fit_score",        "INTEGER")
+    _add_column_if_missing(c, "applications", "ai_fit_verdict",      "TEXT")
+    _add_column_if_missing(c, "applications", "ai_matching_skills",  "TEXT")
+    _add_column_if_missing(c, "applications", "ai_skill_gaps",       "TEXT")
+    _add_column_if_missing(c, "applications", "ai_recommendation",   "TEXT")
+    _add_column_if_missing(c, "applications", "last_modified_at",    "TEXT")
+    _add_column_if_missing(c, "applications", "job_expiry_date",     "TEXT")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""
@@ -222,6 +277,18 @@ def init_db():
             [(name, i) for i, name in enumerate(DEFAULT_STATUSES)],
         )
         conn.commit()
+    else:
+        # Ensure protected / newly-added statuses exist in existing installs.
+        existing_statuses = {r[0] for r in c.execute("SELECT name FROM statuses").fetchall()}
+        max_order = c.execute("SELECT COALESCE(MAX(sort_order), 0) FROM statuses").fetchone()[0]
+        for name in ("Drafting_Application", "Job_Expired"):
+            if name not in existing_statuses:
+                max_order += 1
+                c.execute(
+                    "INSERT OR IGNORE INTO statuses (name, sort_order) VALUES (?,?)",
+                    (name, max_order),
+                )
+        conn.commit()
 
     # Migrate old status names to new normalised names in existing data.
     _migrate_legacy_status_names(c)
@@ -294,7 +361,9 @@ def add_status(name: str):
 
 
 def delete_status(name: str):
-    """Delete a custom status. Prevents deletion if any application uses it."""
+    """Delete a custom status. Prevents deletion of protected statuses or those in use."""
+    if name in PROTECTED_STATUSES:
+        return False, f"'{name}' is a protected status and cannot be deleted."
     conn = get_connection()
     in_use = conn.execute(
         "SELECT COUNT(*) FROM applications WHERE status=?", (name,)
