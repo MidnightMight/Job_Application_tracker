@@ -43,13 +43,16 @@ logic, requirements, and design decisions originate from the repository owner.
 - **Year views** — filterable table of every application for a given year with
   pipeline progress bar and per-year stats
 - **Application detail page** — full details, known contact, status timeline
-  showing days between each stage, and a dedicated additional-notes section
-- **Company tracker** — cross-year applied history per company with sector grouping
-- **Custom status management** — add or remove application statuses to suit your
-  own workflow
+  showing days between each stage, dedicated additional-notes section, and
+  display of `last_modified_at` timestamp and AI fit analysis results
+- **Company tracker** — cross-year applied history per company with sector
+  grouping; new `industry` field auto-populated from application entries
+- **Custom status management** — add or remove application statuses; core
+  workflow statuses (Select_Status, Submitted, Rejected, Offer_Received, etc.)
+  are **protected** — they show a 🔒 badge and cannot be deleted
 - **Bulk CSV import** — upload any CSV file then map each column to an application
   field (Mouser / DigiKey-style column-mapping UI) with a preview and
-  duplicate-field warning
+  duplicate-field warning; team is now included in duplicate detection
 - **Bulk operations** — select multiple rows in a year view and set status, date,
   cover letter, resume, or delete in one action; useful for post-rejection cleanup
 - **Global search** — a single search bar in the navbar queries company, job title,
@@ -57,7 +60,24 @@ logic, requirements, and design decisions originate from the repository owner.
 - **Dark / light theme** — toggle between dark and light colour schemes with the
   🌙 / ☀️ button in the navbar; preference is saved per browser
 - **CRUD** — add, edit and delete applications and companies; required-field
-  validation modal on submission
+  validation modal on submission; auto-creates company record on application save
+- **Industry / Sector field** — track the industry for each application and
+  company; auto-applied to the company record when saving an application
+- **Job advert expiry date** — record when the job posting closes; a gentle hint
+  appears when you change status to "Submitted" and the field is empty
+- **AI Fit storage** — AI fit analysis results (score, verdict, matching skills,
+  skill gaps, recommendation) are saved to the application record and shown on
+  the detail page; a new `/api/ai-fit-save` endpoint persists results from JS
+- **AI fill + fit in Edit mode** — the AI assistant panel is now shown for both
+  Add and Edit forms; paste a new job description to re-run analysis on an
+  existing application
+- **Append to Notes** — after a fit analysis completes, an "Append Summary to
+  Notes" button appends a formatted summary to the Additional Notes textarea
+- **last_modified_at tracking** — `update_application()` only updates the
+  `last_modified_at` timestamp when at least one field has actually changed,
+  preventing spurious edits from polluting the modification log
+- **Dynamic years in navigation** — the year list in the nav is built from actual
+  data in the database plus the current calendar year, so it grows automatically
 - **Today button** — one-click fill for every date field alongside the native
   calendar picker
 - **CLI script** — `run_script.py` prints stats and exports CSV without starting
@@ -85,6 +105,45 @@ logic, requirements, and design decisions originate from the repository owner.
 - **First-run onboarding** — a setup wizard on first launch lets you create an
   admin account and clear the demo data; multi-user login and AI features are
   automatically hidden on local (Windows / macOS) installs
+
+---
+
+## Architecture
+
+The project is structured as two focused Python packages:
+
+```
+db/                          # Database layer (SQLite helpers)
+  __init__.py                # Re-exports all public symbols
+  connection.py              # get_connection(), DB_PATH, get_dynamic_years()
+  init_db.py                 # init_db(), schema migrations, seed data
+  applications.py            # Application CRUD, duplicate detection, bulk import
+  companies.py               # Company CRUD, auto-add-from-application
+  statuses.py                # get_status_options(), PROTECTED_STATUSES
+  users.py                   # User management
+  settings.py                # get_setting(), set_setting()
+  stats.py                   # Stats aggregation helpers
+  reminders.py               # Inbox / reminder helpers
+
+routes/                      # Flask Blueprints (one per area of the app)
+  __init__.py
+  auth.py                    # login_required, /login, /logout
+  dashboard.py               # /, /search, /year/<year>
+  applications.py            # /application/add, /edit, /delete, /bulk-action
+  import_.py                 # /application/import (CSV + Excel)
+  companies.py               # /companies, /company/add|edit|delete|bulk-delete
+  inbox.py                   # /inbox, /inbox/dismiss, /inbox/dismiss-all
+  settings_routes.py         # /settings, /settings/ollama-test, /check-update
+  api.py                     # /api/ai-fill, /api/ai-fit, /api/ai-fit-save, …
+  export.py                  # /export, /export/applications|companies|db
+  onboarding.py              # /onboarding
+
+app.py                       # Thin entry point — creates Flask app, registers blueprints
+database.py                  # Backward-compat shim: from db import *
+```
+
+`database.py` re-exports everything from `db` so any existing code that uses
+`import database as db` continues to work without modification.
 
 ---
 

@@ -6,7 +6,7 @@
   <h2 class="fw-bold mb-0">
     <i class="bi bi-upload text-warning me-2"></i>Bulk Import from CSV / Excel
   </h2>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">
+  <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary btn-sm">
     <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
   </a>
 </div>
@@ -118,7 +118,7 @@
             <div class="form-text">Row number containing column headers. Rows above it are skipped.</div>
           </div>
           <div class="d-flex gap-2">
-            <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('import_.import_csv') }}" class="btn btn-outline-secondary">
               <i class="bi bi-arrow-left me-1"></i>Start Over
             </a>
             <button type="submit" class="btn btn-warning fw-semibold">
@@ -197,7 +197,7 @@
   </div>
 
   <div class="d-flex gap-2 justify-content-end">
-    <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary">
+    <a href="{{ url_for('import_.import_csv') }}" class="btn btn-outline-secondary">
       <i class="bi bi-arrow-left me-1"></i>Start Over
     </a>
     <button type="submit" class="btn btn-warning fw-semibold" id="importBtn">
@@ -270,10 +270,10 @@
         {% endif %}
 
         <div class="d-flex gap-2 justify-content-center">
-          <a href="{{ url_for('dashboard') }}" class="btn btn-warning fw-semibold">
+          <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-warning fw-semibold">
             <i class="bi bi-speedometer2 me-1"></i>Go to Dashboard
           </a>
-          <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary">
+          <a href="{{ url_for('import_.import_csv') }}" class="btn btn-outline-secondary">
             <i class="bi bi-upload me-1"></i>Import Another File
           </a>
         </div>

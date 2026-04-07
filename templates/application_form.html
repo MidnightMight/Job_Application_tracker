@@ -5,8 +5,8 @@
 <div class="row justify-content-center">
   <div class="col-lg-9">
 
-    {# ── AI Fill Panel (only shown when Ollama is enabled) ───────────────── #}
-    {% if ollama_enabled and action == 'Add' %}
+    {# ── AI Fill Panel (shown when Ollama is enabled for Add AND Edit) ─── #}
+    {% if ollama_enabled %}
     <div class="card border-0 shadow-sm mb-3" id="aiFillCard">
       <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center"
            style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#aiFillBody"
@@ -49,7 +49,7 @@
     {% endif %}
 
     {# ── Fit Analysis result card (hidden until AI returns data) ─────────── #}
-    {% if ollama_enabled and ai_fit_enabled and action == 'Add' %}
+    {% if ollama_enabled and ai_fit_enabled %}
     <div class="card border-0 shadow-sm mb-3 d-none" id="fitAnalysisCard">
       <div class="card-header text-white fw-semibold d-flex justify-content-between align-items-center"
            id="fitAnalysisCardHeader" style="background:#1c3a5e;">
@@ -98,15 +98,30 @@
             </div>
           </div>
           <div class="alert alert-info py-2 small mb-0" id="fitRecommendation"></div>
+          <div class="mt-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="appendFitToNotesBtn" style="display:none;">
+              <i class="bi bi-journal-plus me-1"></i>Append Summary to Notes
+            </button>
+          </div>
         </div>
         <div id="fitAnalysisError" class="alert alert-warning py-2 small mb-0 d-none"></div>
       </div>
     </div>
+    {% if app and app.ai_fit_score %}
+    <div class="alert alert-info small py-2 mb-3">
+      <i class="bi bi-robot me-1 text-primary"></i>
+      <strong>Saved AI Fit:</strong>
+      {{ app.ai_fit_verdict }} — {{ app.ai_fit_score }}% match.
+      {% if app.ai_recommendation %}
+      <span class="text-muted">{{ app.ai_recommendation[:120] }}{% if app.ai_recommendation|length > 120 %}…{% endif %}</span>
+      {% endif %}
+    </div>
+    {% endif %}
     {% if not user_profile_complete %}
     <div class="alert alert-warning small py-2 mb-3" id="profileMissingBanner">
       <i class="bi bi-person-exclamation me-1"></i>
       <strong>Smart Job Fit Analysis is enabled</strong> but your profile is not set up yet.
-      <a href="{{ url_for('settings', section='ai') }}" class="alert-link">
+      <a href="{{ url_for('settings_routes.settings', section='ai') }}" class="alert-link">
         Go to Settings → AI Assistant
       </a> to add your skills and experience so the AI can analyse job fit for you.
     </div>
@@ -259,9 +274,43 @@
             <!-- Additional Notes -->
             <div class="col-12">
               <label class="form-label fw-semibold">Additional Notes</label>
-              <textarea name="additional_notes" class="form-control" rows="4"
+              <textarea name="additional_notes" id="additional_notes" class="form-control" rows="4"
                         placeholder="Preparation notes, salary expectations, questions to ask, impressions…">{{ app.additional_notes if app else '' }}</textarea>
             </div>
+
+            <!-- Industry / Sector -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-diagram-3 text-info me-1"></i>Industry / Sector
+              </label>
+              <input type="text" name="industry" class="form-control"
+                     value="{{ app.industry if app and app.industry else '' }}"
+                     placeholder="e.g. Mining, Engineering, Finance">
+              <div class="form-text">Optional — auto-applies to the company record.</div>
+            </div>
+
+            <!-- Job Advert Expiry Date -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-calendar-x text-warning me-1"></i>Job Advert Expiry Date
+              </label>
+              <div class="input-group">
+                <input type="date" name="job_expiry_date" id="job_expiry_date" class="form-control"
+                       value="{{ app.job_expiry_date if app and app.job_expiry_date else '' }}">
+                <button type="button" class="btn btn-outline-secondary today-btn"
+                        data-target="job_expiry_date" title="Set to today">
+                  <i class="bi bi-calendar-check me-1"></i>Today
+                </button>
+              </div>
+              <div class="form-text">When the job posting closes (optional).</div>
+            </div>
+
+            <!-- Hidden AI fit fields (submitted with form) -->
+            <input type="hidden" name="ai_fit_score"       id="hid_fit_score">
+            <input type="hidden" name="ai_fit_verdict"     id="hid_fit_verdict">
+            <input type="hidden" name="ai_matching_skills" id="hid_matching_skills">
+            <input type="hidden" name="ai_skill_gaps"      id="hid_skill_gaps">
+            <input type="hidden" name="ai_recommendation"  id="hid_recommendation">
 
           </div><!-- /.row -->
 
@@ -325,7 +374,7 @@
             <strong>{{ d.company }}</strong> — {{ d.job_desc or '(no role)' }}
             on {{ d.date_applied }}
             <span class="badge bg-secondary ms-1">{{ d.status | replace('_', ' ') }}</span>
-            <a href="{{ url_for('application_detail', app_id=d.id) }}" target="_blank"
+            <a href="{{ url_for('applications.application_detail', app_id=d.id) }}" target="_blank"
                class="ms-1 small text-primary">View</a>
           </li>
           {% endfor %}
@@ -361,6 +410,24 @@ document.querySelectorAll('.today-btn').forEach(function (btn) {
     document.getElementById(btn.dataset.target).value = yyyy + '-' + mm + '-' + dd;
   });
 });
+
+// Job expiry hint when status changes to Submitted.
+(function () {
+  const statusSel = document.querySelector('select[name="status"]');
+  const expiryIn  = document.getElementById('job_expiry_date');
+  if (statusSel && expiryIn) {
+    statusSel.addEventListener('change', function () {
+      if (this.value === 'Submitted' && !expiryIn.value) {
+        expiryIn.classList.add('border-warning');
+        expiryIn.title = 'Consider recording the job ad expiry date while you have it handy.';
+        setTimeout(() => {
+          expiryIn.classList.remove('border-warning');
+          expiryIn.title = '';
+        }, 5000);
+      }
+    });
+  }
+})();
 
 // Submit validation — show modal listing any missing required fields.
 document.getElementById('submitBtn').addEventListener('click', function () {
@@ -400,7 +467,7 @@ window.addEventListener('DOMContentLoaded', function () {
 {% endif %}
 
 // ── AI Fill panel ─────────────────────────────────────────────────────────
-{% if ollama_enabled and action == 'Add' %}
+{% if ollama_enabled %}
 (function () {
   const fillBtn   = document.getElementById('aiFillBtn');
   const clearBtn  = document.getElementById('aiClearBtn');
@@ -430,7 +497,7 @@ window.addEventListener('DOMContentLoaded', function () {
   async function checkServerStatus() {
     setServerBadge('checking');
     try {
-      const resp = await fetch('{{ url_for("ollama_status") }}');
+      const resp = await fetch('{{ url_for("api.ollama_status") }}');
       const data = await resp.json();
       setServerBadge(data.ok ? 'online' : 'offline');
       if (!data.ok) {
@@ -440,7 +507,7 @@ window.addEventListener('DOMContentLoaded', function () {
         const icon = document.createElement('i');
         icon.className = 'bi bi-exclamation-circle me-1';
         const link = document.createElement('a');
-        link.href = '{{ url_for("settings", section="ai") }}';
+        link.href = '{{ url_for("settings_routes.settings", section="ai") }}';
         link.className = 'alert-link';
         link.textContent = 'Check AI settings.';
         span.appendChild(icon);
@@ -480,7 +547,7 @@ window.addEventListener('DOMContentLoaded', function () {
     statusDiv.innerHTML = '';
 
     try {
-      const resp = await fetch('{{ url_for("ai_fill") }}', {
+      const resp = await fetch('{{ url_for("api.ai_fill") }}', {
         method:  'POST',
         headers: {'Content-Type': 'application/json'},
         body:    JSON.stringify({job_description: jd}),
@@ -513,7 +580,7 @@ window.addEventListener('DOMContentLoaded', function () {
         document.getElementById('appFormCardHeader').scrollIntoView({behavior:'smooth', block:'start'});
         // Trigger fit analysis if enabled.
         {% if ollama_enabled and ai_fit_enabled and user_profile_complete %}
-        runFitAnalysis(jd);
+        if (typeof runFitAnalysis === 'function') runFitAnalysis(jd);
         {% endif %}
       } else {
         statusDiv.innerHTML = '<span class="text-warning small"><i class="bi bi-question-circle me-1"></i>AI responded but could not extract any fields. Try pasting more of the job description.</span>';
@@ -546,18 +613,18 @@ window.addEventListener('DOMContentLoaded', function () {
 })();
 {% endif %}
 
-{% if ollama_enabled and ai_fit_enabled and user_profile_complete and action == 'Add' %}
+{% if ollama_enabled and ai_fit_enabled and user_profile_complete %}
 // ── Fit analysis ─────────────────────────────────────────────────────────
+const _FIT_APP_ID = {{ app.id if app and app.id else 'null' }};
+
 async function runFitAnalysis(jobDescription) {
   const card    = document.getElementById('fitAnalysisCard');
   const spinner = document.getElementById('fitAnalysisSpinner');
   const content = document.getElementById('fitAnalysisContent');
   const errDiv  = document.getElementById('fitAnalysisError');
-  const header  = document.getElementById('fitAnalysisCardHeader');
 
   if (!card) return;
 
-  // Show the card and reset state.
   card.classList.remove('d-none');
   spinner.style.display   = '';
   content.style.display   = 'none';
@@ -565,7 +632,7 @@ async function runFitAnalysis(jobDescription) {
   card.scrollIntoView({behavior:'smooth', block:'start'});
 
   try {
-    const resp = await fetch('{{ url_for("ai_fit") }}', {
+    const resp = await fetch('{{ url_for("api.ai_fit") }}', {
       method:  'POST',
       headers: {'Content-Type': 'application/json'},
       body:    JSON.stringify({job_description: jobDescription}),
@@ -606,7 +673,6 @@ async function runFitAnalysis(jobDescription) {
       bar.style.width       = pct;
       bar.setAttribute('aria-valuenow', data.fit_score);
       if (label) label.textContent = pct;
-      // Colour the bar by score.
       bar.className = 'progress-bar ' + (
         data.fit_score >= 75 ? 'bg-success' :
         data.fit_score >= 50 ? 'bg-primary' :
@@ -640,13 +706,71 @@ async function runFitAnalysis(jobDescription) {
       recDiv.innerHTML = `<i class="bi bi-lightbulb me-1 text-primary"></i>${escHtmlFit(data.recommendation)}`;
     }
 
+    // Populate hidden form fields so fit data is submitted with the form.
+    const hidScore    = document.getElementById('hid_fit_score');
+    const hidVerdict  = document.getElementById('hid_fit_verdict');
+    const hidMatching = document.getElementById('hid_matching_skills');
+    const hidGaps     = document.getElementById('hid_skill_gaps');
+    const hidRec      = document.getElementById('hid_recommendation');
+    if (hidScore)    hidScore.value    = data.fit_score;
+    if (hidVerdict)  hidVerdict.value  = data.verdict;
+    if (hidMatching) hidMatching.value = JSON.stringify(data.matching_skills || []);
+    if (hidGaps)     hidGaps.value     = JSON.stringify(data.skill_gaps || []);
+    if (hidRec)      hidRec.value      = data.recommendation || '';
+
+    // Show append-to-notes button.
+    const appendBtn = document.getElementById('appendFitToNotesBtn');
+    if (appendBtn) {
+      appendBtn.style.display = '';
+      appendBtn._fitData = data;
+    }
+
     content.style.display = '';
+
+    // Persist to DB if editing an existing application.
+    if (_FIT_APP_ID) {
+      fetch('{{ url_for("api.ai_fit_save") }}', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          app_id:          _FIT_APP_ID,
+          fit_score:       data.fit_score,
+          verdict:         data.verdict,
+          matching_skills: data.matching_skills,
+          skill_gaps:      data.skill_gaps,
+          recommendation:  data.recommendation,
+        }),
+      }).catch(() => {});  // fire-and-forget
+    }
 
   } catch (err) {
     spinner.style.display = 'none';
     errDiv.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i>Fit analysis failed: ${escHtmlFit(err.message)}`;
     errDiv.classList.remove('d-none');
   }
+}
+
+// Append AI fit summary to the Additional Notes textarea.
+const _appendBtn = document.getElementById('appendFitToNotesBtn');
+if (_appendBtn) {
+  _appendBtn.addEventListener('click', function () {
+    const d = this._fitData;
+    if (!d) return;
+    const ta = document.getElementById('additional_notes');
+    if (!ta) return;
+    const matchStr = (d.matching_skills || []).join(', ') || 'none identified';
+    const gapStr   = (d.skill_gaps || []).join(', ') || 'none identified';
+    const summary = [
+      `\n--- AI Fit Analysis ---`,
+      `Verdict: ${d.verdict} (${d.fit_score}%)`,
+      `Matching skills: ${matchStr}`,
+      `Skill gaps: ${gapStr}`,
+      d.recommendation ? `Recommendation: ${d.recommendation}` : '',
+      `------------------------`,
+    ].filter(Boolean).join('\n');
+    ta.value = ta.value + summary;
+    ta.focus();
+  });
 }
 
 function escHtmlFit(str) {

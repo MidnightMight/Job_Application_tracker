@@ -27,7 +27,7 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
   <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="{{ url_for('dashboard') }}">
+    <a class="navbar-brand fw-bold" href="{{ url_for('dashboard.dashboard') }}">
       <i class="bi bi-briefcase-fill me-2 text-warning"></i>Job Tracker
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -37,7 +37,7 @@
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
-             href="{{ url_for('dashboard') }}">
+             href="{{ url_for('dashboard.dashboard') }}">
             <i class="bi bi-speedometer2 me-1"></i>Dashboard
           </a>
         </li>
@@ -48,32 +48,32 @@
           </a>
           <ul class="dropdown-menu dropdown-menu-dark">
             {% for y in years %}
-            <li><a class="dropdown-item" href="{{ url_for('year_view', year=y) }}">{{ y }}</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('dashboard.year_view', year=y) }}">{{ y }}</a></li>
             {% endfor %}
           </ul>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'companies' %}active{% endif %}"
-             href="{{ url_for('companies') }}">
+             href="{{ url_for('companies.companies') }}">
             <i class="bi bi-building me-1"></i>Companies
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'export_page' %}active{% endif %}"
-             href="{{ url_for('export_page') }}">
+             href="{{ url_for('export.export_page') }}">
             <i class="bi bi-box-arrow-up me-1"></i>Export
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}"
-             href="{{ url_for('settings') }}">
+             href="{{ url_for('settings_routes.settings') }}">
             <i class="bi bi-gear me-1"></i>Settings
           </a>
         </li>
       </ul>
 
       <!-- Global search -->
-      <form class="d-flex me-2 my-1 my-lg-0" action="{{ url_for('search') }}" method="get" role="search">
+      <form class="d-flex me-2 my-1 my-lg-0" action="{{ url_for('dashboard.search') }}" method="get" role="search">
         <div class="input-group input-group-sm">
           <input type="search" name="q" class="form-control form-control-sm navbar-search-input"
                  placeholder="Search…" aria-label="Search applications"
@@ -94,7 +94,7 @@
           <i id="themeIcon" class="bi bi-moon-stars-fill"></i>
         </button>
 
-        <a href="{{ url_for('inbox') }}" class="btn btn-outline-light btn-sm position-relative" title="Reminder Inbox">
+        <a href="{{ url_for('inbox.inbox') }}" class="btn btn-outline-light btn-sm position-relative" title="Reminder Inbox">
           <i class="bi bi-bell me-1"></i>Inbox
           {% if unread_reminder_count > 0 %}
           <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -102,20 +102,20 @@
           </span>
           {% endif %}
         </a>
-        <a href="{{ url_for('import_csv') }}" class="btn btn-outline-light btn-sm">
+        <a href="{{ url_for('import_.import_csv') }}" class="btn btn-outline-light btn-sm">
           <i class="bi bi-upload me-1"></i>Import CSV
         </a>
-        <a href="{{ url_for('add_application') }}" class="btn btn-warning btn-sm fw-semibold">
+        <a href="{{ url_for('applications.add_application') }}" class="btn btn-warning btn-sm fw-semibold">
           <i class="bi bi-plus-circle me-1"></i>New Application
         </a>
         {% if login_enabled %}
           {% if current_user %}
           <span class="text-light small ms-1"><i class="bi bi-person-circle me-1"></i>{{ current_user }}</span>
-          <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm">
+          <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm">
             <i class="bi bi-box-arrow-right me-1"></i>Logout
           </a>
           {% else %}
-          <a href="{{ url_for('login') }}" class="btn btn-outline-success btn-sm">
+          <a href="{{ url_for('auth.login') }}" class="btn btn-outline-success btn-sm">
             <i class="bi bi-box-arrow-in-right me-1"></i>Login
           </a>
           {% endif %}
