@@ -2,12 +2,15 @@
 
 import csv
 import io
+import os
 import shutil
+import sqlite3
 import tempfile
 
-from flask import Blueprint, render_template, request, Response, send_file
+from flask import Blueprint, flash, redirect, render_template, request, Response, send_file, url_for
 
 import db
+from .auth import login_required
 
 bp = Blueprint("export", __name__)
 
@@ -91,3 +94,45 @@ def export_db():
         as_attachment=True,
         download_name="jobs_backup.db",
     )
+
+
+@bp.route("/export/db/restore", methods=["POST"])
+@login_required
+def restore_db():
+    """Replace the current database with an uploaded backup file."""
+    uploaded = request.files.get("db_file")
+    if not uploaded or uploaded.filename == "":
+        flash("No file selected. Please choose a .db file to restore.", "danger")
+        return redirect(url_for("export.export_page"))
+
+    # Save the upload to a temp file for validation
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    try:
+        uploaded.save(tmp.name)
+
+        # Validate that the file is a SQLite database
+        try:
+            conn = sqlite3.connect(tmp.name)
+            result = conn.execute("PRAGMA integrity_check").fetchone()
+            conn.close()
+            if not result or result[0] != "ok":
+                raise sqlite3.DatabaseError("integrity check failed")
+        except sqlite3.DatabaseError:
+            flash("The uploaded file does not appear to be a valid SQLite database.", "danger")
+            return redirect(url_for("export.export_page"))
+
+        # Back up the current database before overwriting
+        backup_path = os.path.join(
+            os.path.dirname(db.DB_PATH), os.path.basename(db.DB_PATH) + ".bak"
+        )
+        shutil.copy2(db.DB_PATH, backup_path)
+
+        # Replace the current database
+        shutil.copy2(tmp.name, db.DB_PATH)
+    finally:
+        if os.path.exists(tmp.name):
+            os.remove(tmp.name)
+
+    flash("Database restored successfully. The previous database was saved as jobs.db.bak.", "success")
+    return redirect(url_for("export.export_page"))
