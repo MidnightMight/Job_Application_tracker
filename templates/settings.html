@@ -8,25 +8,25 @@
   <!-- ── Left sidebar ─────────────────────────────────────────────────── -->
   <div class="col-md-3 col-lg-2 mb-4 mb-md-0 pe-md-3">
     <div class="list-group list-group-flush shadow-sm rounded">
-      <a href="{{ url_for('settings', section='general') }}"
+      <a href="{{ url_for('settings_routes.settings', section='general') }}"
          class="list-group-item list-group-item-action {% if section == 'general' %}active{% endif %}">
         <i class="bi bi-sliders me-2"></i>General
       </a>
-      <a href="{{ url_for('settings', section='statuses') }}"
+      <a href="{{ url_for('settings_routes.settings', section='statuses') }}"
          class="list-group-item list-group-item-action {% if section == 'statuses' %}active{% endif %}">
         <i class="bi bi-tags me-2"></i>Statuses
       </a>
       {% if deployment_mode != 'local' %}
-      <a href="{{ url_for('settings', section='users') }}"
+      <a href="{{ url_for('settings_routes.settings', section='users') }}"
          class="list-group-item list-group-item-action {% if section == 'users' %}active{% endif %}">
         <i class="bi bi-people me-2"></i>Users &amp; Security
       </a>
-      <a href="{{ url_for('settings', section='ai') }}"
+      <a href="{{ url_for('settings_routes.settings', section='ai') }}"
          class="list-group-item list-group-item-action {% if section == 'ai' %}active{% endif %}">
         <i class="bi bi-robot me-2"></i>AI Assistant
       </a>
       {% endif %}
-      <a href="{{ url_for('settings', section='updates') }}"
+      <a href="{{ url_for('settings_routes.settings', section='updates') }}"
          class="list-group-item list-group-item-action {% if section == 'updates' %}active{% endif %}">
         <i class="bi bi-arrow-repeat me-2"></i>Updates
       </a>
@@ -43,7 +43,7 @@
         <i class="bi bi-bell me-1"></i>Reminder Notifications
       </div>
       <div class="card-body">
-        <form method="post" action="{{ url_for('settings', section='general') }}">
+        <form method="post" action="{{ url_for('settings_routes.settings', section='general') }}">
           <input type="hidden" name="action" value="save_general">
 
           <div class="mb-3">
@@ -106,7 +106,7 @@
       <div class="card-body text-muted small">
         <p>The built-in reminder system uses a background scheduler (APScheduler) that runs
         inside the Flask server process. It checks for pending applications every hour and adds
-        a message to the <a href="{{ url_for('inbox') }}">Inbox</a> when the threshold is exceeded.</p>
+        a message to the <a href="{{ url_for('inbox.inbox') }}">Inbox</a> when the threshold is exceeded.</p>
         <p class="mb-0">No external services, emails, or browser extensions are required.</p>
       </div>
     </div>
@@ -135,7 +135,14 @@
                 {% for s in statuses %}
                 <tr>
                   <td class="ps-3 text-muted small">{{ loop.index }}</td>
-                  <td class="fw-semibold small">{{ s }}</td>
+                  <td class="fw-semibold small">
+                    {{ s }}
+                    {% if s in protected_statuses %}
+                    <span class="badge bg-secondary ms-1" title="Protected — cannot be deleted">
+                      <i class="bi bi-lock-fill"></i>
+                    </span>
+                    {% endif %}
+                  </td>
                   <td class="text-muted small">{{ s | replace('_', ' ') }}</td>
                   <td>
                     <span class="badge status-badge status-{{ s | replace(' ', '_') }}">
@@ -143,7 +150,12 @@
                     </span>
                   </td>
                   <td class="text-end pe-3">
-                    <form method="post" action="{{ url_for('settings', section='statuses') }}"
+                    {% if s in protected_statuses %}
+                    <button class="btn btn-outline-secondary btn-sm py-0" disabled title="Protected status — cannot be deleted">
+                      <i class="bi bi-lock-fill"></i>
+                    </button>
+                    {% else %}
+                    <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}"
                           class="d-inline"
                           onsubmit="return confirm('Delete status \'{{ s }}\'? This cannot be done if any applications use it.')">
                       <input type="hidden" name="action" value="delete_status">
@@ -152,6 +164,7 @@
                         <i class="bi bi-trash"></i>
                       </button>
                     </form>
+                    {% endif %}
                   </td>
                 </tr>
                 {% endfor %}
@@ -167,7 +180,7 @@
             <i class="bi bi-plus-circle text-success me-2"></i>Add New Status
           </div>
           <div class="card-body">
-            <form method="post" action="{{ url_for('settings', section='statuses') }}">
+            <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}">
               <input type="hidden" name="action" value="add_status">
               <div class="mb-3">
                 <label class="form-label fw-semibold">Status Name</label>
@@ -212,7 +225,7 @@
             <i class="bi bi-shield-lock me-1"></i>Login &amp; Password Protection
           </div>
           <div class="card-body">
-            <form method="post" action="{{ url_for('settings', section='users') }}">
+            <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}">
               <input type="hidden" name="action" value="save_security">
               <div class="mb-3">
                 <div class="form-check form-switch">
@@ -270,7 +283,7 @@
                   </td>
                   <td class="text-muted small">{{ u.created_at[:10] }}</td>
                   <td class="text-end pe-3">
-                    <form method="post" action="{{ url_for('settings', section='users') }}"
+                    <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}"
                           class="d-inline"
                           onsubmit="return confirm('Delete user \'{{ u.username }}\'?')">
                       <input type="hidden" name="action" value="delete_user">
@@ -300,7 +313,7 @@
             <i class="bi bi-person-plus text-success me-2"></i>Add New User
           </div>
           <div class="card-body">
-            <form method="post" action="{{ url_for('settings', section='users') }}">
+            <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}">
               <input type="hidden" name="action" value="add_user">
               <div class="mb-3">
                 <label class="form-label fw-semibold">Username</label>
@@ -356,7 +369,7 @@
         {% endif %}
       </div>
       <div class="card-body">
-        <form method="post" action="{{ url_for('settings', section='ai') }}" id="aiForm">
+        <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}" id="aiForm">
           <input type="hidden" name="action" value="save_ai">
 
           <div class="mb-3">
@@ -469,7 +482,7 @@
         </div>
 
         {# Manual profile form #}
-        <form method="post" action="{{ url_for('settings', section='ai') }}">
+        <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}">
           <input type="hidden" name="action" value="save_profile">
 
           <div class="mb-3">
@@ -606,7 +619,7 @@ if (testBtn) {
     result.textContent = 'Testing connection…';
     result.className = 'form-text mt-1 text-muted';
     try {
-      const resp = await fetch('{{ url_for("ollama_test") }}', {
+      const resp = await fetch('{{ url_for("settings_routes.ollama_test") }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({url}),
@@ -637,7 +650,7 @@ if (testBtn) {
   const badge = document.getElementById('ollamaSettingsStatusBadge');
   if (!badge) return;  // not on AI section or ollama disabled
   try {
-    const resp = await fetch('{{ url_for("ollama_status") }}');
+    const resp = await fetch('{{ url_for("api.ollama_status") }}');
     const data = await resp.json();
     updateSettingsStatusBadge(data.ok);
     if (data.ok && data.models && data.models.length) {
@@ -680,7 +693,7 @@ if (uploadBtn) {
     formData.append('pdf', file);
 
     try {
-      const resp = await fetch('{{ url_for("upload_profile_pdf") }}', {
+      const resp = await fetch('{{ url_for("api.upload_profile_pdf") }}', {
         method: 'POST',
         body: formData,
       });
@@ -715,7 +728,7 @@ if (checkBtn) {
     const div = document.getElementById('updateResult');
     div.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Checking…</span>';
     try {
-      const resp = await fetch('{{ url_for("check_update") }}');
+      const resp = await fetch('{{ url_for("settings_routes.check_update") }}');
       const data = await resp.json();
       if (!data.ok) {
         div.innerHTML = `<div class="alert alert-warning py-2">Could not reach GitHub: ${data.error || 'unknown error'}</div>`;

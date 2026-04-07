@@ -7,7 +7,7 @@
     <i class="bi bi-speedometer2 text-warning me-2"></i>Dashboard
     <span class="badge bg-secondary fs-6 ms-2">{{ current_year }}</span>
   </h2>
-  <a href="{{ url_for('add_application') }}" class="btn btn-warning">
+  <a href="{{ url_for('applications.add_application') }}" class="btn btn-warning">
     <i class="bi bi-plus-circle me-1"></i>Add Application
   </a>
 </div>
@@ -134,11 +134,11 @@
           </td>
           <td class="text-muted small">{{ a.comment or '—' }}</td>
           <td>
-            <a href="{{ url_for('application_detail', app_id=a.id) }}"
+            <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                class="btn btn-outline-info btn-sm py-0 me-1" title="View details">
               <i class="bi bi-eye"></i>
             </a>
-            <a href="{{ url_for('edit_application', app_id=a.id) }}"
+            <a href="{{ url_for('applications.edit_application', app_id=a.id) }}"
                class="btn btn-outline-primary btn-sm py-0">
               <i class="bi bi-pencil"></i>
             </a>
@@ -158,14 +158,14 @@
   </div>
   <div class="card-body d-flex gap-2 flex-wrap">
     {% for y in years %}
-    <a href="{{ url_for('year_view', year=y) }}" class="btn btn-outline-secondary">
+    <a href="{{ url_for('dashboard.year_view', year=y) }}" class="btn btn-outline-secondary">
       {{ y }} Applications
     </a>
     {% endfor %}
-    <a href="{{ url_for('companies') }}" class="btn btn-outline-info">
+    <a href="{{ url_for('companies.companies') }}" class="btn btn-outline-info">
       <i class="bi bi-building me-1"></i>Company Tracker
     </a>
-    <a href="{{ url_for('import_csv') }}" class="btn btn-outline-success">
+    <a href="{{ url_for('import_.import_csv') }}" class="btn btn-outline-success">
       <i class="bi bi-upload me-1"></i>Import CSV
     </a>
   </div>

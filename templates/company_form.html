@@ -25,6 +25,14 @@
           </div>
 
           <div class="mb-3">
+            <label class="form-label fw-semibold">Industry / Sector (structured)</label>
+            <input type="text" name="industry" class="form-control"
+                   value="{{ company.industry if company and company.industry else '' }}"
+                   placeholder="e.g. Mining, Engineering, Finance">
+            <div class="form-text">Optional. Used for AI analysis and filtering.</div>
+          </div>
+
+          <div class="mb-3">
             <label class="form-label fw-semibold d-block">Applied Years</label>
             <div class="d-flex gap-3 flex-wrap">
               {% for y in years %}
@@ -40,7 +48,7 @@
 
           <hr>
           <div class="d-flex gap-2 justify-content-end">
-            <a href="{{ url_for('companies') }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('companies.companies') }}" class="btn btn-outline-secondary">
               <i class="bi bi-arrow-left me-1"></i>Cancel
             </a>
             <button type="submit" class="btn btn-warning fw-semibold">

@@ -11,7 +11,7 @@
     </span>
     {% endif %}
   </h2>
-  <a href="{{ url_for('add_company') }}" class="btn btn-warning">
+  <a href="{{ url_for('companies.add_company') }}" class="btn btn-warning">
     <i class="bi bi-plus-circle me-1"></i>Add Company
   </a>
 </div>
@@ -63,7 +63,7 @@
 </div>
 
 <!-- Company Table with Bulk Delete -->
-<form method="post" action="{{ url_for('bulk_delete_companies') }}" id="bulkForm">
+<form method="post" action="{{ url_for('companies.bulk_delete_companies') }}" id="bulkForm">
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span class="fw-semibold">
@@ -132,7 +132,7 @@
           {% endfor %}
           <td class="text-nowrap">
             {% if not c._pooled_from_other %}
-            <a href="{{ url_for('edit_company', company_id=c.id) }}"
+            <a href="{{ url_for('companies.edit_company', company_id=c.id) }}"
                class="btn btn-outline-primary btn-sm py-0 me-1">
               <i class="bi bi-pencil"></i>
             </a>
@@ -219,7 +219,7 @@
 
 // ── Single delete via hidden form ─────────────────────────────────────
 // Base URL is server-rendered to avoid coupling JS to route structure.
-const DELETE_BASE_URL = {{ url_for('delete_company', company_id=0) | tojson }}.replace('/0', '/');
+const DELETE_BASE_URL = {{ url_for('companies.delete_company', company_id=0) | tojson }}.replace('/0', '/');
 function deleteSingle(id, name) {
   if (!confirm('Delete company \'' + name + '\'?')) return;
   const form = document.getElementById('singleDeleteForm');

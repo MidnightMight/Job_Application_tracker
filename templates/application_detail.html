@@ -13,10 +13,10 @@
     </div>
   </div>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('edit_application', app_id=app.id) }}" class="btn btn-outline-primary btn-sm">
+    <a href="{{ url_for('applications.edit_application', app_id=app.id) }}" class="btn btn-outline-primary btn-sm">
       <i class="bi bi-pencil me-1"></i>Edit
     </a>
-    <form method="post" action="{{ url_for('delete_application', app_id=app.id) }}"
+    <form method="post" action="{{ url_for('applications.delete_application', app_id=app.id) }}"
           onsubmit="return confirm('Delete this application?')">
       <button class="btn btn-outline-danger btn-sm">
         <i class="bi bi-trash me-1"></i>Delete
@@ -56,6 +56,13 @@
           <dd class="col-sm-8">{{ app.date_applied }}
             <span class="badge bg-light text-dark border ms-1">{{ app.duration }} days ago</span>
           </dd>
+
+          {% if app.job_expiry_date %}
+          <dt class="col-sm-4 text-muted">
+            <i class="bi bi-calendar-x text-warning me-1"></i>Job Expiry
+          </dt>
+          <dd class="col-sm-8">{{ app.job_expiry_date }}</dd>
+          {% endif %}
 
           {% if app.last_contact_date %}
           <dt class="col-sm-4 text-muted">
@@ -116,9 +123,82 @@
             </a>
           </dd>
           {% endif %}
+
+          {% if app.industry %}
+          <dt class="col-sm-4 text-muted">Industry</dt>
+          <dd class="col-sm-8">{{ app.industry }}</dd>
+          {% endif %}
+
+          {% if app.last_modified_at %}
+          <dt class="col-sm-4 text-muted small">Last Modified</dt>
+          <dd class="col-sm-8 small text-muted">{{ app.last_modified_at[:16] | replace('T', ' ') }}</dd>
+          {% endif %}
         </dl>
       </div>
     </div>
+
+    <!-- AI Fit Analysis card -->
+    {% if app.ai_fit_score %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header fw-semibold text-white" style="background:#1c3a5e;">
+        <i class="bi bi-person-check me-2 text-warning"></i>AI Job Fit Analysis
+        <span class="badge bg-warning text-dark ms-2">{{ app.ai_fit_score }}%</span>
+        {% if app.ai_fit_verdict %}
+        <span class="badge
+          {% if app.ai_fit_verdict == 'Strong Fit' %}bg-success
+          {% elif app.ai_fit_verdict == 'Good Fit' %}bg-primary
+          {% elif app.ai_fit_verdict == 'Weak Fit' %}bg-secondary
+          {% elif app.ai_fit_verdict == 'Not a Fit' %}bg-danger
+          {% else %}bg-warning text-dark{% endif %} ms-1">
+          {{ app.ai_fit_verdict }}
+        </span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if app.ai_matching_skills or app.ai_skill_gaps %}
+        <div class="row g-3 mb-3">
+          {% if app.ai_matching_skills %}
+          <div class="col-md-6">
+            <div class="card border-success h-100">
+              <div class="card-header bg-success text-white small fw-semibold py-1">
+                <i class="bi bi-check2-circle me-1"></i>Matching Skills
+              </div>
+              <ul class="list-group list-group-flush">
+                {% for skill in app.ai_matching_skills | from_json %}
+                <li class="list-group-item py-1 small">
+                  <i class="bi bi-check-circle-fill text-success me-1"></i>{{ skill }}
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+          {% endif %}
+          {% if app.ai_skill_gaps %}
+          <div class="col-md-6">
+            <div class="card border-warning h-100">
+              <div class="card-header bg-warning text-dark small fw-semibold py-1">
+                <i class="bi bi-exclamation-triangle me-1"></i>Skill Gaps
+              </div>
+              <ul class="list-group list-group-flush">
+                {% for gap in app.ai_skill_gaps | from_json %}
+                <li class="list-group-item py-1 small">
+                  <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>{{ gap }}
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if app.ai_recommendation %}
+        <div class="alert alert-info py-2 small mb-0">
+          <i class="bi bi-lightbulb me-1 text-primary"></i>{{ app.ai_recommendation }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Comments card -->
     {% if app.comment %}
@@ -136,7 +216,7 @@
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center">
         <span><i class="bi bi-journal-text text-warning me-2"></i>Additional Notes</span>
-        <a href="{{ url_for('edit_application', app_id=app.id) }}" class="btn btn-outline-warning btn-sm py-0">
+        <a href="{{ url_for('applications.edit_application', app_id=app.id) }}" class="btn btn-outline-warning btn-sm py-0">
           <i class="bi bi-pencil me-1"></i>Edit
         </a>
       </div>
@@ -145,7 +225,7 @@
           <p class="mb-0" style="white-space:pre-wrap;">{{ app.additional_notes }}</p>
         {% else %}
           <p class="text-muted mb-0 fst-italic">No additional notes yet.
-            <a href="{{ url_for('edit_application', app_id=app.id) }}">Add some →</a>
+            <a href="{{ url_for('applications.edit_application', app_id=app.id) }}">Add some →</a>
           </p>
         {% endif %}
       </div>

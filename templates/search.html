@@ -11,7 +11,7 @@
 <!-- Search form -->
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body py-3">
-    <form method="get" action="{{ url_for('search') }}" role="search">
+    <form method="get" action="{{ url_for('dashboard.search') }}" role="search">
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-search"></i></span>
         <input type="search" name="q" class="form-control form-control-lg"
@@ -19,7 +19,7 @@
                value="{{ query }}" autofocus autocomplete="off">
         <button type="submit" class="btn btn-warning fw-semibold px-4">Search</button>
         {% if query %}
-        <a href="{{ url_for('search') }}" class="btn btn-outline-secondary">Clear</a>
+        <a href="{{ url_for('dashboard.search') }}" class="btn btn-outline-secondary">Clear</a>
         {% endif %}
       </div>
       {% if query and query | length < 2 %}
@@ -70,7 +70,7 @@
           <tr class="app-row-{{ a.status | replace(' ', '_') }}">
             <td class="text-muted small">{{ loop.index }}</td>
             <td class="fw-semibold">
-              <a href="{{ url_for('application_detail', app_id=a.id) }}"
+              <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                  class="text-decoration-none">
                 {{ a.company }}
               </a>
@@ -82,7 +82,7 @@
               {% endif %}
             </td>
             <td class="small">
-              <a href="{{ url_for('year_view', year=yr) }}" class="text-decoration-none">
+              <a href="{{ url_for('dashboard.year_view', year=yr) }}" class="text-decoration-none">
                 {{ yr }}
               </a>
             </td>
@@ -103,11 +103,11 @@
               {% endif %}
             </td>
             <td class="text-nowrap">
-              <a href="{{ url_for('application_detail', app_id=a.id) }}"
+              <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                  class="btn btn-outline-info btn-sm py-0 me-1" title="View">
                 <i class="bi bi-eye"></i>
               </a>
-              <a href="{{ url_for('edit_application', app_id=a.id) }}"
+              <a href="{{ url_for('applications.edit_application', app_id=a.id) }}"
                  class="btn btn-outline-primary btn-sm py-0" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>

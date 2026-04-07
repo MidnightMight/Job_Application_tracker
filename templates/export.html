@@ -14,7 +14,7 @@
       </div>
       <div class="card-body">
         <p class="text-muted small">Download your applications as a CSV file. Optionally filter by year, status, or company name before exporting.</p>
-        <form action="{{ url_for('export_applications') }}" method="get">
+        <form action="{{ url_for('export.export_applications') }}" method="get">
           <div class="mb-2">
             <label class="form-label small fw-semibold">Year</label>
             <select name="year" class="form-select form-select-sm">
@@ -53,7 +53,7 @@
       </div>
       <div class="card-body d-flex flex-column">
         <p class="text-muted small flex-grow-1">Download your entire company tracker list as a CSV file, including sector/notes and which years you applied.</p>
-        <a href="{{ url_for('export_companies') }}" class="btn btn-success btn-sm w-100 mt-auto">
+        <a href="{{ url_for('export.export_companies') }}" class="btn btn-success btn-sm w-100 mt-auto">
           <i class="bi bi-download me-1"></i>Download Companies CSV
         </a>
       </div>
@@ -72,7 +72,7 @@
           migrate to another device — simply copy it to the new installation's directory and rename
           it to <code>jobs.db</code> (or point the <code>DB_PATH</code> environment variable at it).
         </p>
-        <a href="{{ url_for('export_db') }}" class="btn btn-warning btn-sm w-100 mt-auto">
+        <a href="{{ url_for('export.export_db') }}" class="btn btn-warning btn-sm w-100 mt-auto">
           <i class="bi bi-download me-1"></i>Download jobs_backup.db
         </a>
       </div>
@@ -90,7 +90,7 @@
           To restore from a backup, stop the server and replace <code>jobs.db</code> with your backup file.
           To import applications from a spreadsheet or another tool, use the CSV import feature.
         </p>
-        <a href="{{ url_for('import_csv') }}" class="btn btn-outline-secondary btn-sm w-100 mt-auto">
+        <a href="{{ url_for('import_.import_csv') }}" class="btn btn-outline-secondary btn-sm w-100 mt-auto">
           <i class="bi bi-file-earmark-arrow-up me-1"></i>Import CSV
         </a>
       </div>
