@@ -79,6 +79,31 @@
     </div>
   </div>
 
+  <!-- Restore Database -->
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100 border-danger">
+      <div class="card-header fw-semibold bg-danger text-white">
+        <i class="bi bi-database-fill-up me-1"></i>Restore Database
+      </div>
+      <div class="card-body d-flex flex-column">
+        <p class="text-muted small flex-grow-1">
+          Upload a previously downloaded <code>jobs_backup.db</code> file to replace the current
+          database. <strong class="text-danger">This will overwrite all existing data.</strong>
+          The current database is automatically saved as <code>jobs.db.bak</code> before being replaced.
+        </p>
+        <form action="{{ url_for('export.restore_db') }}" method="post" enctype="multipart/form-data" class="mt-auto"
+              onsubmit="return confirm('Are you sure you want to restore from this backup? All current data will be replaced.');">
+          <div class="mb-2">
+            <input type="file" name="db_file" accept=".db" class="form-control form-control-sm" required>
+          </div>
+          <button type="submit" class="btn btn-danger btn-sm w-100">
+            <i class="bi bi-upload me-1"></i>Restore Database
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Import reminder -->
   <div class="col-md-6">
     <div class="card shadow-sm h-100 border-secondary">
