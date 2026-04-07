@@ -18,17 +18,33 @@ _SAFE_NEXT_RE = _re.compile(r'^/[a-zA-Z0-9/_\-.?=&%+#]*$')
 
 
 def _safe_redirect(url: str) -> str:
-    """Return url if it is a safe relative path, otherwise return the dashboard."""
-    if (
-        url
-        and len(url) <= 2048
-        and _SAFE_NEXT_RE.match(url)
-        and not url.startswith("//")
-    ):
-        parsed = _urlparse(url)
-        if not parsed.netloc and not parsed.scheme:
-            return url
-    return url_for("dashboard.dashboard")
+    """Return url if it is a safe relative path, otherwise return the dashboard.
+
+    Validates the ``next`` parameter to prevent open redirect attacks.
+    The URL is reconstructed from its parsed components so that no raw
+    user-supplied string is ever passed directly to ``redirect()``.
+    """
+    fallback = url_for("dashboard.dashboard")
+    if not url or len(url) > 2048:
+        return fallback
+    if not _SAFE_NEXT_RE.match(url):
+        return fallback
+    if url.startswith("//"):
+        return fallback
+    parsed = _urlparse(url)
+    # Reject anything with a scheme or netloc (e.g. //evil.com, https://…).
+    if parsed.scheme or parsed.netloc:
+        return fallback
+    # Reconstruct from parsed components — never returns the raw string.
+    safe = parsed.path
+    if parsed.query:
+        safe += "?" + parsed.query
+    if parsed.fragment:
+        safe += "#" + parsed.fragment
+    # Final guard: the reconstructed path must still pass our regex.
+    if not _SAFE_NEXT_RE.match(safe):
+        return fallback
+    return safe
 
 
 def login_required(f):
