@@ -257,6 +257,10 @@ python app.py
 
 ## 8. Updating the App
 
+> **Back up your data before updating.**
+> Go to **Export → Download Full Database** in the UI, or run the command-line
+> backup shown in [Section 7 → Backup](#backup) above.
+
 ### Docker (Compose)
 
 ```bash
@@ -276,6 +280,13 @@ python app.py
 ```
 
 The database schema is migrated automatically on startup — no manual SQL needed.
+
+### No Git? Manual download
+
+If you do not have Git installed, you can download a release archive directly
+from GitHub and update the files manually.  See the full step-by-step
+instructions, including Docker image pull and rollback procedures, in
+[`docs/updating.md`](updating.md).
 
 ---
 

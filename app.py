@@ -5,6 +5,7 @@ and the background scheduler.  All route logic lives in routes/.
 All database logic lives in db/.
 """
 
+import logging
 import os
 import platform as _platform_module
 
@@ -51,6 +52,49 @@ DEPLOYMENT_MODE: str = _detect_deployment_mode()
 app.config["DEPLOYMENT_MODE"] = DEPLOYMENT_MODE
 app.config["APP_VERSION"]     = APP_VERSION
 app.config["GITHUB_REPO"]     = GITHUB_REPO
+
+# ---------------------------------------------------------------------------
+# Logging — write DEBUG+ to a log file next to the database; INFO+ to console
+# ---------------------------------------------------------------------------
+
+def _configure_logging():
+    log_dir = os.path.dirname(db.DB_PATH) or "."
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, "app.log")
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    fmt = logging.Formatter(
+        "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # File handler — full DEBUG detail, rotates at 2 MB, keeps 3 backups
+    from logging.handlers import RotatingFileHandler
+    fh = RotatingFileHandler(log_path, maxBytes=2 * 1024 * 1024, backupCount=3)
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+    # Console handler — INFO and above only
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(fmt)
+    root.addHandler(ch)
+
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+    logging.getLogger("tzlocal").setLevel(logging.WARNING)
+
+    return log_path
+
+
+_log_path = _configure_logging()
+logger = logging.getLogger(__name__)
+logger.info("Job Application Tracker starting (version %s, mode=%s)", APP_VERSION, DEPLOYMENT_MODE)
+logger.info("Database path : %s", db.DB_PATH)
+logger.info("Log file path : %s", _log_path)
 
 import json as _json
 
@@ -154,6 +198,18 @@ if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
     _scheduler.add_job(_check_and_create_reminders, "interval", hours=1, id="reminders")
     _scheduler.start()
     _check_and_create_reminders()
+
+
+# ---------------------------------------------------------------------------
+# Unhandled-exception logger — captures the full traceback for every 500
+# ---------------------------------------------------------------------------
+
+@app.errorhandler(Exception)
+def _handle_unhandled_exception(exc):
+    logger.exception(
+        "Unhandled exception on %s %s", request.method, request.path
+    )
+    raise exc
 
 
 # ---------------------------------------------------------------------------

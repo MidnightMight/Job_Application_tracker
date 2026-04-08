@@ -106,6 +106,7 @@ database.py  Backward-compat shim — re-exports everything from db/
 | Document | Contents |
 |---|---|
 | [`docs/admin-guide.md`](docs/admin-guide.md) | Deployment, Docker, env vars, multi-user, maintenance, troubleshooting |
+| [`docs/updating.md`](docs/updating.md) | Update procedures — Git pull, manual download, Docker image pull, rollback |
 | [`docs/user-guide.md`](docs/user-guide.md) | Adding jobs, editing, bulk ops, search, AI assistant, import/export |
 | [`docs/architecture.md`](docs/architecture.md) | Package layout and design notes |
 | [`docs/statuses.md`](docs/statuses.md) | Default statuses reference, protected status rules, naming convention |

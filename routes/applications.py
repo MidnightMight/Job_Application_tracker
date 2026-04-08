@@ -1,5 +1,6 @@
 """Application CRUD and bulk-action routes."""
 
+import logging
 from types import SimpleNamespace
 
 from flask import (
@@ -11,6 +12,7 @@ import db
 from .auth import login_required
 
 bp = Blueprint("applications", __name__)
+logger = logging.getLogger(__name__)
 
 
 @bp.route("/application/<int:app_id>")
@@ -94,7 +96,15 @@ def edit_application(app_id):
         flash("Application not found.", "danger")
         return redirect(url_for("dashboard.dashboard"))
     if request.method == "POST":
-        db.update_application(app_id, request.form)
+        logger.info("edit_application: POST id=%s status=%s job_expiry_date=%s",
+                    app_id,
+                    request.form.get("status"),
+                    request.form.get("job_expiry_date"))
+        try:
+            db.update_application(app_id, request.form)
+        except Exception:
+            logger.exception("edit_application: update_application raised for id=%s", app_id)
+            raise
         flash("Application updated.", "success")
         year = request.form.get("date_applied", "")[:4] or "2025"
         return redirect(url_for("dashboard.year_view", year=year))

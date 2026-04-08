@@ -181,8 +181,18 @@ def check_update():
             "update_available": is_newer,
             "html_url": html_url,
         })
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            error = "No releases have been published on GitHub yet."
+        elif exc.code in (403, 429):
+            error = "GitHub API rate limit reached. Please try again in a few minutes."
+        else:
+            error = f"GitHub returned an unexpected error (HTTP {exc.code})."
+        return jsonify({"ok": False, "error": error, "current": APP_VERSION})
+    except urllib.error.URLError:
+        return jsonify({"ok": False, "error": "Could not reach GitHub. Check your internet connection.", "current": APP_VERSION})
     except Exception:
-        return jsonify({"ok": False, "error": "Could not reach GitHub to check for updates.", "current": APP_VERSION})
+        return jsonify({"ok": False, "error": "An unexpected error occurred while checking for updates.", "current": APP_VERSION})
 
 
 def _version_is_newer(latest: str, current: str) -> bool:

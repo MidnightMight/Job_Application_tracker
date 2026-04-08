@@ -579,13 +579,21 @@
           This app is open-source and hosted on GitHub. To update to the latest version:
         </p>
         <ol>
+          <li><strong>Back up your data first</strong> — go to <strong>Export → Download Full Database</strong> to save a copy of your data before making any changes.</li>
           <li>Stop the running server</li>
           <li>Run <code>git pull origin main</code> in the project directory</li>
           <li>Install any new dependencies: <code>pip install -r requirements.txt</code></li>
           <li>Restart the server</li>
         </ol>
-        <p class="mb-0">If you are using Docker, rebuild the image:
+        <p>If you are using Docker, rebuild the image after pulling:
           <code>docker compose up --build -d</code></p>
+        <p class="mb-0">
+          <i class="bi bi-file-earmark-text me-1"></i>
+          No Git? See the
+          <a href="https://github.com/MidnightMight/Job_Application_tracker/blob/main/docs/updating.md"
+             target="_blank" rel="noopener">manual update guide</a>
+          for instructions on downloading a release archive or pulling a Docker image directly.
+        </p>
       </div>
     </div>
 
@@ -731,7 +739,7 @@ if (checkBtn) {
       const resp = await fetch('{{ url_for("settings_routes.check_update") }}');
       const data = await resp.json();
       if (!data.ok) {
-        div.innerHTML = `<div class="alert alert-warning py-2">Could not reach GitHub: ${data.error || 'unknown error'}</div>`;
+        div.innerHTML = `<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle me-1"></i>${escHtml(data.error || 'Unknown error checking for updates.')}</div>`;
         return;
       }
       if (data.update_available) {

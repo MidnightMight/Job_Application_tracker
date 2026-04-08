@@ -1,9 +1,12 @@
 """Application CRUD, duplicate detection, and bulk import helpers."""
 
 import json
+import logging
 from datetime import date, datetime
 
 from .connection import get_connection, _BULK_UPDATE_FIELDS
+
+logger = logging.getLogger(__name__)
 
 
 def _enrich(app: dict) -> dict:
@@ -148,8 +151,17 @@ def update_application(app_id: int, data):
 
     Only sets last_modified_at when at least one field has actually changed.
     """
+    logger.debug("update_application: id=%s status=%s job_expiry_date=%s industry=%s",
+                 app_id,
+                 data.get("status"),
+                 data.get("job_expiry_date"),
+                 data.get("industry"))
+
     now = datetime.now().isoformat(timespec="seconds")
     existing = get_application(app_id)
+    if existing is None:
+        logger.warning("update_application: application id=%s not found", app_id)
+
     new_status = data.get("status", "Select_Status")
 
     # Detect whether any user-visible field changed.
@@ -172,46 +184,60 @@ def update_application(app_id: int, data):
         or existing.get("industry")              != (data.get("industry")           or None)
     )
 
+    live_cols: list = []
     conn = get_connection()
-    conn.execute(
-        """UPDATE applications SET
-           job_desc=?, team=?, company=?, date_applied=?, status=?,
-           cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
-           contact=?, additional_notes=?, last_contact_date=?,
-           job_expiry_date=?, industry=?,
-           status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END,
-           last_modified_at=CASE WHEN ? THEN ? ELSE last_modified_at END
-           WHERE id=?""",
-        (
-            data.get("job_desc", ""),
-            data.get("team", ""),
-            data.get("company", ""),
-            data.get("date_applied", ""),
-            new_status,
-            1 if data.get("cover_letter") else 0,
-            1 if data.get("resume") else 0,
-            data.get("comment", ""),
-            float(data.get("success_chance", 0) or 0),
-            data.get("link", ""),
-            data.get("contact", ""),
-            data.get("additional_notes", ""),
-            data.get("last_contact_date") or None,
-            data.get("job_expiry_date")   or None,
-            data.get("industry")          or None,
-            new_status,
-            now,
-            1 if _changed else 0,
-            now,
-            app_id,
-        ),
-    )
-    if existing and existing.get("status") != new_status:
+    try:
+        # Log the live schema so we can see if any expected column is missing
+        live_cols = [r[1] for r in conn.execute("PRAGMA table_info(applications)").fetchall()]
+        logger.debug("update_application: live applications columns = %s", live_cols)
+
         conn.execute(
-            "INSERT INTO status_history (application_id, status, changed_at) VALUES (?,?,?)",
-            (app_id, new_status, now),
+            """UPDATE applications SET
+               job_desc=?, team=?, company=?, date_applied=?, status=?,
+               cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
+               contact=?, additional_notes=?, last_contact_date=?,
+               job_expiry_date=?, industry=?,
+               status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END,
+               last_modified_at=CASE WHEN ? THEN ? ELSE last_modified_at END
+               WHERE id=?""",
+            (
+                data.get("job_desc", ""),
+                data.get("team", ""),
+                data.get("company", ""),
+                data.get("date_applied", ""),
+                new_status,
+                1 if data.get("cover_letter") else 0,
+                1 if data.get("resume") else 0,
+                data.get("comment", ""),
+                float(data.get("success_chance", 0) or 0),
+                data.get("link", ""),
+                data.get("contact", ""),
+                data.get("additional_notes", ""),
+                data.get("last_contact_date") or None,
+                data.get("job_expiry_date")   or None,
+                data.get("industry")          or None,
+                new_status,
+                now,
+                1 if _changed else 0,
+                now,
+                app_id,
+            ),
         )
-    conn.commit()
-    conn.close()
+        if existing and existing.get("status") != new_status:
+            conn.execute(
+                "INSERT INTO status_history (application_id, status, changed_at) VALUES (?,?,?)",
+                (app_id, new_status, now),
+            )
+        conn.commit()
+        logger.debug("update_application: id=%s committed successfully", app_id)
+    except Exception:
+        logger.exception(
+            "update_application: SQL failed for id=%s  live_cols=%s",
+            app_id, live_cols,
+        )
+        raise
+    finally:
+        conn.close()
 
 
 def delete_application(app_id: int):
