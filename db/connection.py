@@ -6,8 +6,11 @@ from datetime import date
 
 DB_PATH = os.environ.get(
     "DB_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(__file__)), "jobs.db"),
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "jobs.db"),
 )
+
+# Ensure the data directory exists when using the default local path.
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # Static fallback year list — prefer get_dynamic_years() in views.
 YEARS = [2023, 2024, 2025, 2026, 2027]
