@@ -134,5 +134,8 @@ def restore_db():
         if os.path.exists(tmp.name):
             os.remove(tmp.name)
 
+    # Run migrations so any columns added since the backup was taken are created.
+    db.init_db()
+
     flash("Database restored successfully. The previous database was saved as jobs.db.bak.", "success")
     return redirect(url_for("export.export_page"))
