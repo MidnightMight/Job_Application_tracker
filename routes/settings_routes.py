@@ -63,6 +63,12 @@ def settings():
             flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="statuses"))
 
+        elif action in ("move_status_up", "move_status_down"):
+            direction = "up" if action == "move_status_up" else "down"
+            ok, msg = db.move_status(request.form.get("name", ""), direction)
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings_routes.settings", section="statuses"))
+
         elif action == "add_user":
             if DEPLOYMENT_MODE == "local":
                 flash("User management is not available in local mode.", "warning")
