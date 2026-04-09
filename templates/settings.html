@@ -750,6 +750,7 @@ function escHtml(str) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 const checkBtn = document.getElementById('checkUpdateBtn');
+const deploymentMode = {{ deployment_mode | tojson }};
 if (checkBtn) {
   checkBtn.addEventListener('click', async () => {
     const div = document.getElementById('updateResult');
@@ -762,22 +763,48 @@ if (checkBtn) {
         return;
       }
       if (data.update_available) {
+        const dockerSteps = `
+          <ol class="mb-0 ps-3">
+            <li>Pull the latest image and restart:<br>
+              <code>docker compose pull &amp;&amp; docker compose up -d</code>
+            </li>
+            <li>If you build locally from source instead:<br>
+              <code>git pull origin main &amp;&amp; docker compose up --build -d</code>
+            </li>
+          </ol>`;
+        const localSteps = `
+          <ol class="mb-0 ps-3">
+            <li>Stop the running server</li>
+            <li><code>git pull origin main</code></li>
+            <li><code>pip install -r requirements.txt</code></li>
+            <li>Restart the server</li>
+          </ol>`;
+        const steps = deploymentMode === 'docker' ? dockerSteps : localSteps;
         div.innerHTML = `
-          <div class="alert alert-success py-2">
+          <div class="alert alert-success py-2 mb-2">
             <i class="bi bi-arrow-up-circle me-1"></i>
-            A new version <strong>v${data.latest}</strong> is available!
-            <a href="${data.html_url}" target="_blank" rel="noopener" class="alert-link ms-2">
+            A new version <strong>v${escHtml(data.latest)}</strong> is available!
+            <a href="${escHtml(data.html_url)}" target="_blank" rel="noopener" class="alert-link ms-2">
               View release notes <i class="bi bi-box-arrow-up-right"></i>
             </a>
+          </div>
+          <div class="alert alert-warning py-2 mb-2">
+            <i class="bi bi-database-fill-exclamation me-1"></i>
+            <strong>Back up your data before updating!</strong>
+            Go to <strong>Export &rarr; Download Full Database</strong> to save a copy of your jobs database.
+          </div>
+          <div class="card card-body small py-2">
+            <strong class="d-block mb-1"><i class="bi bi-terminal me-1"></i>How to update:</strong>
+            ${steps}
           </div>`;
       } else {
         div.innerHTML = `<div class="alert alert-info py-2">
           <i class="bi bi-check-circle me-1"></i>
-          You are running the latest version (v${data.current}).
+          You are running the latest version (v${escHtml(data.current)}).
         </div>`;
       }
     } catch (e) {
-      div.innerHTML = `<div class="alert alert-danger py-2">Error: ${e.message}</div>`;
+      div.innerHTML = `<div class="alert alert-danger py-2">Error: ${escHtml(e.message)}</div>`;
     }
   });
 }
