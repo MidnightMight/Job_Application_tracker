@@ -125,6 +125,7 @@
               <thead class="table-dark">
                 <tr>
                   <th class="ps-3">#</th>
+                  <th>Order</th>
                   <th>Status Name</th>
                   <th>Display Label</th>
                   <th>Badge Preview</th>
@@ -135,6 +136,24 @@
                 {% for s in statuses %}
                 <tr>
                   <td class="ps-3 text-muted small">{{ loop.index }}</td>
+                  <td class="text-nowrap">
+                    <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}" class="d-inline">
+                      <input type="hidden" name="action" value="move_status_up">
+                      <input type="hidden" name="name" value="{{ s }}">
+                      <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Move up"
+                              {% if loop.first %}disabled{% endif %}>
+                        <i class="bi bi-arrow-up"></i>
+                      </button>
+                    </form>
+                    <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}" class="d-inline ms-1">
+                      <input type="hidden" name="action" value="move_status_down">
+                      <input type="hidden" name="name" value="{{ s }}">
+                      <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Move down"
+                              {% if loop.last %}disabled{% endif %}>
+                        <i class="bi bi-arrow-down"></i>
+                      </button>
+                    </form>
+                  </td>
                   <td class="fw-semibold small">
                     {{ s }}
                     {% if s in protected_statuses %}

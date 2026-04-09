@@ -45,6 +45,34 @@ def add_status(name: str) -> tuple[bool, str]:
         conn.close()
 
 
+def move_status(name: str, direction: str) -> tuple[bool, str]:
+    """Move a status up or down in sort order. direction must be 'up' or 'down'."""
+    if direction not in ("up", "down"):
+        return False, "Invalid direction."
+    conn = get_connection()
+    rows = conn.execute("SELECT id, name, sort_order FROM statuses ORDER BY sort_order, id").fetchall()
+    names = [r["name"] for r in rows]
+    if name not in names:
+        conn.close()
+        return False, f"Status '{name}' not found."
+    idx = names.index(name)
+    if direction == "up" and idx == 0:
+        conn.close()
+        return False, "Already at the top."
+    if direction == "down" and idx == len(names) - 1:
+        conn.close()
+        return False, "Already at the bottom."
+    swap_idx = idx - 1 if direction == "up" else idx + 1
+    # Swap sort_order values between the two rows
+    a = rows[idx]
+    b = rows[swap_idx]
+    conn.execute("UPDATE statuses SET sort_order=? WHERE id=?", (b["sort_order"], a["id"]))
+    conn.execute("UPDATE statuses SET sort_order=? WHERE id=?", (a["sort_order"], b["id"]))
+    conn.commit()
+    conn.close()
+    return True, f"Status '{name}' moved {direction}."
+
+
 def delete_status(name: str) -> tuple[bool, str]:
     """Delete a custom status. Prevents deletion of protected statuses or those in use."""
     if name in PROTECTED_STATUSES:
