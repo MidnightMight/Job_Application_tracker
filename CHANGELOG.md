@@ -5,6 +5,30 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## v1.2.1 — Bug Fixes & Status Reordering
+
+### Bug Fixes
+
+- **Company Pool crash fixed** — enabling the Company Pool setting caused an
+  HTTP 500 Internal Server Error on every visit to `/companies` due to an
+  incorrect `url_for('settings', …)` call in the pool-info banner.  Fixed to
+  use the correct blueprint endpoint `settings_routes.settings`.
+  *(BUG-001 — see `docs/known-bugs.md`)*
+
+### Improvements
+
+- **Status reordering** — the status list in **Settings → Statuses** now has
+  ↑/↓ buttons so users can change the display order of statuses.  The first
+  status's ↑ and the last status's ↓ button are disabled automatically.
+  *(BUG-002 — see `docs/known-bugs.md`)*
+
+### Documentation
+
+- Added `docs/known-bugs.md` — a dated log of confirmed bugs, root causes,
+  fixes, and workarounds using the `YYYYMMDD` date format.
+
+---
+
 ## v1.2.0 — Modular Refactor + AI Storage + Data Improvements
 
 ### Architecture

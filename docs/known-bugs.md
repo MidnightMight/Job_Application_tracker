@@ -34,7 +34,7 @@ _No known open bugs at this time._
 | **ID** | BUG-002 |
 | **Severity** | Low |
 | **Affects** | ≤ 1.2.0 |
-| **Fixed in** | 1.3.0 |
+| **Fixed in** | 1.2.1 |
 | **Fix date** | 20260409 |
 
 **Description**  
@@ -67,7 +67,7 @@ browser (e.g. DB Browser for SQLite).
 | **ID** | BUG-001 |
 | **Severity** | Critical |
 | **Affects** | ≤ 1.2.0 |
-| **Fixed in** | 1.3.0 |
+| **Fixed in** | 1.2.1 |
 | **Fix date** | 20260409 |
 
 **Description**  
