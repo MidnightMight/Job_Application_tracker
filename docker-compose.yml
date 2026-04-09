@@ -1,7 +1,10 @@
 services:
   app:
+    # build: . builds from local source. Remove or comment it out and run
+    # "docker compose pull && docker compose up -d" to pull a pre-built image
+    # from the GitHub Container Registry instead (e.g. when updating).
     build: .
-    image: job-application-tracker
+    image: ghcr.io/midnightmight/job_application_tracker:latest
     ports:
       - "5000:5000"
     volumes:
