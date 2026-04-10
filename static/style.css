@@ -141,6 +141,14 @@ footer { background-color: #fff; margin-top: 3rem; }
   .stat-icon  { font-size: 1.4rem; }
 }
 
+
+/* ── Stale application row (no status change in N days) ────────────────── */
+.stale-app {
+  border-left: 4px solid #ffc107 !important;
+  background-color: rgba(255, 193, 7, .06);
+}
+[data-bs-theme="dark"] .stale-app { background-color: rgba(255, 193, 7, .10); }
+
 /* ── Inbox / reminders ──────────────────────────────────────────────────── */
 .reminder-unread {
   border-left: 4px solid #ffc107 !important;

@@ -228,7 +228,7 @@
         </thead>
         <tbody>
           {% for a in apps %}
-          <tr class="app-row-{{ a.status | replace(' ', '_') }}">
+          <tr class="app-row-{{ a.status | replace(' ', '_') }}{% if a.is_stale %} stale-app{% endif %}">
             <td>
               <input type="checkbox" name="selected_ids" value="{{ a.id }}"
                      class="form-check-input row-chk">
@@ -239,6 +239,12 @@
                  class="text-decoration-none link-body-emphasis stretched-link-cell">
                 {{ a.company }}
               </a>
+              {% if a.is_stale %}
+              <span class="badge bg-warning text-dark ms-1"
+                    title="No status change in {{ stale_days }}+ days">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Stale
+              </span>
+              {% endif %}
             </td>
             <td class="small text-muted">
               <div>{{ a.job_desc }}</div>

@@ -11,6 +11,7 @@ from flask import (
 
 import db
 from .auth import login_required, current_user_id
+from db.applications import _STALE_DAYS
 
 bp = Blueprint("applications", __name__)
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ def add_application():
                     action="Add",
                     duplicate_warning=True,
                     duplicates=duplicates,
+                    stale_days=_STALE_DAYS,
                 )
 
         db.add_application(request.form, user_id=user_id)
@@ -91,6 +93,7 @@ def add_application():
         companies=companies_list,
         status_options=db.get_status_options(user_id=user_id),
         action="Add",
+        stale_days=_STALE_DAYS,
     )
 
 
@@ -122,6 +125,7 @@ def edit_application(app_id):
         companies=companies_list,
         status_options=db.get_status_options(user_id=user_id),
         action="Edit",
+        stale_days=_STALE_DAYS,
     )
 
 

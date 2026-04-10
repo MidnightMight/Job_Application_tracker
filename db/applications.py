@@ -9,13 +9,41 @@ from .connection import get_connection, _BULK_UPDATE_FIELDS
 logger = logging.getLogger(__name__)
 
 
+# Statuses that are "done" — no stale warning for these.
+_TERMINAL_STATUSES = frozenset({
+    "Offer_Received",
+    "Offer_Rejected",
+    "Rejected",
+    "Not_Applying",
+    "Job_Expired",
+    "Select_Status",
+})
+
+# Days with no status change before an application is flagged as stale.
+_STALE_DAYS = 3
+
+
 def _enrich(app: dict) -> dict:
-    """Add computed 'duration' field (days since applied)."""
+    """Add computed fields: 'duration' (days since applied) and 'is_stale'."""
+    today = date.today()
+
+    # duration — days since date_applied (0 when not set)
     try:
         d = datetime.strptime(app["date_applied"], "%Y-%m-%d").date()
-        app["duration"] = (date.today() - d).days
+        app["duration"] = (today - d).days
     except Exception:
         app["duration"] = 0
+
+    # is_stale — True when status has not changed in >= _STALE_DAYS days and
+    # the application is not in a terminal state.
+    app["is_stale"] = False
+    if app.get("status") not in _TERMINAL_STATUSES:
+        ref = app.get("status_changed_at") or app.get("date_applied") or ""
+        try:
+            ref_date = datetime.fromisoformat(ref[:10]).date()
+            app["is_stale"] = (today - ref_date).days >= _STALE_DAYS
+        except Exception:
+            pass
     return app
 
 
@@ -27,7 +55,11 @@ def get_applications(year=None, status=None, user_id=None) -> list:
         sql += " AND user_id = ?"
         params.append(user_id)
     if year:
-        sql += " AND strftime('%Y', date_applied) = ?"
+        # Include matching year AND undated applications (no date_applied set yet)
+        sql += (
+            " AND (strftime('%Y', date_applied) = ?"
+            " OR date_applied IS NULL OR date_applied = '')"
+        )
         params.append(str(year))
     if status:
         sql += " AND status = ?"
@@ -35,7 +67,10 @@ def get_applications(year=None, status=None, user_id=None) -> list:
     sql += " ORDER BY date_applied DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    return [_enrich(dict(r)) for r in rows]
+    enriched = [_enrich(dict(r)) for r in rows]
+    # Stale applications float to the top so they get immediate attention.
+    enriched.sort(key=lambda a: (0 if a["is_stale"] else 1, a.get("date_applied") or ""))
+    return enriched
 
 
 def search_applications(query: str, year: int | None = None, user_id=None) -> list:

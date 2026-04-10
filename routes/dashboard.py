@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request
 
 import db
 from .auth import login_required, current_user_id
+from db.applications import _STALE_DAYS
 
 bp = Blueprint("dashboard", __name__)
 
@@ -62,4 +63,5 @@ def year_view(year):
         years=db.get_dynamic_years(user_id=user_id),
         status_options=db.get_status_options(user_id=user_id),
         selected_status=status_filter,
+        stale_days=_STALE_DAYS,
     )
