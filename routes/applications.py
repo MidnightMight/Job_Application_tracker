@@ -1,6 +1,7 @@
 """Application CRUD and bulk-action routes."""
 
 import logging
+from datetime import date
 from types import SimpleNamespace
 
 from flask import (
@@ -81,7 +82,7 @@ def add_application():
 
         db.add_application(request.form, user_id=user_id)
         flash("Application added.", "success")
-        year = request.form.get("date_applied", "")[:4] or str(__import__("datetime").date.today().year)
+        year = request.form.get("date_applied", "")[:4] or str(date.today().year)
         return redirect(url_for("dashboard.year_view", year=year))
     companies_list = db.get_companies()
     return render_template(
@@ -112,7 +113,7 @@ def edit_application(app_id):
             logger.exception("edit_application: update_application raised for id=%s", app_id)
             raise
         flash("Application updated.", "success")
-        year = request.form.get("date_applied", "")[:4] or str(__import__("datetime").date.today().year)
+        year = request.form.get("date_applied", "")[:4] or str(date.today().year)
         return redirect(url_for("dashboard.year_view", year=year))
     companies_list = db.get_companies()
     return render_template(
@@ -132,7 +133,7 @@ def delete_application(app_id):
     if not application:
         flash("Application not found.", "danger")
         return redirect(url_for("dashboard.dashboard"))
-    year = application["date_applied"][:4] if application else str(__import__("datetime").date.today().year)
+    year = application["date_applied"][:4] if application else str(date.today().year)
     db.delete_application(app_id, user_id=user_id)
     flash("Application deleted.", "warning")
     return redirect(url_for("dashboard.year_view", year=year))
@@ -144,7 +145,7 @@ def bulk_action():
     """Handle bulk operations (delete / set-field) on multiple applications."""
     user_id = current_user_id()
     action        = request.form.get("action", "")
-    year          = request.form.get("year", str(__import__("datetime").date.today().year))
+    year          = request.form.get("year", str(date.today().year))
     status_filter = request.form.get("status_filter", "")
 
     raw_ids = request.form.getlist("selected_ids")
