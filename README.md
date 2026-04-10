@@ -26,9 +26,15 @@ the repository owner.
 ## Features
 
 - **Dashboard** — Chart.js charts: status breakdown, applications per year,
-  success rate trend, industry/sector keyword frequency
+  success rate trend, industry/sector keyword frequency; **Quick Navigation**
+  card with one-click year, Company Tracker, and Import CSV links
 - **Year views** — filterable per-year table with pipeline progress bar and bulk
   operations (set status, date, cover letter, resume, delete)
+- **Stale application detection** — applications with no status change for ≥ 3
+  days (and not in a terminal state) float to the top and are highlighted in
+  yellow; the threshold is shown as a hint on the application form
+- **Optional Date Applied** — the Date Applied field is no longer required;
+  undated applications are shown in year views and flagged stale after 3 days
 - **Application detail** — full details, status timeline, AI fit analysis card,
   `last_modified_at`, `job_expiry_date`, and additional notes
 - **Industry / Sector** — optional industry field on applications and companies;
@@ -47,7 +53,10 @@ the repository owner.
 - **`last_modified_at` tracking** — timestamp updated only when a field actually
   changes (opening and closing the edit form leaves it unchanged)
 - **Custom statuses** — add or remove statuses; eight core statuses are
-  **protected** (🔒 badge, cannot be deleted)
+  **protected** (🔒 badge, cannot be deleted); set custom badge background and
+  text colours per status with a live-preview colour picker
+- **Per-user status colour overrides** — in multi-user mode each user can
+  personalise badge colours for global statuses without affecting others
 - **Duplicate detection** — checks company + title + team + date; different teams
   on the same posting are treated as distinct applications
 - **Bulk CSV / Excel import** — column-mapping UI with per-row preview and
@@ -58,7 +67,8 @@ the repository owner.
   exceed a configurable threshold
 - **Export** — CSV (applications, companies) or full SQLite database backup
 - **Dark / light theme** — toggle persisted to `localStorage`
-- **Multi-user login** — optional, Docker mode only; werkzeug password hashing
+- **Multi-user login** — optional, Docker mode only; werkzeug password hashing;
+  each user sees only their own applications, statuses, and reminders
 - **PWA support** — Web App Manifest + service worker for offline use
 
 ---

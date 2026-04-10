@@ -14,7 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 GITHUB_REPO = "MidnightMight/Job_Application_tracker"
 
 
