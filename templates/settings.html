@@ -996,7 +996,15 @@ if (checkBtn) {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({names: names}),
-    }).catch(function () {});
+    }).then(function (resp) {
+      return resp.json();
+    }).then(function (data) {
+      if (!data.ok) {
+        console.error('Reorder failed:', data.message);
+      }
+    }).catch(function (err) {
+      console.error('Reorder request failed:', err);
+    });
   }
 })();
 </script>

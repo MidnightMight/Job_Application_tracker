@@ -17,13 +17,13 @@ PROTECTED_STATUSES = frozenset({
     "Job_Expired",
 })
 
-_HEX_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+_HEX_COLOR_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 
 def _valid_color(value: str) -> str:
     """Return the colour string if it is a valid CSS hex colour, else ''."""
-    v = value.strip()
-    return v if _HEX_RE.match(v) else ""
+    stripped = value.strip()
+    return stripped if _HEX_COLOR_RE.match(stripped) else ""
 
 
 def get_status_options() -> list[str]:
@@ -58,13 +58,13 @@ def add_status(name: str, bg_color: str = "", text_color: str = "") -> tuple[boo
     if not name:
         return False, "Status name cannot be empty."
     bg = _valid_color(bg_color)
-    tc = _valid_color(text_color)
+    text = _valid_color(text_color)
     conn = get_connection()
     try:
         max_order = conn.execute("SELECT MAX(sort_order) FROM statuses").fetchone()[0] or 0
         conn.execute(
             "INSERT INTO statuses (name, sort_order, bg_color, text_color) VALUES (?,?,?,?)",
-            (name, max_order + 1, bg or None, tc or None),
+            (name, max_order + 1, bg or None, text or None),
         )
         conn.commit()
         return True, f"Status '{name}' added."
@@ -122,7 +122,7 @@ def delete_status(name: str) -> tuple[bool, str]:
 def update_status_colors(name: str, bg_color: str, text_color: str) -> tuple[bool, str]:
     """Set or clear the custom bg/text colours for a status."""
     bg = _valid_color(bg_color)
-    tc = _valid_color(text_color)
+    text = _valid_color(text_color)
     conn = get_connection()
     row = conn.execute("SELECT id FROM statuses WHERE name=?", (name,)).fetchone()
     if not row:
@@ -130,7 +130,7 @@ def update_status_colors(name: str, bg_color: str, text_color: str) -> tuple[boo
         return False, f"Status '{name}' not found."
     conn.execute(
         "UPDATE statuses SET bg_color=?, text_color=? WHERE name=?",
-        (bg or None, tc or None, name),
+        (bg or None, text or None, name),
     )
     conn.commit()
     conn.close()
