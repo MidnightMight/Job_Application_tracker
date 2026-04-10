@@ -1,5 +1,6 @@
 """Status management helpers."""
 
+import re
 import sqlite3
 
 from .connection import get_connection
@@ -16,6 +17,14 @@ PROTECTED_STATUSES = frozenset({
     "Job_Expired",
 })
 
+_HEX_RE = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _valid_color(value: str) -> str:
+    """Return the colour string if it is a valid CSS hex colour, else ''."""
+    v = value.strip()
+    return v if _HEX_RE.match(v) else ""
+
 
 def get_status_options() -> list[str]:
     conn = get_connection()
@@ -26,16 +35,36 @@ def get_status_options() -> list[str]:
     return [r["name"] for r in rows]
 
 
-def add_status(name: str) -> tuple[bool, str]:
+def get_status_styles() -> dict[str, dict]:
+    """Return a dict {name: {bg_color, text_color}} for statuses that have
+    custom colours set.  Only entries with at least one non-empty colour are
+    included."""
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT name, bg_color, text_color FROM statuses"
+    ).fetchall()
+    conn.close()
+    result = {}
+    for r in rows:
+        bg = (r["bg_color"] or "").strip()
+        tc = (r["text_color"] or "").strip()
+        if bg or tc:
+            result[r["name"]] = {"bg_color": bg, "text_color": tc}
+    return result
+
+
+def add_status(name: str, bg_color: str = "", text_color: str = "") -> tuple[bool, str]:
     name = name.strip().replace(" ", "_")
     if not name:
         return False, "Status name cannot be empty."
+    bg = _valid_color(bg_color)
+    tc = _valid_color(text_color)
     conn = get_connection()
     try:
         max_order = conn.execute("SELECT MAX(sort_order) FROM statuses").fetchone()[0] or 0
         conn.execute(
-            "INSERT INTO statuses (name, sort_order) VALUES (?,?)",
-            (name, max_order + 1),
+            "INSERT INTO statuses (name, sort_order, bg_color, text_color) VALUES (?,?,?,?)",
+            (name, max_order + 1, bg or None, tc or None),
         )
         conn.commit()
         return True, f"Status '{name}' added."
@@ -88,3 +117,37 @@ def delete_status(name: str) -> tuple[bool, str]:
     conn.commit()
     conn.close()
     return True, f"Status '{name}' deleted."
+
+
+def update_status_colors(name: str, bg_color: str, text_color: str) -> tuple[bool, str]:
+    """Set or clear the custom bg/text colours for a status."""
+    bg = _valid_color(bg_color)
+    tc = _valid_color(text_color)
+    conn = get_connection()
+    row = conn.execute("SELECT id FROM statuses WHERE name=?", (name,)).fetchone()
+    if not row:
+        conn.close()
+        return False, f"Status '{name}' not found."
+    conn.execute(
+        "UPDATE statuses SET bg_color=?, text_color=? WHERE name=?",
+        (bg or None, tc or None, name),
+    )
+    conn.commit()
+    conn.close()
+    return True, f"Colours for '{name}' updated."
+
+
+def reorder_statuses(names: list[str]) -> tuple[bool, str]:
+    """Set the sort_order of statuses to match the given list order."""
+    if not names:
+        return False, "No names provided."
+    conn = get_connection()
+    existing = {r["name"] for r in conn.execute("SELECT name FROM statuses").fetchall()}
+    for i, name in enumerate(names):
+        if name not in existing:
+            conn.close()
+            return False, f"Unknown status '{name}'."
+        conn.execute("UPDATE statuses SET sort_order=? WHERE name=?", (i, name))
+    conn.commit()
+    conn.close()
+    return True, "Order saved."

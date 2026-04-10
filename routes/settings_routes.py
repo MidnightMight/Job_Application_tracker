@@ -54,7 +54,11 @@ def settings():
             return redirect(url_for("settings_routes.settings", section="users"))
 
         elif action == "add_status":
-            ok, msg = db.add_status(request.form.get("name", ""))
+            ok, msg = db.add_status(
+                request.form.get("name", ""),
+                bg_color=request.form.get("bg_color", ""),
+                text_color=request.form.get("text_color", ""),
+            )
             flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="statuses"))
 
@@ -66,6 +70,15 @@ def settings():
         elif action in ("move_status_up", "move_status_down"):
             direction = "up" if action == "move_status_up" else "down"
             ok, msg = db.move_status(request.form.get("name", ""), direction)
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings_routes.settings", section="statuses"))
+
+        elif action == "update_status_colors":
+            ok, msg = db.update_status_colors(
+                request.form.get("name", ""),
+                bg_color=request.form.get("bg_color", ""),
+                text_color=request.form.get("text_color", ""),
+            )
             flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="statuses"))
 
@@ -130,16 +143,30 @@ def settings():
 
     current = db.get_all_settings()
     statuses = db.get_status_options()
+    status_styles = db.get_status_styles()
     users = db.get_users()
     return render_template(
         "settings.html",
         settings=current,
         section=section,
         statuses=statuses,
+        status_styles=status_styles,
         users=users,
         app_version=APP_VERSION,
         protected_statuses=db.PROTECTED_STATUSES,
     )
+
+
+@bp.route("/settings/reorder-statuses", methods=["POST"])
+@login_required
+def reorder_statuses():
+    """AJAX endpoint: receive JSON list of status names and save new sort order."""
+    data = request.get_json(silent=True) or {}
+    names = data.get("names")
+    if not isinstance(names, list):
+        return jsonify({"ok": False, "error": "Invalid payload."}), 400
+    ok, msg = db.reorder_statuses(names)
+    return jsonify({"ok": ok, "message": msg})
 
 
 @bp.route("/settings/ollama-test", methods=["POST"])

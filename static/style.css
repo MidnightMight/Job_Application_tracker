@@ -181,3 +181,12 @@ footer { background-color: #fff; margin-top: 3rem; }
 [data-bs-theme="dark"] .app-row-Rejected            { background-color: rgba(220,  53,  69, .08) !important; }
 [data-bs-theme="dark"] .app-row-Not_Applying        { background-color: rgba(108, 117, 125, .08) !important; }
 
+/* Fix: company name link not visible in dark mode on year view */
+[data-bs-theme="dark"] .fw-semibold a.link-body-emphasis,
+[data-bs-theme="dark"] td.fw-semibold a {
+  color: #cdd9e5 !important;
+}
+[data-bs-theme="dark"] td.fw-semibold a:hover {
+  color: #fff !important;
+}
+

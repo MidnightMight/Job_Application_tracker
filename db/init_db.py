@@ -119,9 +119,13 @@ def init_db():
         CREATE TABLE IF NOT EXISTS statuses (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             name       TEXT    UNIQUE NOT NULL,
-            sort_order INTEGER DEFAULT 0
+            sort_order INTEGER DEFAULT 0,
+            bg_color   TEXT,
+            text_color TEXT
         )
     """)
+    _add_column_if_missing(c, "statuses", "bg_color",   "TEXT")
+    _add_column_if_missing(c, "statuses", "text_color", "TEXT")
 
     # ── Settings ─────────────────────────────────────────────────────────────
     c.execute("""

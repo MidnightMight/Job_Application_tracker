@@ -114,46 +114,33 @@
     {# ── Statuses ── #}
     {% elif section == 'statuses' %}
     <div class="row g-4">
-      <div class="col-lg-7">
+      <div class="col-lg-8">
         <div class="card shadow-sm">
-          <div class="card-header fw-semibold">
-            <i class="bi bi-list-ul text-primary me-2"></i>Current Statuses
-            <span class="badge bg-secondary ms-2">{{ statuses | length }}</span>
+          <div class="card-header fw-semibold d-flex align-items-center gap-2">
+            <i class="bi bi-list-ul text-primary me-1"></i>Current Statuses
+            <span class="badge bg-secondary ms-1">{{ statuses | length }}</span>
+            <span class="text-muted small ms-auto">
+              <i class="bi bi-grip-vertical me-1"></i>Drag rows to reorder
+            </span>
           </div>
           <div class="table-responsive">
-            <table class="table table-hover table-sm align-middle mb-0">
+            <table class="table table-hover table-sm align-middle mb-0" id="statusTable">
               <thead class="table-dark">
                 <tr>
-                  <th class="ps-3">#</th>
-                  <th>Order</th>
+                  <th class="ps-2" style="width:1.5rem;" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></th>
+                  <th class="ps-1">#</th>
                   <th>Status Name</th>
-                  <th>Display Label</th>
                   <th>Badge Preview</th>
+                  <th>Colours</th>
                   <th class="text-end pe-3">Remove</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="statusTbody">
                 {% for s in statuses %}
-                <tr>
-                  <td class="ps-3 text-muted small">{{ loop.index }}</td>
-                  <td class="text-nowrap">
-                    <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}" class="d-inline">
-                      <input type="hidden" name="action" value="move_status_up">
-                      <input type="hidden" name="name" value="{{ s }}">
-                      <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Move up"
-                              {% if loop.first %}disabled{% endif %}>
-                        <i class="bi bi-arrow-up"></i>
-                      </button>
-                    </form>
-                    <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}" class="d-inline ms-1">
-                      <input type="hidden" name="action" value="move_status_down">
-                      <input type="hidden" name="name" value="{{ s }}">
-                      <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Move down"
-                              {% if loop.last %}disabled{% endif %}>
-                        <i class="bi bi-arrow-down"></i>
-                      </button>
-                    </form>
-                  </td>
+                {% set style = status_styles.get(s, {}) %}
+                <tr draggable="true" data-name="{{ s }}" class="status-row" style="cursor:grab;">
+                  <td class="ps-2 text-muted" style="cursor:grab;"><i class="bi bi-grip-vertical"></i></td>
+                  <td class="text-muted small row-num">{{ loop.index }}</td>
                   <td class="fw-semibold small">
                     {{ s }}
                     {% if s in protected_statuses %}
@@ -162,11 +149,37 @@
                     </span>
                     {% endif %}
                   </td>
-                  <td class="text-muted small">{{ s | replace('_', ' ') }}</td>
                   <td>
-                    <span class="badge status-badge status-{{ s | replace(' ', '_') }}">
+                    <span class="badge status-badge status-{{ s | replace(' ', '_') }}" id="preview-{{ loop.index }}">
                       {{ s | replace('_', ' ') }}
                     </span>
+                  </td>
+                  <td>
+                    <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}"
+                          class="d-flex align-items-center gap-1 colour-form"
+                          data-preview="preview-{{ loop.index }}">
+                      <input type="hidden" name="action" value="update_status_colors">
+                      <input type="hidden" name="name" value="{{ s }}">
+                      <label class="mb-0 small text-muted" title="Background colour">BG</label>
+                      <input type="color" name="bg_color" class="colour-input"
+                             value="{{ style.bg_color if style.bg_color else '#6c757d' }}"
+                             title="Badge background colour"
+                             style="width:2rem;height:1.6rem;padding:.1rem .2rem;border-radius:4px;cursor:pointer;">
+                      <label class="mb-0 small text-muted" title="Text colour">Text</label>
+                      <input type="color" name="text_color" class="colour-input"
+                             value="{{ style.text_color if style.text_color else '#ffffff' }}"
+                             title="Badge text colour"
+                             style="width:2rem;height:1.6rem;padding:.1rem .2rem;border-radius:4px;cursor:pointer;">
+                      <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-1" title="Save colours">
+                        <i class="bi bi-floppy"></i>
+                      </button>
+                      {% if style.bg_color or style.text_color %}
+                      <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 clear-colour-btn"
+                              data-name="{{ s }}" title="Reset to default colours">
+                        <i class="bi bi-x"></i>
+                      </button>
+                      {% endif %}
+                    </form>
                   </td>
                   <td class="text-end pe-3">
                     {% if s in protected_statuses %}
@@ -193,7 +206,7 @@
         </div>
       </div>
 
-      <div class="col-lg-5">
+      <div class="col-lg-4">
         <div class="card shadow-sm">
           <div class="card-header fw-semibold">
             <i class="bi bi-plus-circle text-success me-2"></i>Add New Status
@@ -203,9 +216,41 @@
               <input type="hidden" name="action" value="add_status">
               <div class="mb-3">
                 <label class="form-label fw-semibold">Status Name</label>
-                <input type="text" name="name" class="form-control"
+                <input type="text" name="name" id="newStatusName" class="form-control"
                        placeholder="e.g. Technical_Test or Phone_Screen" required>
                 <div class="form-text">Spaces are converted to underscores automatically.</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Badge Background Colour</label>
+                <div class="d-flex gap-2 align-items-center">
+                  <input type="color" name="bg_color" id="newBgColor" value="#6c757d"
+                         class="form-control form-control-color" style="width:3rem;"
+                         title="Choose badge background colour">
+                  <input type="text" id="newBgHex" value="#6c757d"
+                         class="form-control form-control-sm font-monospace" style="max-width:7rem;"
+                         placeholder="#rrggbb" maxlength="7">
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Badge Text Colour</label>
+                <div class="d-flex gap-2 align-items-center">
+                  <input type="color" name="text_color" id="newTextColor" value="#ffffff"
+                         class="form-control form-control-color" style="width:3rem;"
+                         title="Choose badge text colour">
+                  <input type="text" id="newTextHex" value="#ffffff"
+                         class="form-control form-control-sm font-monospace" style="max-width:7rem;"
+                         placeholder="#rrggbb" maxlength="7">
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Live Preview</label>
+                <div>
+                  <span id="newStatusPreview"
+                        class="badge status-badge"
+                        style="background-color:#6c757d;color:#ffffff;">
+                    New Status
+                  </span>
+                </div>
               </div>
               <button type="submit" class="btn btn-success fw-semibold">
                 <i class="bi bi-plus-circle me-1"></i>Add Status
@@ -219,6 +264,9 @@
             <i class="bi bi-info-circle text-primary me-1"></i>
             <strong>Note:</strong> A status cannot be deleted while any application is using it.
             Update those applications to a different status first.
+            <hr class="my-2">
+            <i class="bi bi-grip-vertical text-secondary me-1"></i>
+            Drag rows in the table to reorder statuses. Order is saved automatically.
           </div>
         </div>
       </div>
@@ -809,4 +857,151 @@ if (checkBtn) {
   });
 }
 </script>
+
+{% if section == 'statuses' %}
+<script>
+// ── Add-status colour pickers: live preview ───────────────────────────────
+(function () {
+  var nameInput    = document.getElementById('newStatusName');
+  var bgPicker     = document.getElementById('newBgColor');
+  var bgHex        = document.getElementById('newBgHex');
+  var textPicker   = document.getElementById('newTextColor');
+  var textHex      = document.getElementById('newTextHex');
+  var preview      = document.getElementById('newStatusPreview');
+
+  function hexValid(v) { return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v.trim()); }
+
+  function updatePreview() {
+    if (preview) {
+      var label = (nameInput ? nameInput.value.replace(/_/g, ' ') || 'New Status' : 'New Status');
+      preview.textContent = label;
+      preview.style.backgroundColor = bgPicker ? bgPicker.value : '#6c757d';
+      preview.style.color           = textPicker ? textPicker.value : '#ffffff';
+    }
+  }
+
+  // Sync colour picker → hex text input
+  if (bgPicker)   bgPicker.addEventListener('input',   function () { if (bgHex)   bgHex.value   = bgPicker.value;   updatePreview(); });
+  if (textPicker) textPicker.addEventListener('input', function () { if (textHex) textHex.value = textPicker.value; updatePreview(); });
+
+  // Sync hex text input → colour picker
+  if (bgHex) bgHex.addEventListener('input', function () {
+    if (hexValid(bgHex.value) && bgPicker) { bgPicker.value = bgHex.value; updatePreview(); }
+  });
+  if (textHex) textHex.addEventListener('input', function () {
+    if (hexValid(textHex.value) && textPicker) { textPicker.value = textHex.value; updatePreview(); }
+  });
+
+  if (nameInput) nameInput.addEventListener('input', updatePreview);
+
+  updatePreview();
+})();
+
+// ── Inline colour pickers: live badge preview ─────────────────────────────
+(function () {
+  document.querySelectorAll('.colour-form').forEach(function (form) {
+    var previewId = form.getAttribute('data-preview');
+    var badge     = previewId ? document.getElementById(previewId) : null;
+    var inputs    = form.querySelectorAll('.colour-input');
+    inputs.forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        if (!badge) return;
+        var bg   = form.querySelector('[name="bg_color"]');
+        var tc   = form.querySelector('[name="text_color"]');
+        if (bg)   badge.style.backgroundColor = bg.value;
+        if (tc)   badge.style.color           = tc.value;
+      });
+    });
+  });
+})();
+
+// ── Clear-colour buttons ──────────────────────────────────────────────────
+(function () {
+  document.querySelectorAll('.clear-colour-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var name = btn.getAttribute('data-name');
+      var form = document.createElement('form');
+      form.method = 'post';
+      form.action = '{{ url_for("settings_routes.settings", section="statuses") }}';
+      [['action', 'update_status_colors'], ['name', name], ['bg_color', ''], ['text_color', '']].forEach(function (pair) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = pair[0]; inp.value = pair[1];
+        form.appendChild(inp);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    });
+  });
+})();
+
+// ── Drag-and-drop reordering ──────────────────────────────────────────────
+(function () {
+  var tbody     = document.getElementById('statusTbody');
+  if (!tbody) return;
+  var dragging  = null;
+
+  function getRows() { return Array.from(tbody.querySelectorAll('tr.status-row')); }
+
+  function renumber() {
+    getRows().forEach(function (row, i) {
+      var cell = row.querySelector('.row-num');
+      if (cell) cell.textContent = i + 1;
+    });
+  }
+
+  tbody.addEventListener('dragstart', function (e) {
+    dragging = e.target.closest('tr.status-row');
+    if (dragging) {
+      dragging.style.opacity = '0.5';
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  });
+
+  tbody.addEventListener('dragend', function () {
+    if (dragging) dragging.style.opacity = '';
+    tbody.querySelectorAll('tr.status-row').forEach(function (r) { r.classList.remove('drag-over'); });
+    dragging = null;
+  });
+
+  tbody.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    var target = e.target.closest('tr.status-row');
+    if (target && target !== dragging) {
+      tbody.querySelectorAll('tr.status-row').forEach(function (r) { r.classList.remove('drag-over'); });
+      target.classList.add('drag-over');
+    }
+  });
+
+  tbody.addEventListener('drop', function (e) {
+    e.preventDefault();
+    var target = e.target.closest('tr.status-row');
+    if (!target || target === dragging || !dragging) return;
+    var rows = getRows();
+    var fromIdx = rows.indexOf(dragging);
+    var toIdx   = rows.indexOf(target);
+    if (fromIdx < toIdx) {
+      target.after(dragging);
+    } else {
+      target.before(dragging);
+    }
+    renumber();
+    target.classList.remove('drag-over');
+    saveOrder();
+  });
+
+  function saveOrder() {
+    var names = getRows().map(function (r) { return r.getAttribute('data-name'); });
+    fetch('{{ url_for("settings_routes.reorder_statuses") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({names: names}),
+    }).catch(function () {});
+  }
+})();
+</script>
+<style>
+tr.drag-over { outline: 2px solid var(--bs-primary); }
+</style>
+{% endif %}
 {% endblock %}

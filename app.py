@@ -169,6 +169,7 @@ def inject_globals():
         "ai_fit_enabled":         db.get_setting("ai_fit_enabled", "0") == "1",
         "user_profile_complete":  _profile_complete,
         "deployment_mode":        DEPLOYMENT_MODE,
+        "status_styles":          db.get_status_styles(),
     }
 
 
