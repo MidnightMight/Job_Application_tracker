@@ -2,13 +2,13 @@
 
 from datetime import date
 
-from .connection import get_connection, YEARS
+from .connection import get_connection, get_dynamic_years
 from .init_db import PENDING_STATUSES
 
 
-def get_stats(year=None):
+def get_stats(year=None, user_id=None):
     from .applications import get_applications
-    apps = get_applications(year=year)
+    apps = get_applications(year=year, user_id=user_id)
     total = len(apps)
     submitted = sum(
         1 for a in apps
@@ -28,34 +28,43 @@ def get_stats(year=None):
     }
 
 
-def get_status_counts(year=None):
+def get_status_counts(year=None, user_id=None):
     from .applications import get_applications
-    apps = get_applications(year=year)
+    apps = get_applications(year=year, user_id=user_id)
     counts: dict = {}
     for a in apps:
         counts[a["status"]] = counts.get(a["status"], 0) + 1
     return counts
 
 
-def get_apps_per_year():
+def get_apps_per_year(user_id=None):
+    """Return {year_str: count} for all years visible to user_id."""
+    years = get_dynamic_years(user_id=user_id)
     conn = get_connection()
-    rows = conn.execute(
-        """SELECT strftime('%Y', date_applied) as yr, COUNT(*) as cnt
-           FROM applications GROUP BY yr ORDER BY yr"""
-    ).fetchall()
+    sql = (
+        "SELECT strftime('%Y', date_applied) as yr, COUNT(*) as cnt "
+        "FROM applications WHERE date_applied IS NOT NULL"
+    )
+    params: list = []
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    sql += " GROUP BY yr ORDER BY yr"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
-    result = {str(y): 0 for y in YEARS}
+    result = {str(y): 0 for y in years}
     for r in rows:
         if r["yr"] in result:
             result[r["yr"]] = r["cnt"]
     return result
 
 
-def get_success_rate_per_year():
+def get_success_rate_per_year(user_id=None):
     from .applications import get_applications
+    years = get_dynamic_years(user_id=user_id)
     result = {}
-    for y in YEARS:
-        apps = get_applications(year=y)
+    for y in years:
+        apps = get_applications(year=y, user_id=user_id)
         submitted = sum(
             1 for a in apps
             if a["status"] not in ("Select_Status", "Drafting_CV", "Not_Applying")
@@ -65,12 +74,18 @@ def get_success_rate_per_year():
     return result
 
 
-def get_company_note_frequency():
+def get_company_note_frequency(user_id=None):
     """Return top sectors/notes from the companies table."""
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT note FROM companies WHERE note IS NOT NULL AND note != ''"
-    ).fetchall()
+    if user_id is not None:
+        rows = conn.execute(
+            "SELECT note FROM companies WHERE note IS NOT NULL AND note != '' AND user_id=?",
+            (user_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT note FROM companies WHERE note IS NOT NULL AND note != ''"
+        ).fetchall()
     conn.close()
     freq: dict = {}
     for r in rows:

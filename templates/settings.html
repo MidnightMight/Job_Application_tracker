@@ -16,11 +16,13 @@
          class="list-group-item list-group-item-action {% if section == 'statuses' %}active{% endif %}">
         <i class="bi bi-tags me-2"></i>Statuses
       </a>
-      {% if deployment_mode != 'local' %}
+      {% if deployment_mode != 'local' and current_is_admin %}
       <a href="{{ url_for('settings_routes.settings', section='users') }}"
          class="list-group-item list-group-item-action {% if section == 'users' %}active{% endif %}">
         <i class="bi bi-people me-2"></i>Users &amp; Security
       </a>
+      {% endif %}
+      {% if deployment_mode != 'local' %}
       <a href="{{ url_for('settings_routes.settings', section='ai') }}"
          class="list-group-item list-group-item-action {% if section == 'ai' %}active{% endif %}">
         <i class="bi bi-robot me-2"></i>AI Assistant
@@ -426,6 +428,7 @@
       </div>
     </div>
     {% else %}
+    {% if current_is_admin %}
     <div class="card shadow-sm mb-4">
       <div class="card-header fw-semibold d-flex align-items-center gap-2">
         <span><i class="bi bi-robot me-1"></i>Local LLM / Ollama Integration</span>
@@ -503,6 +506,15 @@
         </form>
       </div>
     </div>
+    {% else %}
+    <div class="alert alert-warning d-flex align-items-center gap-3 mb-4" role="alert">
+      <i class="bi bi-shield-lock fs-4 flex-shrink-0"></i>
+      <div>
+        <strong>Admin access required.</strong><br>
+        Only administrators can change the AI assistant configuration.
+      </div>
+    </div>
+    {% endif %}
 
     {# ── User Profile card — shown when ai_fit_enabled is on ── #}
     <div class="card shadow-sm mb-4" id="profileCard"

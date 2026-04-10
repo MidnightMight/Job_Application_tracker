@@ -9,15 +9,17 @@ from flask import (
 )
 
 import db
-from .auth import login_required
+from .auth import login_required, current_user_id
 
 bp = Blueprint("applications", __name__)
 logger = logging.getLogger(__name__)
 
 
 @bp.route("/application/<int:app_id>")
+@login_required
 def application_detail(app_id):
-    application = db.get_application(app_id)
+    user_id = current_user_id()
+    application = db.get_application(app_id, user_id=user_id)
     if not application:
         flash("Application not found.", "danger")
         return redirect(url_for("dashboard.dashboard"))
@@ -30,7 +32,9 @@ def application_detail(app_id):
 
 
 @bp.route("/application/add", methods=["GET", "POST"])
+@login_required
 def add_application():
+    user_id = current_user_id()
     if request.method == "POST":
         company     = request.form.get("company", "").strip()
         job_desc    = request.form.get("job_desc", "").strip()
@@ -39,7 +43,7 @@ def add_application():
 
         if request.form.get("force_add") != "1":
             duplicates = db.find_duplicate_applications(
-                company, job_desc, date_applied, team=team
+                company, job_desc, date_applied, team=team, user_id=user_id
             )
             if duplicates:
                 form_data = SimpleNamespace(
@@ -69,29 +73,31 @@ def add_application():
                     "application_form.html",
                     app=form_data,
                     companies=db.get_companies(),
-                    status_options=db.get_status_options(),
+                    status_options=db.get_status_options(user_id=user_id),
                     action="Add",
                     duplicate_warning=True,
                     duplicates=duplicates,
                 )
 
-        db.add_application(request.form)
+        db.add_application(request.form, user_id=user_id)
         flash("Application added.", "success")
-        year = request.form.get("date_applied", "")[:4] or "2025"
+        year = request.form.get("date_applied", "")[:4] or str(__import__("datetime").date.today().year)
         return redirect(url_for("dashboard.year_view", year=year))
     companies_list = db.get_companies()
     return render_template(
         "application_form.html",
         app=None,
         companies=companies_list,
-        status_options=db.get_status_options(),
+        status_options=db.get_status_options(user_id=user_id),
         action="Add",
     )
 
 
 @bp.route("/application/edit/<int:app_id>", methods=["GET", "POST"])
+@login_required
 def edit_application(app_id):
-    application = db.get_application(app_id)
+    user_id = current_user_id()
+    application = db.get_application(app_id, user_id=user_id)
     if not application:
         flash("Application not found.", "danger")
         return redirect(url_for("dashboard.dashboard"))
@@ -106,32 +112,39 @@ def edit_application(app_id):
             logger.exception("edit_application: update_application raised for id=%s", app_id)
             raise
         flash("Application updated.", "success")
-        year = request.form.get("date_applied", "")[:4] or "2025"
+        year = request.form.get("date_applied", "")[:4] or str(__import__("datetime").date.today().year)
         return redirect(url_for("dashboard.year_view", year=year))
     companies_list = db.get_companies()
     return render_template(
         "application_form.html",
         app=application,
         companies=companies_list,
-        status_options=db.get_status_options(),
+        status_options=db.get_status_options(user_id=user_id),
         action="Edit",
     )
 
 
 @bp.route("/application/delete/<int:app_id>", methods=["POST"])
+@login_required
 def delete_application(app_id):
-    application = db.get_application(app_id)
-    year = application["date_applied"][:4] if application else "2025"
-    db.delete_application(app_id)
+    user_id = current_user_id()
+    application = db.get_application(app_id, user_id=user_id)
+    if not application:
+        flash("Application not found.", "danger")
+        return redirect(url_for("dashboard.dashboard"))
+    year = application["date_applied"][:4] if application else str(__import__("datetime").date.today().year)
+    db.delete_application(app_id, user_id=user_id)
     flash("Application deleted.", "warning")
     return redirect(url_for("dashboard.year_view", year=year))
 
 
 @bp.route("/applications/bulk-action", methods=["POST"])
+@login_required
 def bulk_action():
     """Handle bulk operations (delete / set-field) on multiple applications."""
+    user_id = current_user_id()
     action        = request.form.get("action", "")
-    year          = request.form.get("year", "2025")
+    year          = request.form.get("year", str(__import__("datetime").date.today().year))
     status_filter = request.form.get("status_filter", "")
 
     raw_ids = request.form.getlist("selected_ids")
@@ -149,7 +162,7 @@ def bulk_action():
         return redirect(url_for("dashboard.year_view", **redirect_kwargs))
 
     if action == "delete":
-        count = db.bulk_delete_applications(selected_ids)
+        count = db.bulk_delete_applications(selected_ids, user_id=user_id)
         flash(f"Deleted {count} application(s).", "warning")
 
     elif action == "set_status":
@@ -157,7 +170,7 @@ def bulk_action():
         if not new_status:
             flash("Please choose a status.", "warning")
         else:
-            count = db.bulk_update_applications(selected_ids, "status", new_status)
+            count = db.bulk_update_applications(selected_ids, "status", new_status, user_id=user_id)
             flash(
                 f"Status set to '{new_status.replace('_', ' ')}' "
                 f"for {count} application(s).",
@@ -169,7 +182,7 @@ def bulk_action():
         if not new_date:
             flash("Please enter a date.", "warning")
         else:
-            count = db.bulk_update_applications(selected_ids, "date_applied", new_date)
+            count = db.bulk_update_applications(selected_ids, "date_applied", new_date, user_id=user_id)
             flash(f"Date Applied set to {new_date} for {count} application(s).", "success")
 
     elif action == "set_last_contact":
@@ -177,19 +190,19 @@ def bulk_action():
         if not new_date:
             flash("Please enter a date.", "warning")
         else:
-            count = db.bulk_update_applications(selected_ids, "last_contact_date", new_date)
+            count = db.bulk_update_applications(selected_ids, "last_contact_date", new_date, user_id=user_id)
             flash(f"Last Contact set to {new_date} for {count} application(s).", "success")
 
     elif action == "set_cover_letter":
         value = 1 if request.form.get("bulk_cover_letter") == "1" else 0
         label = "Yes" if value else "No"
-        count = db.bulk_update_applications(selected_ids, "cover_letter", value)
+        count = db.bulk_update_applications(selected_ids, "cover_letter", value, user_id=user_id)
         flash(f"Cover Letter set to {label} for {count} application(s).", "success")
 
     elif action == "set_resume":
         value = 1 if request.form.get("bulk_resume") == "1" else 0
         label = "Yes" if value else "No"
-        count = db.bulk_update_applications(selected_ids, "resume", value)
+        count = db.bulk_update_applications(selected_ids, "resume", value, user_id=user_id)
         flash(f"Resume set to {label} for {count} application(s).", "success")
 
     else:

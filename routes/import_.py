@@ -12,6 +12,7 @@ from flask import (
 import openpyxl
 
 import db
+from .auth import login_required, current_user_id
 
 bp = Blueprint("import_", __name__)
 
@@ -75,6 +76,7 @@ def _excel_sheet_to_csv(workbook_bytes: bytes, sheet_name: str, start_row: int =
 
 
 @bp.route("/application/import", methods=["GET", "POST"])
+@login_required
 def import_csv():
     if request.method == "GET":
         return render_template("csv_import.html", stage="upload",
@@ -229,7 +231,7 @@ def import_csv():
                     record[field] = raw_row[idx].strip()
             rows_to_import.append(record)
 
-        result = db.bulk_import_applications(rows_to_import)
+        result = db.bulk_import_applications(rows_to_import, user_id=current_user_id())
         dup_note = (
             f", {result['duplicates']} duplicate(s) skipped" if result["duplicates"] else ""
         )
