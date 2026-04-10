@@ -23,7 +23,7 @@ _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at", "last_contact_date",
     "ai_fit_score", "ai_fit_verdict", "ai_matching_skills", "ai_skill_gaps",
     "ai_recommendation", "last_modified_at", "job_expiry_date", "industry",
-    "bg_color", "text_color",
+    "bg_color", "text_color", "user_id",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0", "INTEGER", "REAL"}
 
@@ -58,20 +58,26 @@ def _add_column_if_missing(c, table: str, column: str, definition: str):
         c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
-def get_dynamic_years() -> list[int]:
+def get_dynamic_years(user_id=None) -> list[int]:
     """Return a sorted list of years to display in navigation.
 
     Includes every year that has at least one application plus the current
     calendar year.  Falls back to the static YEARS list if the DB is empty.
+    When user_id is given, only that user's applications are considered.
     """
     current = date.today().year
     try:
         conn = get_connection()
-        rows = conn.execute(
+        sql = (
             "SELECT DISTINCT CAST(strftime('%Y', date_applied) AS INTEGER) AS yr "
-            "FROM applications WHERE date_applied IS NOT NULL AND date_applied != '' "
-            "ORDER BY yr"
-        ).fetchall()
+            "FROM applications WHERE date_applied IS NOT NULL AND date_applied != ''"
+        )
+        params: list = []
+        if user_id is not None:
+            sql += " AND user_id = ?"
+            params.append(user_id)
+        sql += " ORDER BY yr"
+        rows = conn.execute(sql, params).fetchall()
         conn.close()
         years_from_db = [r["yr"] for r in rows if r["yr"]]
     except Exception:
