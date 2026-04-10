@@ -9,22 +9,57 @@ from .connection import get_connection, _BULK_UPDATE_FIELDS
 logger = logging.getLogger(__name__)
 
 
+# Statuses that are "done" — no stale warning for these.
+_TERMINAL_STATUSES = frozenset({
+    "Offer_Received",
+    "Offer_Rejected",
+    "Rejected",
+    "Not_Applying",
+    "Job_Expired",
+    "Select_Status",
+})
+
+# Days with no status change before an application is flagged as stale.
+_STALE_DAYS = 3
+
+
 def _enrich(app: dict) -> dict:
-    """Add computed 'duration' field (days since applied)."""
+    """Add computed fields: 'duration' (days since applied) and 'is_stale'."""
+    today = date.today()
+
+    # duration — days since date_applied (0 when not set)
     try:
         d = datetime.strptime(app["date_applied"], "%Y-%m-%d").date()
-        app["duration"] = (date.today() - d).days
+        app["duration"] = (today - d).days
     except Exception:
         app["duration"] = 0
+
+    # is_stale — True when status has not changed in >= _STALE_DAYS days and
+    # the application is not in a terminal state.
+    app["is_stale"] = False
+    if app.get("status") not in _TERMINAL_STATUSES:
+        ref = app.get("status_changed_at") or app.get("date_applied") or ""
+        try:
+            ref_date = datetime.fromisoformat(ref[:10]).date()
+            app["is_stale"] = (today - ref_date).days >= _STALE_DAYS
+        except Exception:
+            pass
     return app
 
 
-def get_applications(year=None, status=None) -> list:
+def get_applications(year=None, status=None, user_id=None) -> list:
     conn = get_connection()
     sql = "SELECT * FROM applications WHERE 1=1"
     params: list = []
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
     if year:
-        sql += " AND strftime('%Y', date_applied) = ?"
+        # Include matching year AND undated applications (no date_applied set yet)
+        sql += (
+            " AND (strftime('%Y', date_applied) = ?"
+            " OR date_applied IS NULL OR date_applied = '')"
+        )
         params.append(str(year))
     if status:
         sql += " AND status = ?"
@@ -32,10 +67,13 @@ def get_applications(year=None, status=None) -> list:
     sql += " ORDER BY date_applied DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    return [_enrich(dict(r)) for r in rows]
+    enriched = [_enrich(dict(r)) for r in rows]
+    # Stale applications float to the top so they get immediate attention.
+    enriched.sort(key=lambda a: (0 if a["is_stale"] else 1, a.get("date_applied") or ""))
+    return enriched
 
 
-def search_applications(query: str, year: int | None = None) -> list:
+def search_applications(query: str, year: int | None = None, user_id=None) -> list:
     """Search applications across company, role, team, comment, notes, and contact."""
     conn = get_connection()
     like_pattern = f"%{query}%"
@@ -51,6 +89,9 @@ def search_applications(query: str, year: int | None = None) -> list:
         )
     """
     params: list = [like_pattern] * 6
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
     if year:
         sql += " AND strftime('%Y', date_applied) = ?"
         params.append(str(year))
@@ -60,11 +101,18 @@ def search_applications(query: str, year: int | None = None) -> list:
     return [_enrich(dict(r)) for r in rows]
 
 
-def get_application(app_id: int):
+def get_application(app_id: int, user_id=None):
+    """Fetch a single application.  When user_id is given, only returns the
+    application if it belongs to that user (ownership check)."""
     conn = get_connection()
-    row = conn.execute(
-        "SELECT * FROM applications WHERE id=?", (app_id,)
-    ).fetchone()
+    if user_id is not None:
+        row = conn.execute(
+            "SELECT * FROM applications WHERE id=? AND user_id=?", (app_id, user_id)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM applications WHERE id=?", (app_id,)
+        ).fetchone()
     conn.close()
     return _enrich(dict(row)) if row else None
 
@@ -92,11 +140,12 @@ def get_application_timeline(app_id: int) -> list:
     return history
 
 
-def add_application(data) -> int:
+def add_application(data, user_id=None) -> int:
     """Insert a new application and return its ID.
 
     Also auto-creates the company record if it does not already exist.
-    Sets last_modified_at to now.
+    Sets last_modified_at to now.  user_id associates the record with the
+    logged-in user; pass None in single-user (login-disabled) mode.
     """
     from .companies import _auto_add_or_update_company
 
@@ -110,8 +159,8 @@ def add_application(data) -> int:
            (job_desc, team, company, date_applied, status,
             cover_letter, resume, comment, success_chance, link,
             contact, additional_notes, status_changed_at, last_contact_date,
-            last_modified_at, job_expiry_date, industry)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            last_modified_at, job_expiry_date, industry, user_id)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
@@ -130,6 +179,7 @@ def add_application(data) -> int:
             now,
             data.get("job_expiry_date") or None,
             industry,
+            user_id,
         ),
     )
     app_id = cur.lastrowid
@@ -240,31 +290,42 @@ def update_application(app_id: int, data):
         conn.close()
 
 
-def delete_application(app_id: int):
+def delete_application(app_id: int, user_id=None):
     conn = get_connection()
-    conn.execute("DELETE FROM applications WHERE id=?", (app_id,))
+    if user_id is not None:
+        conn.execute("DELETE FROM applications WHERE id=? AND user_id=?", (app_id, user_id))
+    else:
+        conn.execute("DELETE FROM applications WHERE id=?", (app_id,))
     conn.commit()
     conn.close()
 
 
-def bulk_delete_applications(ids: list) -> int:
-    """Delete multiple applications by ID. Returns the number of rows deleted."""
+def bulk_delete_applications(ids: list, user_id=None) -> int:
+    """Delete multiple applications by ID. Returns the number of rows deleted.
+    When user_id is given, only deletes applications owned by that user."""
     if not ids:
         return 0
     placeholders = ",".join("?" for _ in ids)
     conn = get_connection()
-    conn.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", ids)
+    if user_id is not None:
+        conn.execute(
+            f"DELETE FROM applications WHERE id IN ({placeholders}) AND user_id=?",
+            (*ids, user_id),
+        )
+    else:
+        conn.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", ids)
     count = conn.execute("SELECT changes()").fetchone()[0]
     conn.commit()
     conn.close()
     return count
 
 
-def bulk_update_applications(ids: list, field: str, value) -> int:
+def bulk_update_applications(ids: list, field: str, value, user_id=None) -> int:
     """Set ``field`` to ``value`` for all application IDs in ``ids``.
 
     Security: ``field`` is validated against ``_BULK_UPDATE_FIELDS``;
     ``placeholders`` contains only literal '?' characters.
+    When user_id is given, only updates applications owned by that user.
     Returns the number of rows updated.
     """
     if not ids:
@@ -273,6 +334,8 @@ def bulk_update_applications(ids: list, field: str, value) -> int:
         raise ValueError(f"bulk_update_applications: unknown field '{field}'")
 
     placeholders = ",".join("?" for _ in ids)
+    user_filter = " AND user_id=?" if user_id is not None else ""
+    user_params = [user_id] if user_id is not None else []
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
 
@@ -280,14 +343,14 @@ def bulk_update_applications(ids: list, field: str, value) -> int:
         existing = {
             r["id"]: r["status"]
             for r in conn.execute(
-                f"SELECT id, status FROM applications WHERE id IN ({placeholders})",
-                ids,
+                f"SELECT id, status FROM applications WHERE id IN ({placeholders}){user_filter}",
+                (*ids, *user_params),
             ).fetchall()
         }
         conn.execute(
             f"UPDATE applications SET status=?, status_changed_at=? "
-            f"WHERE id IN ({placeholders})",
-            (value, now, *ids),
+            f"WHERE id IN ({placeholders}){user_filter}",
+            (value, now, *ids, *user_params),
         )
         for app_id in ids:
             if existing.get(app_id) != value:
@@ -298,12 +361,13 @@ def bulk_update_applications(ids: list, field: str, value) -> int:
                 )
     else:
         conn.execute(
-            f"UPDATE applications SET {field}=? WHERE id IN ({placeholders})",
-            (value, *ids),
+            f"UPDATE applications SET {field}=? WHERE id IN ({placeholders}){user_filter}",
+            (value, *ids, *user_params),
         )
 
     count = conn.execute(
-        f"SELECT COUNT(*) FROM applications WHERE id IN ({placeholders})", ids
+        f"SELECT COUNT(*) FROM applications WHERE id IN ({placeholders}){user_filter}",
+        (*ids, *user_params),
     ).fetchone()[0]
     conn.commit()
     conn.close()
@@ -353,39 +417,48 @@ def _dup_key(company: str, job_desc: str, team: str, date_applied: str) -> tuple
 
 
 def find_duplicate_applications(
-    company: str, job_desc: str, date_applied: str, team: str = ""
+    company: str, job_desc: str, date_applied: str, team: str = "", user_id=None
 ) -> list[dict]:
     """Return existing applications that match company, job_desc, team, and date_applied.
 
     Comparison is case-insensitive and ignores leading/trailing whitespace.
     Different teams at the same company on the same date are NOT duplicates.
+    When user_id is given, only searches within that user's applications.
     """
     conn = get_connection()
-    rows = conn.execute(
-        """SELECT id, company, job_desc, team, date_applied, status
+    sql = """SELECT id, company, job_desc, team, date_applied, status
            FROM applications
            WHERE LOWER(TRIM(company))  = ?
              AND LOWER(TRIM(job_desc)) = ?
              AND LOWER(TRIM(COALESCE(team, ''))) = ?
-             AND date_applied          = ?""",
-        _dup_key(company, job_desc, team, date_applied),
-    ).fetchall()
+             AND date_applied          = ?"""
+    params = list(_dup_key(company, job_desc, team, date_applied))
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def bulk_import_applications(rows: list[dict]) -> dict:
+def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
     """Import a list of dicts representing applications.
 
     Returns {"imported": int, "skipped": int, "duplicates": int,
              "other_skipped": int, "errors": list[str]}.
     Rows that are exact duplicates (company + job_desc + team + date) are skipped.
+    When user_id is given, duplicates are checked and records created for that user.
     """
     conn = get_connection()
-    existing_rows = conn.execute(
+    sql = (
         "SELECT LOWER(TRIM(company)), LOWER(TRIM(job_desc)), "
         "LOWER(TRIM(COALESCE(team,''))), date_applied FROM applications"
-    ).fetchall()
+    )
+    params: list = []
+    if user_id is not None:
+        sql += " WHERE user_id=?"
+        params.append(user_id)
+    existing_rows = conn.execute(sql, params).fetchall()
     conn.close()
     existing_keys = {(r[0], r[1], r[2], r[3]) for r in existing_rows}
 
@@ -430,7 +503,7 @@ def bulk_import_applications(rows: list[dict]) -> dict:
             "contact":          row.get("contact", ""),
             "additional_notes": row.get("additional_notes", ""),
             "industry":         row.get("industry", ""),
-        })
+        }, user_id=user_id)
         existing_keys.add(lookup_key)
         imported += 1
     total_skipped = len(rows) - imported

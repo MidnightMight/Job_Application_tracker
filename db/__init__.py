@@ -24,9 +24,13 @@ from .init_db import (
 from .statuses import (
     PROTECTED_STATUSES,
     get_status_options,
+    get_status_rows,
+    get_status_styles,
     add_status,
     delete_status,
     move_status,
+    update_status_colors,
+    reorder_statuses,
 )
 
 from .settings import (
@@ -91,7 +95,9 @@ __all__ = [
     # init_db
     "DEFAULT_STATUSES", "PENDING_STATUSES", "init_db", "clear_demo_data",
     # statuses
-    "PROTECTED_STATUSES", "get_status_options", "add_status", "delete_status", "move_status",
+    "PROTECTED_STATUSES", "get_status_options", "get_status_rows", "get_status_styles",
+    "add_status", "delete_status", "move_status",
+    "update_status_colors", "reorder_statuses",
     # settings
     "get_setting", "set_setting", "get_all_settings",
     # users

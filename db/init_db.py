@@ -64,7 +64,8 @@ def init_db():
             ai_recommendation TEXT,
             last_modified_at  TEXT,
             job_expiry_date   TEXT,
-            industry          TEXT
+            industry          TEXT,
+            user_id           INTEGER
         )
     """)
 
@@ -81,6 +82,7 @@ def init_db():
     _add_column_if_missing(c, "applications", "last_modified_at",    "TEXT")
     _add_column_if_missing(c, "applications", "job_expiry_date",     "TEXT")
     _add_column_if_missing(c, "applications", "industry",            "TEXT")
+    _add_column_if_missing(c, "applications", "user_id",             "INTEGER")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""
@@ -118,10 +120,17 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS statuses (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT    UNIQUE NOT NULL,
-            sort_order INTEGER DEFAULT 0
+            name       TEXT    NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            bg_color   TEXT,
+            text_color TEXT,
+            user_id    INTEGER,
+            UNIQUE(name, user_id)
         )
     """)
+    _add_column_if_missing(c, "statuses", "bg_color",   "TEXT")
+    _add_column_if_missing(c, "statuses", "text_color", "TEXT")
+    _add_column_if_missing(c, "statuses", "user_id",    "INTEGER")
 
     # ── Settings ─────────────────────────────────────────────────────────────
     c.execute("""

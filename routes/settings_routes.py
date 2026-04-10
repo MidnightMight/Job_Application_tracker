@@ -11,7 +11,7 @@ from flask import (
 from werkzeug.security import generate_password_hash
 
 import db
-from .auth import login_required
+from .auth import login_required, admin_required, current_user_id, is_current_user_admin
 
 bp = Blueprint("settings_routes", __name__)
 
@@ -22,6 +22,13 @@ def settings():
     DEPLOYMENT_MODE = current_app.config.get("DEPLOYMENT_MODE", "docker")
     APP_VERSION = current_app.config.get("APP_VERSION", "")
     section = request.args.get("section", "general")
+    user_id = current_user_id()
+    is_admin = is_current_user_admin()
+
+    # Redirect non-admins away from admin-only sections
+    if section in ("users",) and not is_admin:
+        flash("Administrator access is required for that section.", "danger")
+        return redirect(url_for("settings_routes.settings", section="general"))
 
     if request.method == "POST":
         action = request.form.get("action", "save_general")
@@ -42,6 +49,9 @@ def settings():
             return redirect(url_for("settings_routes.settings", section="general"))
 
         elif action == "save_security":
+            if not is_admin:
+                flash("Administrator access is required.", "danger")
+                return redirect(url_for("settings_routes.settings", section="general"))
             if DEPLOYMENT_MODE == "local":
                 flash("Login / multi-user settings are not available in local mode.", "warning")
                 return redirect(url_for("settings_routes.settings", section="users"))
@@ -54,29 +64,47 @@ def settings():
             return redirect(url_for("settings_routes.settings", section="users"))
 
         elif action == "add_status":
-            ok, msg = db.add_status(request.form.get("name", ""))
+            ok, msg = db.add_status(
+                request.form.get("name", ""),
+                bg_color=request.form.get("bg_color", ""),
+                text_color=request.form.get("text_color", ""),
+                user_id=user_id,
+            )
             flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="statuses"))
 
         elif action == "delete_status":
-            ok, msg = db.delete_status(request.form.get("name", ""))
+            ok, msg = db.delete_status(request.form.get("name", ""), user_id=user_id)
             flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="statuses"))
 
         elif action in ("move_status_up", "move_status_down"):
             direction = "up" if action == "move_status_up" else "down"
-            ok, msg = db.move_status(request.form.get("name", ""), direction)
+            ok, msg = db.move_status(request.form.get("name", ""), direction, user_id=user_id)
+            flash(msg, "success" if ok else "danger")
+            return redirect(url_for("settings_routes.settings", section="statuses"))
+
+        elif action == "update_status_colors":
+            ok, msg = db.update_status_colors(
+                request.form.get("name", ""),
+                bg_color=request.form.get("bg_color", ""),
+                text_color=request.form.get("text_color", ""),
+                user_id=user_id,
+            )
             flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="statuses"))
 
         elif action == "add_user":
+            if not is_admin:
+                flash("Administrator access is required.", "danger")
+                return redirect(url_for("settings_routes.settings", section="general"))
             if DEPLOYMENT_MODE == "local":
                 flash("User management is not available in local mode.", "warning")
                 return redirect(url_for("settings_routes.settings", section="users"))
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             password2 = request.form.get("password2", "")
-            is_admin = bool(request.form.get("is_admin"))
+            new_is_admin = bool(request.form.get("is_admin"))
             if not username or not password:
                 flash("Username and password are required.", "danger")
             elif password != password2:
@@ -85,21 +113,27 @@ def settings():
                 flash("Password must be at least 8 characters.", "danger")
             else:
                 pw_hash = generate_password_hash(password)
-                ok, msg = db.add_user(username, pw_hash, is_admin)
+                ok, msg = db.add_user(username, pw_hash, new_is_admin)
                 flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="users"))
 
         elif action == "delete_user":
+            if not is_admin:
+                flash("Administrator access is required.", "danger")
+                return redirect(url_for("settings_routes.settings", section="general"))
             if DEPLOYMENT_MODE == "local":
                 flash("User management is not available in local mode.", "warning")
                 return redirect(url_for("settings_routes.settings", section="users"))
-            user_id = request.form.get("user_id", "")
-            if user_id.isdigit():
-                ok, msg = db.delete_user(int(user_id))
+            target_user_id = request.form.get("user_id", "")
+            if target_user_id.isdigit():
+                ok, msg = db.delete_user(int(target_user_id))
                 flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="users"))
 
         elif action == "save_ai":
+            if not is_admin:
+                flash("Administrator access is required to change AI settings.", "danger")
+                return redirect(url_for("settings_routes.settings", section="ai"))
             if DEPLOYMENT_MODE == "local":
                 flash("AI settings are not available in local mode.", "warning")
                 return redirect(url_for("settings_routes.settings", section="ai"))
@@ -129,17 +163,35 @@ def settings():
         return redirect(url_for("settings_routes.settings", section=section))
 
     current = db.get_all_settings()
-    statuses = db.get_status_options()
+    statuses = db.get_status_options(user_id=user_id)
+    status_rows = db.get_status_rows(user_id=user_id)
+    status_styles = db.get_status_styles(user_id=user_id)
     users = db.get_users()
     return render_template(
         "settings.html",
         settings=current,
         section=section,
         statuses=statuses,
+        status_rows=status_rows,
+        status_styles=status_styles,
         users=users,
         app_version=APP_VERSION,
         protected_statuses=db.PROTECTED_STATUSES,
+        current_is_admin=is_admin,
     )
+
+
+@bp.route("/settings/reorder-statuses", methods=["POST"])
+@login_required
+def reorder_statuses():
+    """AJAX endpoint: receive JSON list of status names and save new sort order."""
+    data = request.get_json(silent=True) or {}
+    names = data.get("names")
+    if not isinstance(names, list):
+        return jsonify({"ok": False, "error": "Invalid payload."}), 400
+    user_id = current_user_id()
+    ok, msg = db.reorder_statuses(names, user_id=user_id)
+    return jsonify({"ok": ok, "message": msg})
 
 
 @bp.route("/settings/ollama-test", methods=["POST"])

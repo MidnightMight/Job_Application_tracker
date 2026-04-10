@@ -141,6 +141,14 @@ footer { background-color: #fff; margin-top: 3rem; }
   .stat-icon  { font-size: 1.4rem; }
 }
 
+
+/* ── Stale application row (no status change in N days) ────────────────── */
+.stale-app {
+  border-left: 4px solid #ffc107 !important;
+  background-color: rgba(255, 193, 7, .06);
+}
+[data-bs-theme="dark"] .stale-app { background-color: rgba(255, 193, 7, .10); }
+
 /* ── Inbox / reminders ──────────────────────────────────────────────────── */
 .reminder-unread {
   border-left: 4px solid #ffc107 !important;
@@ -180,4 +188,13 @@ footer { background-color: #fff; margin-top: 3rem; }
 [data-bs-theme="dark"] .app-row-Awaiting_Response   { background-color: rgba( 13, 202, 240, .10) !important; }
 [data-bs-theme="dark"] .app-row-Rejected            { background-color: rgba(220,  53,  69, .08) !important; }
 [data-bs-theme="dark"] .app-row-Not_Applying        { background-color: rgba(108, 117, 125, .08) !important; }
+
+/* Fix: company name link not visible in dark mode on year view */
+[data-bs-theme="dark"] .fw-semibold a.link-body-emphasis,
+[data-bs-theme="dark"] td.fw-semibold a {
+  color: #cdd9e5 !important;
+}
+[data-bs-theme="dark"] td.fw-semibold a:hover {
+  color: #fff !important;
+}
 

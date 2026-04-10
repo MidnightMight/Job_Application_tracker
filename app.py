@@ -152,23 +152,27 @@ def _check_onboarding():
 @app.context_processor
 def inject_globals():
     from datetime import date as _date
+    from flask import session
+    from routes.auth import current_user_id, is_current_user_admin
     _profile_complete = bool(
         db.get_setting("user_profile_skills",     "").strip()
         or db.get_setting("user_profile_experience", "").strip()
         or db.get_setting("user_profile_summary",    "").strip()
     )
-    from flask import session
+    user_id = current_user_id()
     return {
-        "years":                  db.get_dynamic_years(),
+        "years":                  db.get_dynamic_years(user_id=user_id),
         "current_year_for_footer": _date.today().year,
-        "unread_reminder_count":  db.get_unread_reminder_count(),
+        "unread_reminder_count":  db.get_unread_reminder_count(user_id=user_id),
         "login_enabled":          db.get_setting("login_enabled", "0") == "1",
         "current_user":           session.get("username"),
+        "current_is_admin":       is_current_user_admin(),
         "app_version":            APP_VERSION,
         "ollama_enabled":         db.get_setting("ollama_enabled", "0") == "1",
         "ai_fit_enabled":         db.get_setting("ai_fit_enabled", "0") == "1",
         "user_profile_complete":  _profile_complete,
         "deployment_mode":        DEPLOYMENT_MODE,
+        "status_styles":          db.get_status_styles(user_id=user_id),
     }
 
 

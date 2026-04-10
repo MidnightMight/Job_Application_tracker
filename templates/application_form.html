@@ -184,7 +184,7 @@
             <!-- Date Applied -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">
-                Date Applied <span class="text-danger">*</span>
+                Date Applied
               </label>
               <div class="input-group">
                 <input type="date" name="date_applied" id="date_applied" class="form-control"
@@ -194,6 +194,7 @@
                   <i class="bi bi-calendar-check me-1"></i>Today
                 </button>
               </div>
+              <div class="form-text">Optional — leave blank if not yet applied. You'll be warned after {{ stale_days }} days with no status change.</div>
             </div>
 
             <!-- Last Contact Date -->
@@ -436,8 +437,6 @@ document.getElementById('submitBtn').addEventListener('click', function () {
     missing.push('Job Description / Role');
   if (!document.getElementById('company').value.trim())
     missing.push('Company');
-  if (!document.getElementById('date_applied').value.trim())
-    missing.push('Date Applied');
 
   if (missing.length) {
     var list = document.getElementById('missingFieldsList');

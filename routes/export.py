@@ -11,24 +11,28 @@ import tempfile
 from flask import Blueprint, flash, redirect, render_template, request, Response, send_file, url_for
 
 import db
-from .auth import login_required
+from .auth import login_required, current_user_id
 
 bp = Blueprint("export", __name__)
 logger = logging.getLogger(__name__)
 
 
 @bp.route("/export")
+@login_required
 def export_page():
-    status_options = db.get_status_options()
+    user_id = current_user_id()
+    status_options = db.get_status_options(user_id=user_id)
     return render_template(
         "export.html",
-        years=db.get_dynamic_years(),
+        years=db.get_dynamic_years(user_id=user_id),
         status_options=status_options,
     )
 
 
 @bp.route("/export/applications")
+@login_required
 def export_applications():
+    user_id = current_user_id()
     year = request.args.get("year", "")
     status = request.args.get("status", "")
     company = request.args.get("company", "").strip()
@@ -36,6 +40,7 @@ def export_applications():
     apps = db.get_applications(
         year=int(year) if year.isdigit() else None,
         status=status if status else None,
+        user_id=user_id,
     )
     if company:
         apps = [a for a in apps if company.lower() in a["company"].lower()]
