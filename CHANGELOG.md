@@ -5,6 +5,82 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## v1.2.2 — Stale Detection, Custom Status Colours & Multi-user Scoping
+
+### New Features
+
+- **Quick Navigation panel** — the dashboard now shows a "Quick Navigation" card
+  at the top with one-click buttons for every year view, the Company Tracker,
+  and the CSV importer.
+
+- **Stale application detection** — applications that have not had a status change
+  in 3 or more days and are not in a terminal state (`Rejected`, `Offer_Received`,
+  `Offer_Rejected`, `Not_Applying`, `Job_Expired`, `Select_Status`) are flagged as
+  stale.  They float to the top of list views and receive a yellow left-border
+  highlight (`.stale-app`) in both light and dark mode.
+
+- **Optional `date_applied`** — the Date Applied field is no longer marked as
+  required on the application form.  A help note explains that undated applications
+  will be flagged stale after 3 days with no status change.  Undated records are
+  included when browsing a year view.
+
+- **Custom status badge colours** — each status in **Settings → Statuses** now has
+  BG / Text colour pickers.  The chosen colours are injected as `.status-<Name>`
+  CSS rules in `<head>` via the new `status_styles` global context variable.  A
+  live preview badge updates as you pick colours when adding a new status.
+
+- **Per-user status colour overrides** — in multi-user (login-enabled) mode, a
+  user can set their own badge colours for any global status without affecting
+  other users.  The override is stored as a separate per-user row in the
+  `statuses` table.
+
+- **`/settings/reorder-statuses` AJAX endpoint** — drag-to-reorder for statuses
+  now calls a dedicated JSON endpoint (`POST /settings/reorder-statuses`) that
+  saves the full order in a single request.
+
+### Multi-user Improvements
+
+- **`user_id` column on `applications`** — new `INTEGER` column added to the
+  `applications` table (with `_add_column_if_missing` for existing databases).
+  All data-access functions — `get_applications`, `search_applications`,
+  `get_application`, `add_application`, `delete_application`,
+  `bulk_delete_applications`, `bulk_update_applications`,
+  `find_duplicate_applications` — now accept and enforce a `user_id` parameter
+  when login is enabled.
+
+- **`user_id` column on `statuses`** — `bg_color`, `text_color`, and `user_id`
+  columns added to the `statuses` table.  The unique constraint is now
+  `UNIQUE(name, user_id)` to allow per-user colour overrides.
+
+- **Stats and charts scoped per user** — `get_stats`, `get_status_counts`,
+  `get_apps_per_year`, `get_success_rate_per_year`, `get_company_note_frequency`,
+  and `get_dynamic_years` all accept `user_id` so each user sees their own data.
+
+- **Reminders scoped per user** — `get_pending_for_reminders`, `get_reminders`,
+  `dismiss_all_reminders`, and `get_unread_reminder_count` are filtered by
+  `user_id` in login-enabled mode.
+
+- **`current_user_id()` helper** — new function in `routes/auth.py` returns the
+  logged-in user's ID when login is enabled, or `None` in single-user mode
+  (ensuring all-records visibility when login is disabled).
+
+- **`is_current_user_admin()` helper** — new function in `routes/auth.py`;
+  exposed as `current_is_admin` in all templates via `inject_globals`.
+
+### Bug Fixes
+
+- **Dashboard `current_year` hardcoded to 2025** — `current_year` on the
+  dashboard is now derived from `date.today().year` instead of a hardcoded value.
+
+- **Year view accessible without login** — `year_view` route now correctly
+  applies `@login_required` (was missing in previous releases).
+
+- **Dark mode company link visibility** — company name links in the year view
+  were invisible against the dark background.  A targeted CSS rule
+  (`[data-bs-theme="dark"] td.fw-semibold a`) sets an appropriate light colour.
+
+---
+
 ## v1.2.1 — Bug Fixes & Status Reordering
 
 ### Bug Fixes
