@@ -22,7 +22,8 @@ def count_users() -> int:
     return n
 
 
-def add_user(username: str, password_hash: str, is_admin: bool = False) -> tuple[bool, str]:
+def add_user(username: str, password_hash: str, is_admin: bool = False,
+             needs_password_setup: bool = False) -> tuple[bool, str]:
     username = username.strip()
     if not username:
         return False, "Username cannot be empty."
@@ -30,8 +31,9 @@ def add_user(username: str, password_hash: str, is_admin: bool = False) -> tuple
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO users (username, password_hash, is_admin, created_at) VALUES (?,?,?,?)",
-            (username, password_hash, 1 if is_admin else 0, now),
+            "INSERT INTO users (username, password_hash, is_admin, created_at, needs_password_setup)"
+            " VALUES (?,?,?,?,?)",
+            (username, password_hash, 1 if is_admin else 0, now, 1 if needs_password_setup else 0),
         )
         conn.commit()
         return True, f"User '{username}' added."
@@ -57,11 +59,23 @@ def delete_user(user_id: int) -> tuple[bool, str]:
 def get_user_by_username(username: str) -> dict | None:
     conn = get_connection()
     row = conn.execute(
-        "SELECT id, username, password_hash, is_admin FROM users WHERE username=?",
+        "SELECT id, username, password_hash, is_admin, needs_password_setup"
+        " FROM users WHERE username=?",
         (username,),
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def set_user_password(user_id: int, password_hash: str) -> None:
+    """Store a new password for *user_id* and clear the needs_password_setup flag."""
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET password_hash=?, needs_password_setup=0 WHERE id=?",
+        (password_hash, user_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def reassign_null_user_data(user_id: int) -> int:

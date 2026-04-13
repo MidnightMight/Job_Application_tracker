@@ -133,7 +133,7 @@ app.register_blueprint(export_bp)
 # Onboarding gate
 # ---------------------------------------------------------------------------
 
-_ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "static"}
+_ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "auth.setup_password", "static"}
 
 
 @app.before_request
@@ -154,12 +154,29 @@ def inject_globals():
     from datetime import date as _date
     from flask import session
     from routes.auth import current_user_id, is_current_user_admin
-    _profile_complete = bool(
-        db.get_setting("user_profile_skills",     "").strip()
-        or db.get_setting("user_profile_experience", "").strip()
-        or db.get_setting("user_profile_summary",    "").strip()
-    )
     user_id = current_user_id()
+
+    # Per-user AI settings (empty defaults when not logged in)
+    user_ai_cfg = db.get_user_ai_settings(user_id)
+
+    # Profile completeness: check user's own profile first, fall back to global settings
+    if user_id is not None:
+        _profile_complete = bool(
+            user_ai_cfg.get("profile_skills",     "").strip()
+            or user_ai_cfg.get("profile_experience", "").strip()
+            or user_ai_cfg.get("profile_summary",    "").strip()
+        )
+    else:
+        _profile_complete = bool(
+            db.get_setting("user_profile_skills",     "").strip()
+            or db.get_setting("user_profile_experience", "").strip()
+            or db.get_setting("user_profile_summary",    "").strip()
+        )
+
+    ollama_on = db.get_setting("ollama_enabled", "0") == "1"
+    # AI is available when the admin enabled Ollama OR the user has their own API key.
+    ai_available = ollama_on or db.user_has_own_ai(user_id)
+
     return {
         "years":                  db.get_dynamic_years(user_id=user_id),
         "current_year_for_footer": _date.today().year,
@@ -168,7 +185,8 @@ def inject_globals():
         "current_user":           session.get("username"),
         "current_is_admin":       is_current_user_admin(),
         "app_version":            APP_VERSION,
-        "ollama_enabled":         db.get_setting("ollama_enabled", "0") == "1",
+        "ollama_enabled":         ollama_on,
+        "ai_available":           ai_available,
         "ai_fit_enabled":         db.get_setting("ai_fit_enabled", "0") == "1",
         "user_profile_complete":  _profile_complete,
         "deployment_mode":        DEPLOYMENT_MODE,
