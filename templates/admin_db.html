@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block title %}Admin — Database Viewer{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <h4 class="mb-0"><i class="bi bi-database-fill-gear text-danger me-2"></i>Admin — Database Viewer</h4>
+  <span class="badge bg-danger">Admin Only</span>
+</div>
+
+{# Alert banner #}
+<div class="alert alert-warning d-flex align-items-start gap-3 mb-4 py-2" role="alert">
+  <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+  <div class="small">
+    <strong>Caution:</strong> This tool gives direct read/write access to the live database.
+    Incorrect edits <em>will</em> break data integrity.
+    <strong>Always back up the database before making changes.</strong>
+    Password fields are masked and cannot be changed here — use the Users settings page for that.
+  </div>
+</div>
+
+{# Sub-navigation #}
+<nav class="mb-4">
+  <div class="btn-group btn-group-sm" role="group">
+    <a href="{{ url_for('admin_db.db_overview') }}"
+       class="btn {% if view == 'overview' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-grid-3x3-gap me-1"></i>Tables
+    </a>
+    <a href="{{ url_for('admin_db.db_query') }}"
+       class="btn {% if view == 'query' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-terminal me-1"></i>SQL Query
+    </a>
+    <a href="{{ url_for('settings_routes.settings', section='general') }}"
+       class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Settings
+    </a>
+  </div>
+</nav>
+
+{# Breadcrumb #}
+{% if view in ('table', 'row') %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb mb-0">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin_db.db_overview') }}">Tables</a>
+    </li>
+    {% if view == 'table' %}
+    <li class="breadcrumb-item active">{{ table }}</li>
+    {% elif view == 'row' %}
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('admin_db.db_table', table=table) }}">{{ table }}</a>
+    </li>
+    <li class="breadcrumb-item active">Row #{{ pk }}</li>
+    {% endif %}
+  </ol>
+</nav>
+{% endif %}
+
+{# ── Overview ── #}
+{% if view == 'overview' %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-table me-1"></i>Tables
+    <span class="text-muted small fw-normal ms-2">{{ db_path }}</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>Table</th>
+            <th class="text-end">Rows</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in tables %}
+          <tr>
+            <td>
+              <i class="bi bi-table me-1 text-muted"></i>
+              <code>{{ t.name }}</code>
+            </td>
+            <td class="text-end">
+              <span class="badge bg-secondary">{{ t.row_count }}</span>
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('admin_db.db_table', table=t.name) }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye me-1"></i>View
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# Quick-tip box on overview page #}
+<div class="card shadow-sm border-info">
+  <div class="card-header fw-semibold text-info-emphasis bg-info-subtle">
+    <i class="bi bi-lightbulb me-1"></i>Debug Tips
+  </div>
+  <div class="card-body small">
+    <ul class="mb-0 ps-3">
+      <li class="mb-2">
+        <strong>Application not showing up?</strong>
+        Browse <code>applications</code> and check the <code>user_id</code> column —
+        make sure it matches your account ID shown in the <code>users</code> table.
+      </li>
+      <li class="mb-2">
+        <strong>Login locked out?</strong>
+        Use the <a href="{{ url_for('admin_db.db_query') }}">SQL console</a> and run:<br>
+        <code>UPDATE settings SET value='0' WHERE key='login_enabled'</code>
+      </li>
+      <li class="mb-2">
+        <strong>AI settings not saving?</strong>
+        Check <code>user_ai_settings</code> — rows are keyed by <code>user_id</code>.
+        If no row exists for your user, save your settings in the AI tab first.
+      </li>
+      <li class="mb-2">
+        <strong>Status order wrong?</strong>
+        Browse <code>statuses</code> and edit the <code>sort_order</code> values directly here.
+      </li>
+      <li>
+        <strong>Onboarding stuck?</strong>
+        Run: <code>UPDATE settings SET value='1' WHERE key='onboarding_complete'</code>
+      </li>
+    </ul>
+  </div>
+</div>
+
+{# ── Table view ── #}
+{% elif view == 'table' %}
+<div class="card shadow-sm">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-table me-1"></i><code>{{ table }}</code></span>
+    <span class="text-muted small">{{ total }} row{{ 's' if total != 1 }}</span>
+  </div>
+  {% if rows %}
+  <div class="table-responsive">
+    <table class="table table-sm table-bordered table-hover mb-0" style="font-size:.8rem;">
+      <thead class="table-dark sticky-top">
+        <tr>
+          {% for col in columns %}
+          <th class="text-nowrap">{{ col }}</th>
+          {% endfor %}
+          {% if pk_col %}
+          <th></th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          {% for col in columns %}
+          <td class="text-nowrap" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;"
+              title="{{ row[col]|string }}">
+            {{ row[col] if row[col] is not none else '' }}
+          </td>
+          {% endfor %}
+          {% if pk_col %}
+          <td>
+            {% if pk_is_int %}
+            <a href="{{ url_for('admin_db.db_row', table=table, pk=row[pk_col]) }}"
+               class="btn btn-xs btn-outline-warning" style="font-size:.7rem;padding:.1rem .4rem;">
+              Edit
+            </a>
+            {% else %}
+            <a href="{{ url_for('admin_db.db_row_text', table=table, pk=row[pk_col]) }}"
+               class="btn btn-xs btn-outline-warning" style="font-size:.7rem;padding:.1rem .4rem;">
+              Edit
+            </a>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {# Pagination #}
+  {% if total_pages > 1 %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="text-muted small">Page {{ page }} / {{ total_pages }}</span>
+    <div class="btn-group btn-group-sm">
+      {% if page > 1 %}
+      <a href="{{ url_for('admin_db.db_table', table=table, page=page-1) }}"
+         class="btn btn-outline-secondary">← Prev</a>
+      {% endif %}
+      {% if page < total_pages %}
+      <a href="{{ url_for('admin_db.db_table', table=table, page=page+1) }}"
+         class="btn btn-outline-secondary">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="card-body text-muted">No rows found.</div>
+  {% endif %}
+</div>
+
+{# ── Row edit ── #}
+{% elif view == 'row' %}
+<div class="card shadow-sm">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-pencil-square me-1"></i>Edit <code>{{ table }}</code>
+    — row <code>{{ pk_col }}={{ pk }}</code>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      {% for col in columns %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold small mb-1 {% if col == pk_col %}text-muted{% endif %}">
+          {{ col }}
+          {% if col == pk_col %}<span class="badge bg-secondary ms-1">PK — read only</span>{% endif %}
+          {% if col in sensitive %}<span class="badge bg-danger ms-1">masked</span>{% endif %}
+        </label>
+        {% if col == pk_col %}
+        <input class="form-control form-control-sm" value="{{ row[col] }}" disabled>
+        {% elif col in sensitive %}
+        <input type="password" class="form-control form-control-sm" name="{{ col }}"
+               placeholder="Leave blank to keep existing value"
+               autocomplete="new-password">
+        <div class="form-text">Current value is masked. Enter a new value to replace, or leave blank.</div>
+        {% elif row[col] is not none and row[col]|string|length > 120 %}
+        <textarea class="form-control form-control-sm font-monospace" name="{{ col }}"
+                  rows="4" style="font-size:.8rem;">{{ row[col] }}</textarea>
+        {% else %}
+        <input type="text" class="form-control form-control-sm" name="{{ col }}"
+               value="{{ row[col] if row[col] is not none else '' }}">
+        {% endif %}
+      </div>
+      {% endfor %}
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-warning fw-semibold">
+          <i class="bi bi-save me-1"></i>Save Changes
+        </button>
+        <a href="{{ url_for('admin_db.db_table', table=table) }}"
+           class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── SQL query console ── #}
+{% elif view == 'query' %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-terminal me-1"></i>Read-Only SQL Console
+    <span class="badge bg-warning text-dark ms-2 small">SELECT / PRAGMA only</span>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label fw-semibold small">SQL Query</label>
+        <textarea class="form-control font-monospace" name="sql" rows="5"
+                  placeholder="SELECT * FROM settings ORDER BY key;&#10;PRAGMA table_info(applications);">{{ sql }}</textarea>
+        <div class="form-text">
+          Only <code>SELECT</code> and <code>PRAGMA</code> statements are allowed.
+          Results are capped at 500 rows.
+          Sensitive columns (password hashes, API keys) are always masked.
+        </div>
+      </div>
+      <button type="submit" class="btn btn-dark fw-semibold">
+        <i class="bi bi-play-fill me-1"></i>Run Query
+      </button>
+    </form>
+
+    {% if error %}
+    <div class="alert alert-danger mt-3 small"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
+    {% endif %}
+
+    {% if results is not none %}
+    {% if results %}
+    <div class="mt-4">
+      <p class="small text-muted mb-2">{{ results|length }} row{{ 's' if results|length != 1 }} returned</p>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered table-hover" style="font-size:.8rem;">
+          <thead class="table-dark">
+            <tr>
+              {% for col in columns %}
+              <th class="text-nowrap">{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in results %}
+            <tr>
+              {% for col in columns %}
+              <td class="text-nowrap" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;"
+                  title="{{ row[col]|string }}">
+                {{ row[col] if row[col] is not none else '<em class="text-muted">NULL</em>'|safe }}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info mt-3 small">Query returned no rows.</div>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+{# Handy queries #}
+<div class="card shadow-sm">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-clipboard-pulse me-1"></i>Handy Diagnostic Queries
+  </div>
+  <div class="card-body small">
+    <p class="text-muted mb-3">Click a query to copy it to the console above.</p>
+    <div class="d-flex flex-wrap gap-2" id="snippetButtons">
+      {% set snippets = [
+        ("All settings",         "SELECT key, value FROM settings ORDER BY key;"),
+        ("Users (no hashes)",    "SELECT id, username, is_admin, created_at, needs_password_setup FROM users;"),
+        ("App counts per user",  "SELECT user_id, COUNT(*) AS apps FROM applications GROUP BY user_id;"),
+        ("AI settings",          "SELECT user_id, ai_provider, ai_model, profile_skills FROM user_ai_settings;"),
+        ("Recent applications",  "SELECT id, job_desc, company, status, date_applied FROM applications ORDER BY id DESC LIMIT 20;"),
+        ("Status list",          "SELECT name, sort_order, user_id FROM statuses ORDER BY sort_order;"),
+        ("Pending reminders",    "SELECT * FROM reminders WHERE dismissed=0 ORDER BY created_at DESC;"),
+        ("Table sizes",          "SELECT name, (SELECT COUNT(*) FROM applications) AS rows FROM sqlite_master WHERE type='table' ORDER BY name;"),
+      ] %}
+      {% for label, query in snippets %}
+      <button type="button" class="btn btn-sm btn-outline-secondary snippet-btn"
+              data-query="{{ query }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if view == 'query' %}
+<script>
+document.querySelectorAll('.snippet-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const ta = document.querySelector('textarea[name="sql"]');
+    if (ta) ta.value = this.dataset.query;
+    ta.focus();
+    // Scroll to top so user sees the query
+    ta.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+});
+</script>
+{% endif %}
+{% endblock %}

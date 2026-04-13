@@ -32,6 +32,13 @@
          class="list-group-item list-group-item-action {% if section == 'updates' %}active{% endif %}">
         <i class="bi bi-arrow-repeat me-2"></i>Updates
       </a>
+      {% if deployment_mode != 'local' and current_is_admin %}
+      <a href="{{ url_for('admin_db.db_overview') }}"
+         class="list-group-item list-group-item-action text-danger">
+        <i class="bi bi-database-fill-gear me-2"></i>Database
+        <span class="badge bg-danger ms-1 small" style="font-size:.6rem;">Admin</span>
+      </a>
+      {% endif %}
     </div>
   </div>
 

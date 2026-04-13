@@ -5,6 +5,68 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## v1.2.3 — Admin DB Viewer, Per-User AI Providers, First-Time Login Onboarding
+
+### New Features
+
+- **Admin Database Viewer** — admins now have a dedicated `/admin/db` section
+  accessible from **Settings → Database** (admin + Docker mode only).  Features:
+  - Table overview with row counts for all 8 system tables.
+  - Paginated row viewer (50 rows/page) with truncated cell previews.
+  - Row edit form — change any field except primary keys; sensitive fields
+    (password hashes, API keys) are always masked and can only be replaced,
+    not revealed.
+  - Read-only SQL console — execute `SELECT` and `PRAGMA` statements against
+    the live database; results capped at 500 rows; sensitive columns masked.
+  - One-click snippet buttons for common diagnostic queries.
+  - Inline debug tips for the most common support scenarios.
+
+- **Per-User AI Provider Settings** — each user can now configure their own AI
+  provider independently of the shared Ollama server.  Supported providers:
+  - 🦙 **Ollama** (shared admin server — default behaviour)
+  - 🌐 **OpenAI** (API key + model, default `gpt-4o-mini`)
+  - 🟠 **Anthropic / Claude** (API key + model, default `claude-3-haiku-20240307`)
+  - 🔧 **Custom OpenAI-compatible API** (base URL + optional key, e.g. LM Studio,
+    vLLM, Groq)
+
+  Provider configuration, API keys, and user profile (skills / experience /
+  summary) are all stored in a new `user_ai_settings` table — one row per user.
+  In single-user (login-disabled) mode the app falls back to the existing global
+  settings table so existing behaviour is unchanged.
+
+- **Per-User Profile Storage** — skills, prior experience, and professional
+  summary are now stored per-user rather than globally.  The PDF résumé upload
+  also saves to the calling user's row.
+
+- **AI Offline Overlay** — when the AI server is unreachable the AI fill panel
+  on the application form collapses automatically.  If the user expands the panel
+  a grey blocking overlay (unclickable) appears with:
+  - "AI Server is not online" heading.
+  - "Ask admin to reconfigure" button → Settings → AI.
+  - "Add your own API link" button → Settings → AI → personal provider.
+
+- **First-Time Login Password Setup** — admins can now add users without
+  supplying a password.  On first login the user leaves the password field blank
+  and is redirected to a dedicated `/setup-password` page where they create their
+  own password (≥ 8 characters, with live match feedback).
+
+### Improvements
+
+- `/api/ollama-status` now returns a `provider` field so the front end can
+  display the correct provider name in the AI panel badge.
+- Anthropic connectivity check now actually issues a `/v1/models` request rather
+  than trusting key presence alone.
+- `RuntimeError` messages returned to the client are capped at 200 characters
+  to avoid leaking internal details.
+
+### Security Fixes
+
+- SQL column names in `user_ai_settings` upserts now use a pre-built
+  `_COL_UPDATES` dict instead of f-string interpolation, eliminating a potential
+  SQL-injection vector.
+
+---
+
 ## v1.2.2 — Stale Detection, Custom Status Colours & Multi-user Scoping
 
 ### New Features

@@ -14,7 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
 
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 GITHUB_REPO = "MidnightMight/Job_Application_tracker"
 
 
@@ -117,6 +117,7 @@ from routes.inbox           import bp as inbox_bp
 from routes.settings_routes import bp as settings_bp
 from routes.api             import bp as api_bp
 from routes.export          import bp as export_bp
+from routes.admin_db        import bp as admin_db_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(onboarding_bp)
@@ -128,6 +129,7 @@ app.register_blueprint(inbox_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(export_bp)
+app.register_blueprint(admin_db_bp)
 
 # ---------------------------------------------------------------------------
 # Onboarding gate

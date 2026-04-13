@@ -14,8 +14,9 @@ for administrators running their own instance of Job Application Tracker.
 5. [Environment Variables](#5-environment-variables)
 6. [Multi-User Setup (Docker only)](#6-multi-user-setup-docker-only)
 7. [Database Maintenance](#7-database-maintenance)
-8. [Updating the App](#8-updating-the-app)
-9. [Troubleshooting](#9-troubleshooting)
+8. [Database Debug Viewer](#8-database-debug-viewer)
+9. [Updating the App](#9-updating-the-app)
+10. [Troubleshooting](#10-troubleshooting)
 
 ---
 
@@ -255,7 +256,110 @@ python app.py
 
 ---
 
-## 8. Updating the App
+## 8. Database Debug Viewer
+
+> **Docker / admin mode only.** The viewer is hidden in local mode and from
+> non-admin users.
+
+From **v1.2.3** onwards the app ships an in-browser database viewer.
+Navigate to **Settings → Database** (the link only appears for admin users)
+or go directly to `/admin/db`.
+
+### What you can do
+
+| Feature | Description |
+|---|---|
+| **Table overview** | Lists all 8 system tables with their current row counts. |
+| **Row browser** | Paginated (50 rows/page) view of any table with truncated cell previews. |
+| **Row editor** | Edit any non-primary-key field on any row.  Sensitive fields (password hashes, API keys) are always masked. |
+| **SQL console** | Run read-only `SELECT` and `PRAGMA` statements.  Results capped at 500 rows.  Sensitive columns are always masked. |
+
+### Security
+
+- The viewer is **only accessible to admin users** and throws a 403 for everyone
+  else.
+- The SQL console only accepts `SELECT` or `PRAGMA` statements — write queries
+  are blocked.
+- `password_hash` and `api_key` columns are **always** shown as `••••••••`.
+  To change a password use **Settings → Users** instead.
+
+### Common Debug Scenarios
+
+#### Applications missing or duplicated
+
+Browse the `applications` table and check the `user_id` column.  In multi-user
+mode every row must have the correct `user_id`; rows with `NULL` or `0` may not
+appear for any user.
+
+**Quick fix:**
+
+```sql
+-- Find applications with no user assigned
+SELECT id, job_desc, company FROM applications WHERE user_id IS NULL;
+
+-- Assign them to user with id=1
+UPDATE applications SET user_id=1 WHERE user_id IS NULL;
+```
+
+#### Locked out of the app
+
+If login is enabled and you cannot log in:
+
+```sql
+-- Disable login entirely (anyone can access)
+UPDATE settings SET value='0' WHERE key='login_enabled';
+```
+
+Or reset a user's `needs_password_setup` flag so they can set a new password:
+
+```sql
+UPDATE users SET needs_password_setup=1, password_hash='' WHERE username='alice';
+```
+
+#### Onboarding wizard keeps appearing
+
+```sql
+UPDATE settings SET value='1' WHERE key='onboarding_complete';
+```
+
+#### Wrong status order
+
+```sql
+-- Check current order
+SELECT name, sort_order FROM statuses WHERE user_id IS NULL ORDER BY sort_order;
+
+-- Fix sort_order for a specific status
+UPDATE statuses SET sort_order=5 WHERE name='Interview_Scheduled' AND user_id IS NULL;
+```
+
+#### AI settings not applying
+
+```sql
+-- Check per-user AI configuration
+SELECT user_id, ai_provider, ai_model, profile_skills FROM user_ai_settings;
+
+-- Remove a stale row so defaults are used
+DELETE FROM user_ai_settings WHERE user_id=3;
+```
+
+#### Reading the application log
+
+The app writes a rotating log file next to the database:
+
+```bash
+# Local
+tail -f data/app.log
+
+# Docker
+docker exec job-tracker tail -f /data/app.log
+```
+
+The log level is `DEBUG` in the file and `INFO` on the console.  Tracebacks for
+unhandled exceptions are always written to the file.
+
+---
+
+## 9. Updating the App
 
 > **Back up your data before updating.**
 > Go to **Export → Download Full Database** in the UI, or run the command-line
@@ -290,7 +394,7 @@ instructions, including Docker image pull and rollback procedures, in
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
