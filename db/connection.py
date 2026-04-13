@@ -23,7 +23,7 @@ _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at", "last_contact_date",
     "ai_fit_score", "ai_fit_verdict", "ai_matching_skills", "ai_skill_gaps",
     "ai_recommendation", "last_modified_at", "job_expiry_date", "industry",
-    "bg_color", "text_color", "user_id", "needs_password_setup",
+    "bg_color", "text_color", "user_id", "needs_password_setup", "use_admin_ai",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0", "INTEGER", "REAL"}
 

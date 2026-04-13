@@ -90,36 +90,41 @@ def _call_ai(prompt: str, user_id, timeout: int = 90) -> str:
     """Route the AI call to the correct provider for *user_id*.
 
     Priority:
-    1. User's own configured provider (openai / anthropic / custom).
-    2. Global Ollama settings (requires ollama_enabled=1).
+    1. If user set ``use_admin_ai=1`` (or has no personal settings), fall through
+       to the global Ollama configuration.
+    2. Otherwise use the user's own configured provider (openai / anthropic / custom).
+    3. Fall back to global Ollama when nothing else is available.
     Raises RuntimeError with a user-friendly message when nothing is available.
     """
     cfg = db.get_user_ai_settings(user_id)
+    use_admin = int(cfg.get("use_admin_ai", 1))
     provider = cfg.get("ai_provider", "ollama")
 
-    if provider == "openai":
-        api_key = cfg.get("api_key", "").strip()
-        if not api_key:
-            raise RuntimeError("OpenAI API key is not configured. Go to Settings → AI Assistant.")
-        model = cfg.get("ai_model", "").strip() or "gpt-4o-mini"
-        return _call_openai_compat(prompt, api_key, "https://api.openai.com/v1", model, timeout)
+    # When the user chose to use their own provider (use_admin_ai = 0).
+    if not use_admin and provider != "ollama":
+        if provider == "openai":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
+                raise RuntimeError("OpenAI API key is not configured. Go to Settings → AI Assistant.")
+            model = cfg.get("ai_model", "").strip() or "gpt-4o-mini"
+            return _call_openai_compat(prompt, api_key, "https://api.openai.com/v1", model, timeout)
 
-    if provider == "anthropic":
-        api_key = cfg.get("api_key", "").strip()
-        if not api_key:
-            raise RuntimeError("Anthropic API key is not configured. Go to Settings → AI Assistant.")
-        model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
-        return _call_anthropic(prompt, api_key, model, timeout)
+        if provider == "anthropic":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
+                raise RuntimeError("Anthropic API key is not configured. Go to Settings → AI Assistant.")
+            model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+            return _call_anthropic(prompt, api_key, model, timeout)
 
-    if provider == "custom":
-        api_key = cfg.get("api_key", "").strip()
-        api_url = cfg.get("api_url", "").strip()
-        model   = cfg.get("ai_model", "").strip()
-        if not api_url:
-            raise RuntimeError("Custom API URL is not configured. Go to Settings → AI Assistant.")
-        return _call_openai_compat(prompt, api_key, api_url, model, timeout)
+        if provider == "custom":
+            api_key = cfg.get("api_key", "").strip()
+            api_url = cfg.get("api_url", "").strip()
+            model   = cfg.get("ai_model", "").strip()
+            if not api_url:
+                raise RuntimeError("Custom API URL is not configured. Go to Settings → AI Assistant.")
+            return _call_openai_compat(prompt, api_key, api_url, model, timeout)
 
-    # Default: global Ollama
+    # Default / fallback: global Ollama
     if db.get_setting("ollama_enabled", "0") != "1":
         raise RuntimeError("Ollama AI Assistant is not enabled. Ask an admin to configure AI in Settings.")
     url   = db.get_setting("ollama_url",   "http://localhost:11434")
@@ -154,82 +159,83 @@ def _ai_available(user_id) -> bool:
 def ollama_status():
     """Check AI availability for the current user (Ollama or personal provider)."""
     user_id = current_user_id()
-    cfg     = db.get_user_ai_settings(user_id)
-    provider = cfg.get("ai_provider", "ollama")
+    cfg      = db.get_user_ai_settings(user_id)
+    use_admin = int(cfg.get("use_admin_ai", 1))
+    provider  = cfg.get("ai_provider", "ollama")
 
-    if provider == "openai":
-        api_key = cfg.get("api_key", "").strip()
-        if not api_key:
-            return jsonify({"ok": False, "provider": "openai",
-                            "error": "OpenAI API key not configured."})
-        try:
-            req = urllib.request.Request(
-                "https://api.openai.com/v1/models",
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=5):
-                pass
-            model = cfg.get("ai_model", "").strip() or "gpt-4o-mini"
-            return jsonify({"ok": True, "provider": "openai", "model": model})
-        except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403):
+    # When the user chose their own provider (use_admin_ai = 0).
+    if not use_admin and provider != "ollama":
+        if provider == "openai":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
                 return jsonify({"ok": False, "provider": "openai",
-                                "error": "Invalid OpenAI API key."})
-            return jsonify({"ok": False, "provider": "openai",
-                            "error": f"OpenAI returned HTTP {exc.code}."})
-        except Exception:
-            return jsonify({"ok": False, "provider": "openai",
-                            "error": "Could not reach OpenAI API."})
+                                "error": "OpenAI API key not configured."})
+            try:
+                req = urllib.request.Request(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+                model = cfg.get("ai_model", "").strip() or "gpt-4o-mini"
+                return jsonify({"ok": True, "provider": "openai", "model": model})
+            except urllib.error.HTTPError as exc:
+                if exc.code in (401, 403):
+                    return jsonify({"ok": False, "provider": "openai",
+                                    "error": "Invalid OpenAI API key."})
+                return jsonify({"ok": False, "provider": "openai",
+                                "error": f"OpenAI returned HTTP {exc.code}."})
+            except Exception:
+                return jsonify({"ok": False, "provider": "openai",
+                                "error": "Could not reach OpenAI API."})
 
-    if provider == "anthropic":
-        api_key = cfg.get("api_key", "").strip()
-        if not api_key:
-            return jsonify({"ok": False, "provider": "anthropic",
-                            "error": "Anthropic API key not configured."})
-        # Attempt a lightweight connectivity check against the Anthropic API endpoint.
-        try:
-            req = urllib.request.Request(
-                "https://api.anthropic.com/v1/models",
-                headers={
-                    "x-api-key":         api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Accept":            "application/json",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=5):
-                pass
-            model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
-            return jsonify({"ok": True, "provider": "anthropic", "model": model})
-        except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403):
+        if provider == "anthropic":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
                 return jsonify({"ok": False, "provider": "anthropic",
-                                "error": "Invalid Anthropic API key."})
-            # Other HTTP errors still mean the API is reachable.
-            model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
-            return jsonify({"ok": True, "provider": "anthropic", "model": model})
-        except Exception:
-            return jsonify({"ok": False, "provider": "anthropic",
-                            "error": "Could not reach Anthropic API."})
+                                "error": "Anthropic API key not configured."})
+            try:
+                req = urllib.request.Request(
+                    "https://api.anthropic.com/v1/models",
+                    headers={
+                        "x-api-key":         api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Accept":            "application/json",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+                model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+                return jsonify({"ok": True, "provider": "anthropic", "model": model})
+            except urllib.error.HTTPError as exc:
+                if exc.code in (401, 403):
+                    return jsonify({"ok": False, "provider": "anthropic",
+                                    "error": "Invalid Anthropic API key."})
+                model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+                return jsonify({"ok": True, "provider": "anthropic", "model": model})
+            except Exception:
+                return jsonify({"ok": False, "provider": "anthropic",
+                                "error": "Could not reach Anthropic API."})
 
-    if provider == "custom":
-        api_url = cfg.get("api_url", "").strip()
-        if not api_url:
-            return jsonify({"ok": False, "provider": "custom",
-                            "error": "Custom API URL not configured."})
-        try:
-            req = urllib.request.Request(
-                f"{api_url.rstrip('/')}/models",
-                headers={"Accept": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=4):
-                pass
-            model = cfg.get("ai_model", "").strip()
-            return jsonify({"ok": True, "provider": "custom", "model": model})
-        except Exception:
-            return jsonify({"ok": False, "provider": "custom",
-                            "error": "Could not reach custom API."})
+        if provider == "custom":
+            api_url = cfg.get("api_url", "").strip()
+            if not api_url:
+                return jsonify({"ok": False, "provider": "custom",
+                                "error": "Custom API URL not configured."})
+            try:
+                req = urllib.request.Request(
+                    f"{api_url.rstrip('/')}/models",
+                    headers={"Accept": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=4):
+                    pass
+                model = cfg.get("ai_model", "").strip()
+                return jsonify({"ok": True, "provider": "custom", "model": model})
+            except Exception:
+                return jsonify({"ok": False, "provider": "custom",
+                                "error": "Could not reach custom API."})
 
-    # Default: global Ollama
+    # Default / fallback: global Ollama
     if db.get_setting("ollama_enabled", "0") != "1":
         return jsonify({"ok": False, "provider": "ollama", "error": "Ollama is not enabled."})
     ollama_url = db.get_setting("ollama_url", "http://localhost:11434").rstrip("/")

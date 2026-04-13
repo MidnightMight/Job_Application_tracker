@@ -193,18 +193,24 @@ def settings():
             if profile_user_id is None:
                 flash("You must be logged in to save personal AI settings.", "warning")
                 return redirect(url_for("settings_routes.settings", section="ai"))
+            # Toggle: 1 = use admin's server, 0 = use own settings.
+            use_admin_ai = 1 if request.form.get("use_admin_ai") == "1" else 0
             provider = request.form.get("ai_provider", "ollama").strip()
             if provider not in ("ollama", "openai", "anthropic", "custom"):
                 provider = "ollama"
             api_key  = request.form.get("api_key",  "").strip()
             api_url  = request.form.get("api_url",  "").strip()
             ai_model = request.form.get("ai_model", "").strip()
-            db.save_user_ai_settings(profile_user_id, {
-                "ai_provider": provider,
-                "api_key":     api_key,
-                "api_url":     api_url,
-                "ai_model":    ai_model,
-            })
+            fields = {
+                "use_admin_ai": use_admin_ai,
+                "ai_provider":  provider,
+                "api_url":      api_url,
+                "ai_model":     ai_model,
+            }
+            # Only overwrite the stored API key when a non-empty value was submitted.
+            if api_key:
+                fields["api_key"] = api_key
+            db.save_user_ai_settings(profile_user_id, fields)
             flash("Your AI provider settings have been saved.", "success")
             return redirect(url_for("settings_routes.settings", section="ai"))
 

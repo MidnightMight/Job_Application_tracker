@@ -176,9 +176,11 @@ def init_db():
             profile_skills      TEXT NOT NULL DEFAULT '',
             profile_experience  TEXT NOT NULL DEFAULT '',
             profile_summary     TEXT NOT NULL DEFAULT '',
+            use_admin_ai        INTEGER NOT NULL DEFAULT 1,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     """)
+    _add_column_if_missing(c, "user_ai_settings", "use_admin_ai", "INTEGER DEFAULT 0")
 
     conn.commit()
 

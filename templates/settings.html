@@ -530,66 +530,107 @@
 
     {# ── Per-user AI provider ── #}
     {% if login_enabled %}
+    {# use_admin_ai: 1 = use admin server (default), 0 = use own settings #}
+    {% set _use_admin = user_ai_settings.get('use_admin_ai', 1)|int %}
     <div class="card shadow-sm mb-4">
-      <div class="card-header fw-semibold">
-        <i class="bi bi-cpu me-1 text-primary"></i>Your Personal AI Provider
-        <span class="badge bg-info text-dark ms-2 small">Per-account</span>
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+          <i class="bi bi-cpu me-1 text-primary"></i>Your Personal AI Provider
+          <span class="badge bg-info text-dark ms-2 small">Per-account</span>
+        </span>
+        {# ── Master toggle ── #}
+        <div class="d-flex align-items-center gap-2">
+          <span class="small text-muted" id="aiToggleLabel">
+            {% if _use_admin %}Using admin's server{% else %}Using my own settings{% endif %}
+          </span>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   id="useAdminAiToggle"
+                   {% if _use_admin %}checked{% endif %}>
+            <label class="form-check-label small fw-normal" for="useAdminAiToggle">
+              Use admin's server
+            </label>
+          </div>
+        </div>
       </div>
       <div class="card-body">
-        <p class="text-muted small mb-3">
-          Configure your own AI provider. When set, this overrides the shared Ollama server for
-          <em>your</em> account only. You can use <strong>OpenAI</strong>, <strong>Anthropic (Claude)</strong>,
-          or any <strong>custom OpenAI-compatible API</strong> (e.g. a local LM Studio or vLLM server).
-          <br><small class="text-muted">API keys are stored locally in this server's database.</small>
-        </p>
-        <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}">
-          <input type="hidden" name="action" value="save_user_ai">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">AI Provider</label>
-            <select name="ai_provider" id="aiProviderSelect" class="form-select" style="max-width:280px;">
-              <option value="ollama"    {% if user_ai_settings.get('ai_provider','ollama') == 'ollama'    %}selected{% endif %}>
-                🦙 Ollama (shared server)
-              </option>
-              <option value="openai"   {% if user_ai_settings.get('ai_provider','') == 'openai'   %}selected{% endif %}>
-                🌐 OpenAI (ChatGPT / GPT-4o)
-              </option>
-              <option value="anthropic"{% if user_ai_settings.get('ai_provider','') == 'anthropic'%}selected{% endif %}>
-                🟠 Anthropic (Claude)
-              </option>
-              <option value="custom"   {% if user_ai_settings.get('ai_provider','') == 'custom'   %}selected{% endif %}>
-                🔧 Custom OpenAI-compatible API
-              </option>
-            </select>
-          </div>
-
-          <div id="providerApiSection" {% if user_ai_settings.get('ai_provider','ollama') == 'ollama' %}style="display:none"{% endif %}>
-            <div class="mb-3" id="apiKeyRow">
-              <label class="form-label fw-semibold">API Key</label>
-              <input type="password" name="api_key" class="form-control" style="max-width:400px;"
-                     placeholder="sk-…  (leave blank to keep existing)"
-                     autocomplete="new-password">
-              {% if user_ai_settings.get('api_key') %}
-              <div class="form-text text-success">
-                <i class="bi bi-key-fill me-1"></i>API key is saved.
-                Enter a new key to replace it.
-              </div>
+        {# Info banner shown when "use admin" is ON #}
+        <div id="adminAiBanner" {% if not _use_admin %}style="display:none"{% endif %}>
+          <div class="alert alert-info d-flex align-items-start gap-3 py-2 mb-3" role="alert">
+            <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+            <div class="small">
+              <strong>Using the admin's AI server.</strong>
+              Your AI requests go through the shared
+              {% if settings.get('ollama_enabled','0') == '1' %}
+                Ollama server (<code>{{ settings.get('ollama_url','http://localhost:11434') }}</code>,
+                model <code>{{ settings.get('ollama_model','llama3') }}</code>).
+              {% else %}
+                Ollama server (currently <span class="text-danger">disabled</span> by admin).
               {% endif %}
+              Toggle the switch off to configure your own provider.
             </div>
-            <div class="mb-3" id="customUrlRow"
-                 {% if user_ai_settings.get('ai_provider','ollama') not in ('custom',) %}style="display:none"{% endif %}>
-              <label class="form-label fw-semibold">API Base URL</label>
-              <input type="url" name="api_url" class="form-control" style="max-width:400px;"
-                     value="{{ user_ai_settings.get('api_url','') }}"
-                     placeholder="e.g. http://localhost:1234/v1">
-              <div class="form-text">The base URL for an OpenAI-compatible API (e.g. LM Studio, vLLM, Groq).</div>
-            </div>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}"
+              id="userAiForm">
+          <input type="hidden" name="action" value="save_user_ai">
+          {# Hidden field tracks the toggle state; JS keeps it in sync. #}
+          <input type="hidden" name="use_admin_ai" id="useAdminAiInput"
+                 value="{{ '1' if _use_admin else '0' }}">
+
+          {# Provider form — hidden when "use admin" is ON #}
+          <div id="ownProviderSection" {% if _use_admin %}style="display:none"{% endif %}>
+            <p class="text-muted small mb-3">
+              Configure your own AI provider. When set, this overrides the shared Ollama server for
+              <em>your</em> account only. You can use <strong>OpenAI</strong>, <strong>Anthropic (Claude)</strong>,
+              or any <strong>custom OpenAI-compatible API</strong> (e.g. a local LM Studio or vLLM server).
+              <br><small class="text-muted">API keys are stored locally in this server's database.</small>
+            </p>
             <div class="mb-3">
-              <label class="form-label fw-semibold">Model Name <span class="text-muted small fw-normal">(optional)</span></label>
-              <input type="text" name="ai_model" class="form-control" style="max-width:280px;"
-                     value="{{ user_ai_settings.get('ai_model','') }}"
-                     id="aiModelInput"
-                     placeholder="{{ 'gpt-4o-mini' if user_ai_settings.get('ai_provider','') == 'openai' else ('claude-3-haiku-20240307' if user_ai_settings.get('ai_provider','') == 'anthropic' else '') }}">
-              <div class="form-text" id="modelHint"></div>
+              <label class="form-label fw-semibold">AI Provider</label>
+              <select name="ai_provider" id="aiProviderSelect" class="form-select" style="max-width:280px;">
+                <option value="openai"   {% if user_ai_settings.get('ai_provider','') == 'openai'    %}selected{% endif %}>
+                  🌐 OpenAI (ChatGPT / GPT-4o)
+                </option>
+                <option value="anthropic"{% if user_ai_settings.get('ai_provider','') == 'anthropic' %}selected{% endif %}>
+                  🟠 Anthropic (Claude)
+                </option>
+                <option value="custom"   {% if user_ai_settings.get('ai_provider','') == 'custom'    %}selected{% endif %}>
+                  🔧 Custom OpenAI-compatible API
+                </option>
+              </select>
+            </div>
+
+            <div id="providerApiSection">
+              <div class="mb-3" id="apiKeyRow">
+                <label class="form-label fw-semibold">API Key</label>
+                <input type="password" name="api_key" class="form-control" style="max-width:400px;"
+                       placeholder="sk-…  (leave blank to keep existing)"
+                       autocomplete="new-password">
+                {% if user_ai_settings.get('api_key') %}
+                <div class="form-text text-success">
+                  <i class="bi bi-key-fill me-1"></i>API key is saved.
+                  Enter a new key to replace it.
+                </div>
+                {% endif %}
+              </div>
+              <div class="mb-3" id="customUrlRow"
+                   {% if user_ai_settings.get('ai_provider','ollama') not in ('custom',) %}style="display:none"{% endif %}>
+                <label class="form-label fw-semibold">API Base URL</label>
+                <input type="url" name="api_url" class="form-control" style="max-width:400px;"
+                       value="{{ user_ai_settings.get('api_url','') }}"
+                       placeholder="e.g. http://localhost:1234/v1">
+                <div class="form-text">The base URL for an OpenAI-compatible API (e.g. LM Studio, vLLM, Groq).</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Model Name <span class="text-muted small fw-normal">(optional)</span></label>
+                <input type="text" name="ai_model" class="form-control" style="max-width:280px;"
+                       value="{{ user_ai_settings.get('ai_model','') }}"
+                       id="aiModelInput"
+                       placeholder="{{ 'gpt-4o-mini' if user_ai_settings.get('ai_provider','') == 'openai' else ('claude-3-haiku-20240307' if user_ai_settings.get('ai_provider','') == 'anthropic' else '') }}">
+                <div class="form-text" id="modelHint"></div>
+              </div>
             </div>
           </div>
 
@@ -841,32 +882,49 @@ if (fitToggle) {
 
 // ── Per-user AI provider selector ────────────────────────────────────────
 (function () {
-  const sel          = document.getElementById('aiProviderSelect');
-  const apiSection   = document.getElementById('providerApiSection');
-  const customUrlRow = document.getElementById('customUrlRow');
-  const modelInput   = document.getElementById('aiModelInput');
-  const modelHint    = document.getElementById('modelHint');
+  const toggle         = document.getElementById('useAdminAiToggle');
+  const hiddenInput    = document.getElementById('useAdminAiInput');
+  const adminBanner    = document.getElementById('adminAiBanner');
+  const ownSection     = document.getElementById('ownProviderSection');
+  const toggleLabel    = document.getElementById('aiToggleLabel');
+  const sel            = document.getElementById('aiProviderSelect');
+  const apiSection     = document.getElementById('providerApiSection');
+  const customUrlRow   = document.getElementById('customUrlRow');
+  const modelInput     = document.getElementById('aiModelInput');
+  const modelHint      = document.getElementById('modelHint');
 
   const modelPlaceholders = {
     openai:    'gpt-4o-mini',
     anthropic: 'claude-3-haiku-20240307',
     custom:    'e.g. mistral, llama3',
-    ollama:    '',
   };
   const modelHints = {
     openai:    'e.g. gpt-4o-mini, gpt-4o, gpt-3.5-turbo',
     anthropic: 'e.g. claude-3-haiku-20240307, claude-3-sonnet-20240229',
     custom:    'Model name accepted by your custom API server.',
-    ollama:    '',
   };
 
   function updateProviderUI() {
-    if (!sel || !apiSection) return;
+    if (!sel) return;
     const provider = sel.value;
-    apiSection.style.display   = provider === 'ollama' ? 'none' : '';
     if (customUrlRow) customUrlRow.style.display = provider === 'custom' ? '' : 'none';
     if (modelInput) modelInput.placeholder = modelPlaceholders[provider] || '';
     if (modelHint)  modelHint.textContent  = modelHints[provider] || '';
+  }
+
+  function applyToggle(useAdmin) {
+    if (hiddenInput)  hiddenInput.value        = useAdmin ? '1' : '0';
+    if (adminBanner)  adminBanner.style.display = useAdmin ? '' : 'none';
+    if (ownSection)   ownSection.style.display  = useAdmin ? 'none' : '';
+    if (toggleLabel)  toggleLabel.textContent   = useAdmin ? "Using admin's server" : "Using my own settings";
+  }
+
+  if (toggle) {
+    toggle.addEventListener('change', function () {
+      applyToggle(this.checked);
+    });
+    // Initialise to match current state (driven by server-rendered checked attribute).
+    applyToggle(toggle.checked);
   }
 
   if (sel) sel.addEventListener('change', updateProviderUI);
