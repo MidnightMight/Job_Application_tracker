@@ -45,6 +45,7 @@ from .users import (
     add_user,
     delete_user,
     get_user_by_username,
+    reassign_null_user_data,
 )
 
 from .reminders import (
@@ -102,6 +103,7 @@ __all__ = [
     "get_setting", "set_setting", "get_all_settings",
     # users
     "get_users", "count_users", "add_user", "delete_user", "get_user_by_username",
+    "reassign_null_user_data",
     # reminders
     "get_pending_for_reminders", "create_reminder", "get_reminders",
     "dismiss_reminder", "dismiss_all_reminders", "get_unread_reminder_count",

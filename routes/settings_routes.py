@@ -60,6 +60,12 @@ def settings():
                 flash("Cannot enable login — no users exist. Add a user first.", "danger")
                 return redirect(url_for("settings_routes.settings", section="users"))
             db.set_setting("login_enabled", login_enabled)
+            if login_enabled == "1":
+                users = db.get_users()
+                admins = [u for u in users if u["is_admin"]]
+                first_user = (admins or users)[0] if (admins or users) else None
+                if first_user:
+                    db.reassign_null_user_data(first_user["id"])
             flash("Security settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="users"))
 

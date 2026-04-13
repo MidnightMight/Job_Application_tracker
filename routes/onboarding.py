@@ -50,8 +50,10 @@ def onboarding():
                 return render_template("onboarding.html", step="admin",
                                        deployment_mode=DEPLOYMENT_MODE)
 
+            new_user = db.get_user_by_username(username)
+            db.reassign_null_user_data(new_user["id"])
             db.set_setting("login_enabled", "1")
-            session["user_id"] = db.get_user_by_username(username)["id"]
+            session["user_id"] = new_user["id"]
             session["username"] = username
 
             if clear_demo:

@@ -62,3 +62,23 @@ def get_user_by_username(username: str) -> dict | None:
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def reassign_null_user_data(user_id: int) -> int:
+    """Assign all applications that have no owner (user_id IS NULL) to user_id.
+
+    Called when login is first enabled so that records created in single-user
+    mode (before any login was required) remain visible to the first admin user
+    rather than disappearing because queries now filter by user_id.
+
+    Returns the number of application rows updated.
+    """
+    conn = get_connection()
+    cursor = conn.execute(
+        "UPDATE applications SET user_id=? WHERE user_id IS NULL",
+        (user_id,),
+    )
+    count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return count
