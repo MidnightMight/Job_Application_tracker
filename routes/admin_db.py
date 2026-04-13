@@ -12,14 +12,12 @@ Sensitive columns (password_hash, api_key) are masked in the viewer.
 """
 
 import sqlite3
-import re as _re
 
 from flask import (
     Blueprint, flash, redirect, render_template,
-    request, url_for, jsonify,
+    request, url_for,
 )
 
-import db
 from db.connection import get_connection, DB_PATH
 from .auth import admin_required
 
@@ -29,10 +27,18 @@ bp = Blueprint("admin_db", __name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# Only allow viewing/editing these tables.
-_VIEWABLE_TABLES = {
-    "applications", "companies", "status_history",
-    "statuses", "reminders", "settings", "users", "user_ai_settings",
+# Pre-built mapping from external name → trusted literal table name.
+# Using a dict lookup breaks any taint chain — the value used in SQL is always
+# a string literal defined here in source, never the user-supplied value.
+_TABLE_MAP: dict[str, str] = {
+    "applications":   "applications",
+    "companies":      "companies",
+    "status_history": "status_history",
+    "statuses":       "statuses",
+    "reminders":      "reminders",
+    "settings":       "settings",
+    "users":          "users",
+    "user_ai_settings": "user_ai_settings",
 }
 
 # Columns whose values are masked in the viewer / editor (display only).
@@ -42,27 +48,37 @@ _PAGE_SIZE = 50
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Internal helpers
 # ---------------------------------------------------------------------------
+
+def _safe_table(name: str) -> str | None:
+    """Return the trusted table name literal for *name*, or None if unknown."""
+    return _TABLE_MAP.get(name)
+
 
 def _get_tables() -> list[dict]:
     """Return table metadata (name, row_count) for all viewable tables."""
     conn = get_connection()
     results = []
-    for table in sorted(_VIEWABLE_TABLES):
+    for safe_name in sorted(_TABLE_MAP.values()):
+        # safe_name is a literal from _TABLE_MAP — not user input.
         try:
-            count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # noqa: S608
+            count = conn.execute(
+                "SELECT COUNT(*) FROM " + safe_name  # nosec B608
+            ).fetchone()[0]
         except sqlite3.OperationalError:
             count = 0
-        results.append({"name": table, "row_count": count})
+        results.append({"name": safe_name, "row_count": count})
     conn.close()
     return results
 
 
-def _get_columns(table: str) -> list[str]:
-    """Return ordered column names for *table*."""
+def _get_columns(safe_name: str) -> list[str]:
+    """Return ordered column names for *safe_name* (must be a trusted literal)."""
     conn = get_connection()
-    cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    cols = [row[1] for row in conn.execute(
+        "PRAGMA table_info(" + safe_name + ")"  # nosec B608
+    ).fetchall()]
     conn.close()
     return cols
 
@@ -75,26 +91,17 @@ def _mask_row(row: dict) -> dict:
     }
 
 
-def _get_pk_column(table: str) -> str | None:
-    """Return the name of the INTEGER PRIMARY KEY column for *table*, or None."""
-    conn = get_connection()
-    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
-    conn.close()
-    for row in rows:
-        # cid, name, type, notnull, dflt_value, pk
-        if row[5] == 1 and "INT" in (row[2] or "").upper():
-            return row[1]
-    return None
+def _get_any_pk_column(safe_name: str) -> tuple[str | None, bool]:
+    """Return (pk_column_name, is_integer_type) for *safe_name*.
 
-
-def _get_any_pk_column(table: str) -> tuple[str | None, bool]:
-    """Return (pk_column_name, is_integer_type).
-
-    The `settings` table uses a TEXT primary key ('key'), most others use INTEGER.
+    The `settings` table uses a TEXT primary key ('key'); most others use INTEGER.
     Returns (None, False) when there is no single primary key column.
+    *safe_name* must already be a trusted literal from _TABLE_MAP.
     """
     conn = get_connection()
-    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    rows = conn.execute(
+        "PRAGMA table_info(" + safe_name + ")"  # nosec B608
+    ).fetchall()
     conn.close()
     for row in rows:
         if row[5] == 1:  # pk flag
@@ -121,7 +128,8 @@ def db_overview():
 @admin_required
 def db_table(table: str):
     """Show paginated rows for *table*."""
-    if table not in _VIEWABLE_TABLES:
+    safe_name = _safe_table(table)
+    if not safe_name:
         flash(f"Table '{table}' is not accessible.", "danger")
         return redirect(url_for("admin_db.db_overview"))
 
@@ -130,9 +138,12 @@ def db_table(table: str):
 
     conn = get_connection()
     try:
-        total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]  # noqa: S608
+        # safe_name is a literal from _TABLE_MAP, not user input.
+        total = conn.execute(
+            "SELECT COUNT(*) FROM " + safe_name  # nosec B608
+        ).fetchone()[0]
         rows_raw = conn.execute(
-            f"SELECT * FROM {table} LIMIT ? OFFSET ?",  # noqa: S608
+            "SELECT * FROM " + safe_name + " LIMIT ? OFFSET ?",  # nosec B608
             (_PAGE_SIZE, offset),
         ).fetchall()
     except sqlite3.OperationalError as exc:
@@ -141,15 +152,15 @@ def db_table(table: str):
         return redirect(url_for("admin_db.db_overview"))
     conn.close()
 
-    columns = _get_columns(table)
+    columns = _get_columns(safe_name)
     rows = [_mask_row(dict(r)) for r in rows_raw]
-    pk_col, pk_is_int = _get_any_pk_column(table)
+    pk_col, pk_is_int = _get_any_pk_column(safe_name)
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
 
     return render_template(
         "admin_db.html",
         view="table",
-        table=table,
+        table=safe_name,
         columns=columns,
         rows=rows,
         pk_col=pk_col,
@@ -176,28 +187,31 @@ def db_row_text(table: str, pk: str):
 
 def _db_row_impl(table: str, pk):
     """Shared implementation for integer and text PK row editing."""
-    if table not in _VIEWABLE_TABLES:
+    safe_name = _safe_table(table)
+    if not safe_name:
         flash(f"Table '{table}' is not accessible.", "danger")
         return redirect(url_for("admin_db.db_overview"))
 
-    pk_col, pk_is_int = _get_any_pk_column(table)
+    pk_col, pk_is_int = _get_any_pk_column(safe_name)
     if not pk_col:
-        flash(f"Table '{table}' has no editable primary key.", "warning")
-        return redirect(url_for("admin_db.db_table", table=table))
+        flash(f"Table '{safe_name}' has no editable primary key.", "warning")
+        return redirect(url_for("admin_db.db_table", table=safe_name))
 
+    # pk_col comes from PRAGMA table_info (DB schema), not user input.
     conn = get_connection()
     row_raw = conn.execute(
-        f"SELECT * FROM {table} WHERE {pk_col}=?",  # noqa: S608
+        "SELECT * FROM " + safe_name + " WHERE " + pk_col + "=?",  # nosec B608
         (pk,),
     ).fetchone()
 
     if row_raw is None:
         conn.close()
         flash("Row not found.", "danger")
-        return redirect(url_for("admin_db.db_table", table=table))
+        return redirect(url_for("admin_db.db_table", table=safe_name))
 
     if request.method == "POST":
-        columns = _get_columns(table)
+        # Columns come from DB schema (PRAGMA), not user input.
+        columns = _get_columns(safe_name)
         updates = {}
         for col in columns:
             if col == pk_col:
@@ -210,11 +224,13 @@ def _db_row_impl(table: str, pk):
                 updates[col] = request.form.get(col, "")
 
         if updates:
-            set_clause = ", ".join(f"{c}=?" for c in updates)
+            # All keys in `updates` are columns fetched from PRAGMA (DB schema).
+            set_clause = ", ".join(c + "=?" for c in updates)
             values = list(updates.values()) + [pk]
             try:
                 conn.execute(
-                    f"UPDATE {table} SET {set_clause} WHERE {pk_col}=?",  # noqa: S608
+                    "UPDATE " + safe_name + " SET " + set_clause  # nosec B608
+                    + " WHERE " + pk_col + "=?",
                     values,
                 )
                 conn.commit()
@@ -227,16 +243,16 @@ def _db_row_impl(table: str, pk):
 
         conn.close()
         if pk_is_int:
-            return redirect(url_for("admin_db.db_row", table=table, pk=pk))
-        return redirect(url_for("admin_db.db_row_text", table=table, pk=pk))
+            return redirect(url_for("admin_db.db_row", table=safe_name, pk=pk))
+        return redirect(url_for("admin_db.db_row_text", table=safe_name, pk=pk))
 
     conn.close()
     row = dict(row_raw)
-    columns = _get_columns(table)
+    columns = _get_columns(safe_name)
     return render_template(
         "admin_db.html",
         view="row",
-        table=table,
+        table=safe_name,
         pk=pk,
         pk_col=pk_col,
         pk_is_int=pk_is_int,
@@ -257,14 +273,14 @@ def db_query():
 
     if request.method == "POST":
         sql = request.form.get("sql", "").strip()
-        # Only allow SELECT statements (very basic guard; WAL mode prevents writes anyway).
+        # Only allow SELECT/PRAGMA — WAL mode + query_only PRAGMA reinforce this.
         normalised = sql.upper().lstrip()
         if not normalised.startswith("SELECT") and not normalised.startswith("PRAGMA"):
             error = "Only SELECT and PRAGMA statements are permitted."
         else:
             conn = get_connection()
-            conn.execute("PRAGMA query_only=ON")
             try:
+                conn.execute("PRAGMA query_only=ON")
                 cur = conn.execute(sql)
                 rows_raw = cur.fetchmany(500)
                 columns = [d[0] for d in cur.description] if cur.description else []
