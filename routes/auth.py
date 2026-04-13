@@ -6,7 +6,7 @@ from flask import (
     Blueprint, flash, redirect, render_template,
     request, session, url_for,
 )
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
 
@@ -98,7 +98,14 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         user = db.get_user_by_username(username)
-        if user and check_password_hash(user["password_hash"], password):
+
+        # First-time login: user exists, needs password setup, password left blank.
+        if user and not password and user.get("needs_password_setup"):
+            session["setup_user_id"] = user["id"]
+            session["setup_username"] = user["username"]
+            return redirect(url_for("auth.setup_password"))
+
+        if user and user["password_hash"] and check_password_hash(user["password_hash"], password):
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["is_admin"] = bool(user["is_admin"])
@@ -116,3 +123,44 @@ def logout():
     session.clear()
     flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/setup-password", methods=["GET", "POST"])
+def setup_password():
+    """First-time password setup for users who were created without a password."""
+    user_id = session.get("setup_user_id")
+    username = session.get("setup_username", "")
+    if not user_id:
+        # Nothing to set up — redirect to login.
+        return redirect(url_for("auth.login"))
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        password2 = request.form.get("password2", "")
+        errors = []
+        if not password:
+            errors.append("Password is required.")
+        elif len(password) < 8:
+            errors.append("Password must be at least 8 characters.")
+        elif password != password2:
+            errors.append("Passwords do not match.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+            return render_template("setup_password.html", username=username)
+
+        db.set_user_password(user_id, generate_password_hash(password))
+        session.pop("setup_user_id", None)
+        session.pop("setup_username", None)
+
+        # Log the user in now that their password is set.
+        user = db.get_user_by_username(username)
+        if user:
+            session["user_id"] = user["id"]
+            session["username"] = user["username"]
+            session["is_admin"] = bool(user["is_admin"])
+        flash("Password set successfully! Welcome.", "success")
+        return redirect(url_for("dashboard.dashboard"))
+
+    return render_template("setup_password.html", username=username)

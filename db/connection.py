@@ -17,13 +17,13 @@ YEARS = [2023, 2024, 2025, 2026, 2027]
 
 _ALLOWED_TABLES = {
     "applications", "companies", "status_history",
-    "statuses", "reminders", "settings", "users",
+    "statuses", "reminders", "settings", "users", "user_ai_settings",
 }
 _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at", "last_contact_date",
     "ai_fit_score", "ai_fit_verdict", "ai_matching_skills", "ai_skill_gaps",
     "ai_recommendation", "last_modified_at", "job_expiry_date", "industry",
-    "bg_color", "text_color", "user_id",
+    "bg_color", "text_color", "user_id", "needs_password_setup", "use_admin_ai",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0", "INTEGER", "REAL"}
 

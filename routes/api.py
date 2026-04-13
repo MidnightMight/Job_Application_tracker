@@ -9,7 +9,7 @@ import urllib.request
 from flask import Blueprint, jsonify, request
 
 import db
-from .auth import login_required
+from .auth import login_required, current_user_id
 
 bp = Blueprint("api", __name__)
 
@@ -17,14 +17,229 @@ _MAX_JOB_DESC_LENGTH  = 4000
 _MAX_ERROR_MSG_LENGTH = 120
 _MAX_PROFILE_LENGTH   = 8000
 
+# ---------------------------------------------------------------------------
+# AI provider helpers
+# ---------------------------------------------------------------------------
+
+def _call_ollama(prompt: str, url: str, model: str, timeout: int = 90) -> str:
+    """Call the Ollama /api/generate endpoint and return the response text."""
+    payload = json.dumps({
+        "model":   model,
+        "prompt":  prompt,
+        "stream":  False,
+        "options": {"temperature": 0.1},
+    }).encode()
+    req = urllib.request.Request(
+        f"{url.rstrip('/')}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = json.loads(resp.read().decode())
+    return (result.get("response") or "").strip()
+
+
+def _call_openai_compat(prompt: str, api_key: str, base_url: str, model: str,
+                        timeout: int = 90) -> str:
+    """Call an OpenAI-compatible Chat Completions endpoint and return the response text."""
+    payload = json.dumps({
+        "model":    model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+    }).encode()
+    headers = {
+        "Content-Type":  "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}/chat/completions",
+        data=payload,
+        headers=headers,
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = json.loads(resp.read().decode())
+    return (result["choices"][0]["message"]["content"] or "").strip()
+
+
+def _call_anthropic(prompt: str, api_key: str, model: str, timeout: int = 90) -> str:
+    """Call the Anthropic Messages API and return the response text."""
+    payload = json.dumps({
+        "model":      model or "claude-3-haiku-20240307",
+        "max_tokens": 1024,
+        "messages":   [{"role": "user", "content": prompt}],
+    }).encode()
+    headers = {
+        "Content-Type":      "application/json",
+        "x-api-key":         api_key,
+        "anthropic-version": "2023-06-01",
+    }
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers=headers,
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = json.loads(resp.read().decode())
+    return (result["content"][0]["text"] or "").strip()
+
+
+def _call_ai(prompt: str, user_id, timeout: int = 90) -> str:
+    """Route the AI call to the correct provider for *user_id*.
+
+    Priority:
+    1. If user set ``use_admin_ai=1`` (or has no personal settings), fall through
+       to the global Ollama configuration.
+    2. Otherwise use the user's own configured provider (openai / anthropic / custom).
+    3. Fall back to global Ollama when nothing else is available.
+    Raises RuntimeError with a user-friendly message when nothing is available.
+    """
+    cfg = db.get_user_ai_settings(user_id)
+    use_admin = int(cfg.get("use_admin_ai", 1))
+    provider = cfg.get("ai_provider", "ollama")
+
+    # When the user chose to use their own provider (use_admin_ai = 0).
+    if not use_admin and provider != "ollama":
+        if provider == "openai":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
+                raise RuntimeError("OpenAI API key is not configured. Go to Settings → AI Assistant.")
+            model = cfg.get("ai_model", "").strip() or "gpt-4o-mini"
+            return _call_openai_compat(prompt, api_key, "https://api.openai.com/v1", model, timeout)
+
+        if provider == "anthropic":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
+                raise RuntimeError("Anthropic API key is not configured. Go to Settings → AI Assistant.")
+            model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+            return _call_anthropic(prompt, api_key, model, timeout)
+
+        if provider == "custom":
+            api_key = cfg.get("api_key", "").strip()
+            api_url = cfg.get("api_url", "").strip()
+            model   = cfg.get("ai_model", "").strip()
+            if not api_url:
+                raise RuntimeError("Custom API URL is not configured. Go to Settings → AI Assistant.")
+            return _call_openai_compat(prompt, api_key, api_url, model, timeout)
+
+    # Default / fallback: global Ollama
+    if db.get_setting("ollama_enabled", "0") != "1":
+        raise RuntimeError("Ollama AI Assistant is not enabled. Ask an admin to configure AI in Settings.")
+    url   = db.get_setting("ollama_url",   "http://localhost:11434")
+    model = db.get_setting("ollama_model", "llama3")
+    return _call_ollama(prompt, url, model, timeout)
+
+
+def _parse_json_response(raw: str) -> dict:
+    """Strip markdown fences and extract the first JSON object from *raw*."""
+    fence = _re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
+    if fence:
+        raw = fence.group(1).strip()
+    obj = _re.search(r"\{[\s\S]+\}", raw)
+    if obj:
+        raw = obj.group(0)
+    return json.loads(raw)
+
+
+def _ai_available(user_id) -> bool:
+    """Return True when at least one AI provider is usable for *user_id*."""
+    if db.user_has_own_ai(user_id):
+        return True
+    return db.get_setting("ollama_enabled", "0") == "1"
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 @bp.route("/api/ollama-status")
 @login_required
 def ollama_status():
+    """Check AI availability for the current user (Ollama or personal provider)."""
+    user_id = current_user_id()
+    cfg      = db.get_user_ai_settings(user_id)
+    use_admin = int(cfg.get("use_admin_ai", 1))
+    provider  = cfg.get("ai_provider", "ollama")
+
+    # When the user chose their own provider (use_admin_ai = 0).
+    if not use_admin and provider != "ollama":
+        if provider == "openai":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
+                return jsonify({"ok": False, "provider": "openai",
+                                "error": "OpenAI API key not configured."})
+            try:
+                req = urllib.request.Request(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+                model = cfg.get("ai_model", "").strip() or "gpt-4o-mini"
+                return jsonify({"ok": True, "provider": "openai", "model": model})
+            except urllib.error.HTTPError as exc:
+                if exc.code in (401, 403):
+                    return jsonify({"ok": False, "provider": "openai",
+                                    "error": "Invalid OpenAI API key."})
+                return jsonify({"ok": False, "provider": "openai",
+                                "error": f"OpenAI returned HTTP {exc.code}."})
+            except Exception:
+                return jsonify({"ok": False, "provider": "openai",
+                                "error": "Could not reach OpenAI API."})
+
+        if provider == "anthropic":
+            api_key = cfg.get("api_key", "").strip()
+            if not api_key:
+                return jsonify({"ok": False, "provider": "anthropic",
+                                "error": "Anthropic API key not configured."})
+            try:
+                req = urllib.request.Request(
+                    "https://api.anthropic.com/v1/models",
+                    headers={
+                        "x-api-key":         api_key,
+                        "anthropic-version": "2023-06-01",
+                        "Accept":            "application/json",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=5):
+                    pass
+                model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+                return jsonify({"ok": True, "provider": "anthropic", "model": model})
+            except urllib.error.HTTPError as exc:
+                if exc.code in (401, 403):
+                    return jsonify({"ok": False, "provider": "anthropic",
+                                    "error": "Invalid Anthropic API key."})
+                model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+                return jsonify({"ok": True, "provider": "anthropic", "model": model})
+            except Exception:
+                return jsonify({"ok": False, "provider": "anthropic",
+                                "error": "Could not reach Anthropic API."})
+
+        if provider == "custom":
+            api_url = cfg.get("api_url", "").strip()
+            if not api_url:
+                return jsonify({"ok": False, "provider": "custom",
+                                "error": "Custom API URL not configured."})
+            try:
+                req = urllib.request.Request(
+                    f"{api_url.rstrip('/')}/models",
+                    headers={"Accept": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=4):
+                    pass
+                model = cfg.get("ai_model", "").strip()
+                return jsonify({"ok": True, "provider": "custom", "model": model})
+            except Exception:
+                return jsonify({"ok": False, "provider": "custom",
+                                "error": "Could not reach custom API."})
+
+    # Default / fallback: global Ollama
     if db.get_setting("ollama_enabled", "0") != "1":
-        return jsonify({"ok": False, "error": "Ollama is not enabled."})
+        return jsonify({"ok": False, "provider": "ollama", "error": "Ollama is not enabled."})
     ollama_url = db.get_setting("ollama_url", "http://localhost:11434").rstrip("/")
-    model = db.get_setting("ollama_model", "llama3")
+    model      = db.get_setting("ollama_model", "llama3")
     try:
         req = urllib.request.Request(
             f"{ollama_url}/api/tags",
@@ -33,27 +248,26 @@ def ollama_status():
         with urllib.request.urlopen(req, timeout=4) as resp:
             data = json.loads(resp.read().decode())
         models = [m.get("name", "") for m in data.get("models", [])]
-        return jsonify({"ok": True, "model": model, "models": models})
+        return jsonify({"ok": True, "provider": "ollama", "model": model, "models": models})
     except urllib.error.URLError:
-        return jsonify({"ok": False, "error": "Server unreachable."})
+        return jsonify({"ok": False, "provider": "ollama", "error": "Server unreachable."})
     except Exception:
-        return jsonify({"ok": False, "error": "Could not connect to Ollama server."})
+        return jsonify({"ok": False, "provider": "ollama",
+                        "error": "Could not connect to Ollama server."})
 
 
 @bp.route("/api/ai-fill", methods=["POST"])
 @login_required
 def ai_fill():
-    """AJAX: send a pasted job description to Ollama and return extracted form fields."""
-    if db.get_setting("ollama_enabled", "0") != "1":
-        return jsonify({"ok": False, "error": "Ollama AI Assistant is not enabled in Settings."})
+    """AJAX: send a pasted job description to AI and return extracted form fields."""
+    user_id = current_user_id()
+    if not _ai_available(user_id):
+        return jsonify({"ok": False, "error": "AI Assistant is not configured. Go to Settings → AI Assistant."})
 
     body = request.get_json(silent=True) or {}
     job_description = (body.get("job_description") or "").strip()
     if not job_description:
         return jsonify({"ok": False, "error": "Please paste a job description first."})
-
-    ollama_url   = db.get_setting("ollama_url",   "http://localhost:11434").rstrip("/")
-    ollama_model = db.get_setting("ollama_model", "llama3")
 
     prompt = (
         "You are a helpful assistant that extracts structured information from job postings.\n\n"
@@ -71,38 +285,16 @@ def ai_fill():
         "JSON object:"
     )
 
-    payload = json.dumps({
-        "model":  ollama_model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.1},
-    }).encode()
-
     try:
-        req = urllib.request.Request(
-            f"{ollama_url}/api/generate",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            result = json.loads(resp.read().decode())
-
-        raw = (result.get("response") or "").strip()
-        fence_match = _re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
-        if fence_match:
-            raw = fence_match.group(1).strip()
-        obj_match = _re.search(r"\{[\s\S]+\}", raw)
-        if obj_match:
-            raw = obj_match.group(0)
-
-        fields = json.loads(raw)
+        raw    = _call_ai(prompt, user_id, timeout=90)
+        fields = _parse_json_response(raw)
         allowed = {"job_desc", "company", "team", "link", "comment"}
         fields = {k: str(v).strip() for k, v in fields.items() if k in allowed}
         return jsonify({"ok": True, "fields": fields})
-
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc)[:200]})
     except urllib.error.URLError:
-        return jsonify({"ok": False, "error": "Could not connect to the Ollama server. Is it running?"})
+        return jsonify({"ok": False, "error": "Could not connect to the AI server. Is it running?"})
     except json.JSONDecodeError:
         return jsonify({
             "ok": False,
@@ -118,8 +310,7 @@ def ai_fill():
 @bp.route("/api/upload-profile-pdf", methods=["POST"])
 @login_required
 def upload_profile_pdf():
-    if db.get_setting("ollama_enabled", "0") != "1":
-        return jsonify({"ok": False, "error": "Ollama AI Assistant is not enabled in Settings."})
+    user_id = current_user_id()
 
     pdf_file = request.files.get("pdf")
     if not pdf_file or not pdf_file.filename:
@@ -144,7 +335,13 @@ def upload_profile_pdf():
         return jsonify({"ok": False, "error": "No readable text found in the PDF. Try a text-based PDF."})
 
     extracted = extracted[:_MAX_PROFILE_LENGTH]
-    db.set_setting("user_profile_summary", extracted)
+
+    # Save to per-user settings if logged in; fall back to global settings.
+    if user_id is not None:
+        db.save_user_ai_settings(user_id, {"profile_summary": extracted})
+    else:
+        db.set_setting("user_profile_summary", extracted)
+
     preview = extracted[:300].replace("\n", " ")
     return jsonify({"ok": True, "preview": preview, "char_count": len(extracted)})
 
@@ -153,8 +350,9 @@ def upload_profile_pdf():
 @login_required
 def ai_fit():
     """AJAX: compare user profile with a job description and return a fit analysis."""
-    if db.get_setting("ollama_enabled", "0") != "1":
-        return jsonify({"ok": False, "error": "Ollama AI Assistant is not enabled in Settings."})
+    user_id = current_user_id()
+    if not _ai_available(user_id):
+        return jsonify({"ok": False, "error": "AI Assistant is not configured. Go to Settings → AI Assistant."})
 
     if db.get_setting("ai_fit_enabled", "0") != "1":
         return jsonify({"ok": False, "error": "Smart Job Fit Analysis is not enabled in Settings."})
@@ -164,9 +362,16 @@ def ai_fit():
     if not job_description:
         return jsonify({"ok": False, "error": "No job description provided for fit analysis."})
 
-    skills     = db.get_setting("user_profile_skills",     "").strip()
-    experience = db.get_setting("user_profile_experience", "").strip()
-    summary    = db.get_setting("user_profile_summary",    "").strip()
+    # Prefer per-user profile; fall back to global settings.
+    if user_id is not None:
+        cfg = db.get_user_ai_settings(user_id)
+        skills     = cfg.get("profile_skills",     "").strip()
+        experience = cfg.get("profile_experience", "").strip()
+        summary    = cfg.get("profile_summary",    "").strip()
+    else:
+        skills     = db.get_setting("user_profile_skills",     "").strip()
+        experience = db.get_setting("user_profile_experience", "").strip()
+        summary    = db.get_setting("user_profile_summary",    "").strip()
 
     if not (skills or experience or summary):
         return jsonify({
@@ -182,9 +387,6 @@ def ai_fit():
     if experience:
         profile_parts.append(f"My experience:\n{experience[:1500]}")
     profile_text = "\n\n".join(profile_parts)
-
-    ollama_url   = db.get_setting("ollama_url",   "http://localhost:11434").rstrip("/")
-    ollama_model = db.get_setting("ollama_model", "llama3")
 
     prompt = (
         "You are a career advisor. Given a candidate profile and a job description, "
@@ -206,32 +408,9 @@ def ai_fit():
         "JSON object:"
     )
 
-    payload = json.dumps({
-        "model":   ollama_model,
-        "prompt":  prompt,
-        "stream":  False,
-        "options": {"temperature": 0.2},
-    }).encode()
-
     try:
-        req = urllib.request.Request(
-            f"{ollama_url}/api/generate",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            result = json.loads(resp.read().decode())
-
-        raw = (result.get("response") or "").strip()
-        fence_match = _re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
-        if fence_match:
-            raw = fence_match.group(1).strip()
-        obj_match = _re.search(r"\{[\s\S]+\}", raw)
-        if obj_match:
-            raw = obj_match.group(0)
-
-        analysis = json.loads(raw)
+        raw      = _call_ai(prompt, user_id, timeout=120)
+        analysis = _parse_json_response(raw)
 
         _VERDICT_VALUES = {"Strong Fit", "Good Fit", "Moderate Fit", "Weak Fit", "Not a Fit"}
         fit_score = analysis.get("fit_score", 0)
@@ -256,9 +435,10 @@ def ai_fit():
             "skill_gaps":      skill_gaps,
             "recommendation":  recommendation,
         })
-
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc)[:200]})
     except urllib.error.URLError:
-        return jsonify({"ok": False, "error": "Could not connect to the Ollama server. Is it running?"})
+        return jsonify({"ok": False, "error": "Could not connect to the AI server. Is it running?"})
     except json.JSONDecodeError:
         return jsonify({
             "ok": False,

@@ -155,13 +155,32 @@ def init_db():
     # ── Users ─────────────────────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            username      TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            is_admin      INTEGER DEFAULT 0,
-            created_at    TEXT NOT NULL
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            username            TEXT UNIQUE NOT NULL,
+            password_hash       TEXT NOT NULL DEFAULT '',
+            is_admin            INTEGER DEFAULT 0,
+            created_at          TEXT NOT NULL,
+            needs_password_setup INTEGER DEFAULT 0
         )
     """)
+    _add_column_if_missing(c, "users", "needs_password_setup", "INTEGER DEFAULT 0")
+
+    # ── Per-user AI settings ───────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_ai_settings (
+            user_id             INTEGER PRIMARY KEY,
+            ai_provider         TEXT NOT NULL DEFAULT 'ollama',
+            api_key             TEXT NOT NULL DEFAULT '',
+            api_url             TEXT NOT NULL DEFAULT '',
+            ai_model            TEXT NOT NULL DEFAULT '',
+            profile_skills      TEXT NOT NULL DEFAULT '',
+            profile_experience  TEXT NOT NULL DEFAULT '',
+            profile_summary     TEXT NOT NULL DEFAULT '',
+            use_admin_ai        INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    _add_column_if_missing(c, "user_ai_settings", "use_admin_ai", "INTEGER DEFAULT 0")
 
     conn.commit()
 

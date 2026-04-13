@@ -32,6 +32,13 @@
          class="list-group-item list-group-item-action {% if section == 'updates' %}active{% endif %}">
         <i class="bi bi-arrow-repeat me-2"></i>Updates
       </a>
+      {% if deployment_mode != 'local' and current_is_admin %}
+      <a href="{{ url_for('admin_db.db_overview') }}"
+         class="list-group-item list-group-item-action text-danger">
+        <i class="bi bi-database-fill-gear me-2"></i>Database
+        <span class="badge bg-danger ms-1 small" style="font-size:.6rem;">Admin</span>
+      </a>
+      {% endif %}
     </div>
   </div>
 
@@ -390,14 +397,19 @@
                        placeholder="e.g. admin" required autocomplete="off">
               </div>
               <div class="mb-3">
-                <label class="form-label fw-semibold">Password</label>
+                <label class="form-label fw-semibold">Password <span class="text-muted small fw-normal">(optional)</span></label>
                 <input type="password" name="password" class="form-control"
-                       placeholder="Min. 8 characters" required autocomplete="new-password">
+                       placeholder="Min. 8 characters — leave blank to prompt on first login"
+                       autocomplete="new-password">
+                <div class="form-text">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Leave blank to let the user set their own password the first time they sign in.
+                </div>
               </div>
               <div class="mb-3">
                 <label class="form-label fw-semibold">Confirm Password</label>
                 <input type="password" name="password2" class="form-control"
-                       placeholder="Repeat password" required autocomplete="new-password">
+                       placeholder="Repeat password" autocomplete="new-password">
               </div>
               <div class="mb-3">
                 <div class="form-check">
@@ -511,18 +523,131 @@
       <i class="bi bi-shield-lock fs-4 flex-shrink-0"></i>
       <div>
         <strong>Admin access required.</strong><br>
-        Only administrators can change the AI assistant configuration.
+        Only administrators can change the global Ollama AI configuration.
       </div>
     </div>
     {% endif %}
 
-    {# ── User Profile card — shown when ai_fit_enabled is on ── #}
-    <div class="card shadow-sm mb-4" id="profileCard"
-         {% if settings.get('ai_fit_enabled', '0') != '1' %}style="display:none"{% endif %}>
+    {# ── Per-user AI provider ── #}
+    {% if login_enabled %}
+    {# use_admin_ai: 1 = use admin server (default), 0 = use own settings #}
+    {% set _use_admin = user_ai_settings.get('use_admin_ai', 1)|int %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+          <i class="bi bi-cpu me-1 text-primary"></i>Your Personal AI Provider
+          <span class="badge bg-info text-dark ms-2 small">Per-account</span>
+        </span>
+        {# ── Master toggle ── #}
+        <div class="d-flex align-items-center gap-2">
+          <span class="small text-muted" id="aiToggleLabel">
+            {% if _use_admin %}Using admin's server{% else %}Using my own settings{% endif %}
+          </span>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   id="useAdminAiToggle"
+                   {% if _use_admin %}checked{% endif %}>
+            <label class="form-check-label small fw-normal" for="useAdminAiToggle">
+              Use admin's server
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        {# Info banner shown when "use admin" is ON #}
+        <div id="adminAiBanner" {% if not _use_admin %}style="display:none"{% endif %}>
+          <div class="alert alert-info d-flex align-items-start gap-3 py-2 mb-3" role="alert">
+            <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+            <div class="small">
+              <strong>Using the admin's AI server.</strong>
+              Your AI requests go through the shared
+              {% if settings.get('ollama_enabled','0') == '1' %}
+                Ollama server (<code>{{ settings.get('ollama_url','http://localhost:11434') }}</code>,
+                model <code>{{ settings.get('ollama_model','llama3') }}</code>).
+              {% else %}
+                Ollama server (currently <span class="text-danger">disabled</span> by admin).
+              {% endif %}
+              Toggle the switch off to configure your own provider.
+            </div>
+          </div>
+        </div>
+
+        <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}"
+              id="userAiForm">
+          <input type="hidden" name="action" value="save_user_ai">
+          {# Hidden field tracks the toggle state; JS keeps it in sync. #}
+          <input type="hidden" name="use_admin_ai" id="useAdminAiInput"
+                 value="{{ '1' if _use_admin else '0' }}">
+
+          {# Provider form — hidden when "use admin" is ON #}
+          <div id="ownProviderSection" {% if _use_admin %}style="display:none"{% endif %}>
+            <p class="text-muted small mb-3">
+              Configure your own AI provider. When set, this overrides the shared Ollama server for
+              <em>your</em> account only. You can use <strong>OpenAI</strong>, <strong>Anthropic (Claude)</strong>,
+              or any <strong>custom OpenAI-compatible API</strong> (e.g. a local LM Studio or vLLM server).
+              <br><small class="text-muted">API keys are stored locally in this server's database.</small>
+            </p>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">AI Provider</label>
+              <select name="ai_provider" id="aiProviderSelect" class="form-select" style="max-width:280px;">
+                <option value="openai"   {% if user_ai_settings.get('ai_provider','') == 'openai'    %}selected{% endif %}>
+                  🌐 OpenAI (ChatGPT / GPT-4o)
+                </option>
+                <option value="anthropic"{% if user_ai_settings.get('ai_provider','') == 'anthropic' %}selected{% endif %}>
+                  🟠 Anthropic (Claude)
+                </option>
+                <option value="custom"   {% if user_ai_settings.get('ai_provider','') == 'custom'    %}selected{% endif %}>
+                  🔧 Custom OpenAI-compatible API
+                </option>
+              </select>
+            </div>
+
+            <div id="providerApiSection">
+              <div class="mb-3" id="apiKeyRow">
+                <label class="form-label fw-semibold">API Key</label>
+                <input type="password" name="api_key" class="form-control" style="max-width:400px;"
+                       placeholder="sk-…  (leave blank to keep existing)"
+                       autocomplete="new-password">
+                {% if user_ai_settings.get('api_key') %}
+                <div class="form-text text-success">
+                  <i class="bi bi-key-fill me-1"></i>API key is saved.
+                  Enter a new key to replace it.
+                </div>
+                {% endif %}
+              </div>
+              <div class="mb-3" id="customUrlRow"
+                   {% if user_ai_settings.get('ai_provider','ollama') not in ('custom',) %}style="display:none"{% endif %}>
+                <label class="form-label fw-semibold">API Base URL</label>
+                <input type="url" name="api_url" class="form-control" style="max-width:400px;"
+                       value="{{ user_ai_settings.get('api_url','') }}"
+                       placeholder="e.g. http://localhost:1234/v1">
+                <div class="form-text">The base URL for an OpenAI-compatible API (e.g. LM Studio, vLLM, Groq).</div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Model Name <span class="text-muted small fw-normal">(optional)</span></label>
+                <input type="text" name="ai_model" class="form-control" style="max-width:280px;"
+                       value="{{ user_ai_settings.get('ai_model','') }}"
+                       id="aiModelInput"
+                       placeholder="{{ 'gpt-4o-mini' if user_ai_settings.get('ai_provider','') == 'openai' else ('claude-3-haiku-20240307' if user_ai_settings.get('ai_provider','') == 'anthropic' else '') }}">
+                <div class="form-text" id="modelHint"></div>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i>Save Provider Settings
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── User Profile card — always shown when AI is available ── #}
+    <div class="card shadow-sm mb-4" id="profileCard">
       <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span>
           <i class="bi bi-person-badge me-1 text-success"></i>Your Profile
-          {% set _has_profile = settings.get('user_profile_skills','') or settings.get('user_profile_experience','') or settings.get('user_profile_summary','') %}
+          {% set _has_profile = user_ai_settings.get('profile_skills','') or user_ai_settings.get('profile_experience','') or user_ai_settings.get('profile_summary','') %}
           {% if _has_profile %}
           <span class="badge bg-success ms-2">
             <i class="bi bi-check-circle me-1"></i>Profile saved
@@ -538,7 +663,7 @@
         <p class="text-muted small mb-3">
           Fill in your details below so the AI can compare your background against job descriptions.
           You can also upload a PDF CV/résumé and the app will extract the text automatically.
-          <strong>Your data stays on your machine — nothing is sent to the cloud.</strong>
+          <strong>Your profile is stored locally — nothing is sent to the cloud unless you use an external API.</strong>
         </p>
 
         {# PDF upload #}
@@ -570,7 +695,7 @@
             </label>
             <textarea class="form-control" id="user_profile_skills" name="user_profile_skills"
                       rows="3"
-                      placeholder="e.g. Python, SQL, project management, AutoCAD, teamwork, communication…">{{ settings.get('user_profile_skills', '') }}</textarea>
+                      placeholder="e.g. Python, SQL, project management, AutoCAD, teamwork, communication…">{{ user_ai_settings.get('profile_skills', '') }}</textarea>
             <div class="form-text">List your key skills, tools, and technologies, one per line or comma-separated.</div>
           </div>
 
@@ -580,7 +705,7 @@
             </label>
             <textarea class="form-control" id="user_profile_experience" name="user_profile_experience"
                       rows="4"
-                      placeholder="e.g. 2 years as an electrical engineer at XYZ, internship at ABC Corp on power systems…">{{ settings.get('user_profile_experience', '') }}</textarea>
+                      placeholder="e.g. 2 years as an electrical engineer at XYZ, internship at ABC Corp on power systems…">{{ user_ai_settings.get('profile_experience', '') }}</textarea>
             <div class="form-text">Briefly describe your work history, internships, and notable projects.</div>
           </div>
 
@@ -590,7 +715,7 @@
             </label>
             <textarea class="form-control" id="user_profile_summary" name="user_profile_summary"
                       rows="4"
-                      placeholder="e.g. Recent electrical engineering graduate passionate about renewable energy, seeking graduate roles in design or project delivery…">{{ settings.get('user_profile_summary', '') }}</textarea>
+                      placeholder="e.g. Recent electrical engineering graduate passionate about renewable energy, seeking graduate roles in design or project delivery…">{{ user_ai_settings.get('profile_summary', '') }}</textarea>
             <div class="form-text">
               A brief summary of who you are and what you are looking for. Uploading a PDF above
               will replace this field automatically.
@@ -751,12 +876,60 @@ if (testBtn) {
 
 // ── Toggle profile card visibility when ai_fit_enabled changes ─────────
 const fitToggle    = document.getElementById('ai_fit_enabled');
-const profileCard  = document.getElementById('profileCard');
-if (fitToggle && profileCard) {
-  fitToggle.addEventListener('change', () => {
-    profileCard.style.display = fitToggle.checked ? '' : 'none';
-  });
+if (fitToggle) {
+  // Profile card is always visible now; no-op kept for compatibility.
 }
+
+// ── Per-user AI provider selector ────────────────────────────────────────
+(function () {
+  const toggle         = document.getElementById('useAdminAiToggle');
+  const hiddenInput    = document.getElementById('useAdminAiInput');
+  const adminBanner    = document.getElementById('adminAiBanner');
+  const ownSection     = document.getElementById('ownProviderSection');
+  const toggleLabel    = document.getElementById('aiToggleLabel');
+  const sel            = document.getElementById('aiProviderSelect');
+  const apiSection     = document.getElementById('providerApiSection');
+  const customUrlRow   = document.getElementById('customUrlRow');
+  const modelInput     = document.getElementById('aiModelInput');
+  const modelHint      = document.getElementById('modelHint');
+
+  const modelPlaceholders = {
+    openai:    'gpt-4o-mini',
+    anthropic: 'claude-3-haiku-20240307',
+    custom:    'e.g. mistral, llama3',
+  };
+  const modelHints = {
+    openai:    'e.g. gpt-4o-mini, gpt-4o, gpt-3.5-turbo',
+    anthropic: 'e.g. claude-3-haiku-20240307, claude-3-sonnet-20240229',
+    custom:    'Model name accepted by your custom API server.',
+  };
+
+  function updateProviderUI() {
+    if (!sel) return;
+    const provider = sel.value;
+    if (customUrlRow) customUrlRow.style.display = provider === 'custom' ? '' : 'none';
+    if (modelInput) modelInput.placeholder = modelPlaceholders[provider] || '';
+    if (modelHint)  modelHint.textContent  = modelHints[provider] || '';
+  }
+
+  function applyToggle(useAdmin) {
+    if (hiddenInput)  hiddenInput.value        = useAdmin ? '1' : '0';
+    if (adminBanner)  adminBanner.style.display = useAdmin ? '' : 'none';
+    if (ownSection)   ownSection.style.display  = useAdmin ? 'none' : '';
+    if (toggleLabel)  toggleLabel.textContent   = useAdmin ? "Using admin's server" : "Using my own settings";
+  }
+
+  if (toggle) {
+    toggle.addEventListener('change', function () {
+      applyToggle(this.checked);
+    });
+    // Initialise to match current state (driven by server-rendered checked attribute).
+    applyToggle(toggle.checked);
+  }
+
+  if (sel) sel.addEventListener('change', updateProviderUI);
+  updateProviderUI();
+})();
 
 // ── PDF profile upload ────────────────────────────────────────────────
 const uploadBtn     = document.getElementById('uploadPdfBtn');

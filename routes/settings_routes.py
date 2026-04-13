@@ -60,6 +60,11 @@ def settings():
                 flash("Cannot enable login — no users exist. Add a user first.", "danger")
                 return redirect(url_for("settings_routes.settings", section="users"))
             db.set_setting("login_enabled", login_enabled)
+            if login_enabled == "1":
+                users = db.get_users()
+                admins = [u for u in users if u["is_admin"]]
+                first_user = (admins or users)[0]
+                db.reassign_null_user_data(first_user["id"])
             flash("Security settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="users"))
 
@@ -105,15 +110,24 @@ def settings():
             password = request.form.get("password", "")
             password2 = request.form.get("password2", "")
             new_is_admin = bool(request.form.get("is_admin"))
-            if not username or not password:
-                flash("Username and password are required.", "danger")
-            elif password != password2:
+            if not username:
+                flash("Username is required.", "danger")
+            elif password and password != password2:
                 flash("Passwords do not match.", "danger")
-            elif len(password) < 8:
+            elif password and len(password) < 8:
                 flash("Password must be at least 8 characters.", "danger")
             else:
-                pw_hash = generate_password_hash(password)
-                ok, msg = db.add_user(username, pw_hash, new_is_admin)
+                if password:
+                    pw_hash = generate_password_hash(password)
+                    needs_setup = False
+                else:
+                    # No password supplied — user must set it on first login.
+                    pw_hash = ""
+                    needs_setup = True
+                ok, msg = db.add_user(username, pw_hash, new_is_admin,
+                                      needs_password_setup=needs_setup)
+                if ok and needs_setup:
+                    msg += " They will be prompted to set a password on first login."
                 flash(msg, "success" if ok else "danger")
             return redirect(url_for("settings_routes.settings", section="users"))
 
@@ -153,10 +167,51 @@ def settings():
             if DEPLOYMENT_MODE == "local":
                 flash("AI profile settings are not available in local mode.", "warning")
                 return redirect(url_for("settings_routes.settings", section="ai"))
-            db.set_setting("user_profile_skills",     request.form.get("user_profile_skills",     "").strip())
-            db.set_setting("user_profile_experience", request.form.get("user_profile_experience", "").strip())
-            db.set_setting("user_profile_summary",    request.form.get("user_profile_summary",    "").strip())
+            profile_user_id = current_user_id()
+            skills     = request.form.get("user_profile_skills",     "").strip()
+            experience = request.form.get("user_profile_experience", "").strip()
+            summary    = request.form.get("user_profile_summary",    "").strip()
+            if profile_user_id is not None:
+                db.save_user_ai_settings(profile_user_id, {
+                    "profile_skills":     skills,
+                    "profile_experience": experience,
+                    "profile_summary":    summary,
+                })
+            else:
+                # Single-user mode: keep using global settings.
+                db.set_setting("user_profile_skills",     skills)
+                db.set_setting("user_profile_experience", experience)
+                db.set_setting("user_profile_summary",    summary)
             flash("Your profile has been saved.", "success")
+            return redirect(url_for("settings_routes.settings", section="ai"))
+
+        elif action == "save_user_ai":
+            if DEPLOYMENT_MODE == "local":
+                flash("AI settings are not available in local mode.", "warning")
+                return redirect(url_for("settings_routes.settings", section="ai"))
+            profile_user_id = current_user_id()
+            if profile_user_id is None:
+                flash("You must be logged in to save personal AI settings.", "warning")
+                return redirect(url_for("settings_routes.settings", section="ai"))
+            # Toggle: 1 = use admin's server, 0 = use own settings.
+            use_admin_ai = 1 if request.form.get("use_admin_ai") == "1" else 0
+            provider = request.form.get("ai_provider", "ollama").strip()
+            if provider not in ("ollama", "openai", "anthropic", "custom"):
+                provider = "ollama"
+            api_key  = request.form.get("api_key",  "").strip()
+            api_url  = request.form.get("api_url",  "").strip()
+            ai_model = request.form.get("ai_model", "").strip()
+            fields = {
+                "use_admin_ai": use_admin_ai,
+                "ai_provider":  provider,
+                "api_url":      api_url,
+                "ai_model":     ai_model,
+            }
+            # Only overwrite the stored API key when a non-empty value was submitted.
+            if api_key:
+                fields["api_key"] = api_key
+            db.save_user_ai_settings(profile_user_id, fields)
+            flash("Your AI provider settings have been saved.", "success")
             return redirect(url_for("settings_routes.settings", section="ai"))
 
         flash("Unknown action.", "warning")
@@ -167,6 +222,7 @@ def settings():
     status_rows = db.get_status_rows(user_id=user_id)
     status_styles = db.get_status_styles(user_id=user_id)
     users = db.get_users()
+    user_ai_cfg = db.get_user_ai_settings(user_id)
     return render_template(
         "settings.html",
         settings=current,
@@ -178,6 +234,7 @@ def settings():
         app_version=APP_VERSION,
         protected_statuses=db.PROTECTED_STATUSES,
         current_is_admin=is_admin,
+        user_ai_settings=user_ai_cfg,
     )
 
 

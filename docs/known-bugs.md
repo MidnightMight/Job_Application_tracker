@@ -23,6 +23,12 @@ Date format: **YYYYMMDD**
 
 _No known open bugs at this time._
 
+> **Tip (v1.2.3+):** Admins can now inspect and edit the live database directly
+> from the browser via **Settings → Database**.  This replaces the need for an
+> external SQLite browser for most common debugging tasks.  See the
+> [Admin Guide → Database Debug Viewer](admin-guide.md#8-database-debug-viewer)
+> for SQL snippets and common fix recipes.
+
 ---
 
 ## Fixed bugs
