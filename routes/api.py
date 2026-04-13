@@ -186,9 +186,30 @@ def ollama_status():
         if not api_key:
             return jsonify({"ok": False, "provider": "anthropic",
                             "error": "Anthropic API key not configured."})
-        # Anthropic has no lightweight ping endpoint; return ok if key present.
-        model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
-        return jsonify({"ok": True, "provider": "anthropic", "model": model})
+        # Attempt a lightweight connectivity check against the Anthropic API endpoint.
+        try:
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/models",
+                headers={
+                    "x-api-key":         api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Accept":            "application/json",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=5):
+                pass
+            model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+            return jsonify({"ok": True, "provider": "anthropic", "model": model})
+        except urllib.error.HTTPError as exc:
+            if exc.code in (401, 403):
+                return jsonify({"ok": False, "provider": "anthropic",
+                                "error": "Invalid Anthropic API key."})
+            # Other HTTP errors still mean the API is reachable.
+            model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+            return jsonify({"ok": True, "provider": "anthropic", "model": model})
+        except Exception:
+            return jsonify({"ok": False, "provider": "anthropic",
+                            "error": "Could not reach Anthropic API."})
 
     if provider == "custom":
         api_url = cfg.get("api_url", "").strip()
@@ -265,7 +286,7 @@ def ai_fill():
         fields = {k: str(v).strip() for k, v in fields.items() if k in allowed}
         return jsonify({"ok": True, "fields": fields})
     except RuntimeError as exc:
-        return jsonify({"ok": False, "error": str(exc)})
+        return jsonify({"ok": False, "error": str(exc)[:200]})
     except urllib.error.URLError:
         return jsonify({"ok": False, "error": "Could not connect to the AI server. Is it running?"})
     except json.JSONDecodeError:
@@ -409,7 +430,7 @@ def ai_fit():
             "recommendation":  recommendation,
         })
     except RuntimeError as exc:
-        return jsonify({"ok": False, "error": str(exc)})
+        return jsonify({"ok": False, "error": str(exc)[:200]})
     except urllib.error.URLError:
         return jsonify({"ok": False, "error": "Could not connect to the AI server. Is it running?"})
     except json.JSONDecodeError:
