@@ -281,7 +281,10 @@ def db_query():
             conn = get_connection()
             try:
                 conn.execute("PRAGMA query_only=ON")
-                cur = conn.execute(sql)
+                # Intentional: this is an admin-only read-only SQL console.
+                # Access is gated by @admin_required, PRAGMA query_only=ON is set,
+                # and only SELECT/PRAGMA statements are accepted above.
+                cur = conn.execute(sql)  # nosec B608
                 rows_raw = cur.fetchmany(500)
                 columns = [d[0] for d in cur.description] if cur.description else []
                 results = [dict(zip(columns, r)) for r in rows_raw]
