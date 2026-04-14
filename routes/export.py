@@ -11,7 +11,7 @@ import tempfile
 from flask import Blueprint, flash, redirect, render_template, request, Response, send_file, url_for
 
 import db
-from .auth import login_required, current_user_id
+from .auth import admin_required, login_required, current_user_id
 
 bp = Blueprint("export", __name__)
 logger = logging.getLogger(__name__)
@@ -71,6 +71,7 @@ def export_applications():
 
 
 @bp.route("/export/companies")
+@login_required
 def export_companies():
     companies_list = db.get_companies()
     fields = [
@@ -90,6 +91,7 @@ def export_companies():
 
 
 @bp.route("/export/db")
+@admin_required
 def export_db():
     """Download a copy of the SQLite database for migration / backup."""
     logger.info("DB export requested by %s", request.remote_addr)
@@ -107,7 +109,7 @@ def export_db():
 
 
 @bp.route("/export/db/restore", methods=["POST"])
-@login_required
+@admin_required
 def restore_db():
     """Replace the current database with an uploaded backup file."""
     logger.info("DB restore requested by %s", request.remote_addr)
