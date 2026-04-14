@@ -142,23 +142,17 @@
     <table class="table table-sm table-bordered table-hover mb-0" style="font-size:.8rem;">
       <thead class="table-dark sticky-top">
         <tr>
-          {% for col in columns %}
-          <th class="text-nowrap">{{ col }}</th>
-          {% endfor %}
           {% if pk_col %}
           <th></th>
           {% endif %}
+          {% for col in columns %}
+          <th class="text-nowrap">{{ col }}</th>
+          {% endfor %}
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
         <tr>
-          {% for col in columns %}
-          <td class="text-nowrap" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;"
-              title="{{ row[col]|string }}">
-            {{ row[col] if row[col] is not none else '' }}
-          </td>
-          {% endfor %}
           {% if pk_col %}
           <td>
             {% if pk_is_int %}
@@ -174,6 +168,12 @@
             {% endif %}
           </td>
           {% endif %}
+          {% for col in columns %}
+          <td class="text-nowrap" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;"
+              title="{{ row[col]|string }}">
+            {{ row[col] if row[col] is not none else '' }}
+          </td>
+          {% endfor %}
         </tr>
         {% endfor %}
       </tbody>
@@ -247,28 +247,35 @@
 {% elif view == 'query' %}
 <div class="card shadow-sm mb-4">
   <div class="card-header fw-semibold">
-    <i class="bi bi-terminal me-1"></i>Read-Only SQL Console
-    <span class="badge bg-warning text-dark ms-2 small">SELECT / PRAGMA only</span>
+    <i class="bi bi-terminal me-1"></i>SQL Console
+    <span class="badge bg-warning text-dark ms-2 small">SELECT · UPDATE · INSERT · DELETE</span>
   </div>
   <div class="card-body">
     <form method="post">
       <div class="mb-3">
-        <label class="form-label fw-semibold small">SQL Query</label>
+        <label class="form-label fw-semibold small">SQL Statement</label>
         <textarea class="form-control font-monospace" name="sql" rows="5"
-                  placeholder="SELECT * FROM settings ORDER BY key;&#10;PRAGMA table_info(applications);">{{ sql }}</textarea>
+                  placeholder="SELECT * FROM settings ORDER BY key;&#10;UPDATE applications SET user_id=1 WHERE user_id=0;">{{ sql }}</textarea>
         <div class="form-text">
-          Only <code>SELECT</code> and <code>PRAGMA</code> statements are allowed.
-          Results are capped at 500 rows.
-          Sensitive columns (password hashes, API keys) are always masked.
+          <code>SELECT</code>, <code>PRAGMA</code>, <code>UPDATE</code>, <code>INSERT</code>, and
+          <code>DELETE</code> are allowed. Schema-altering statements (DROP, ALTER, CREATE, …) are blocked.
+          SELECT results are capped at 500 rows. Sensitive columns (password hashes, API keys) are always masked.
         </div>
       </div>
       <button type="submit" class="btn btn-dark fw-semibold">
-        <i class="bi bi-play-fill me-1"></i>Run Query
+        <i class="bi bi-play-fill me-1"></i>Run
       </button>
     </form>
 
     {% if error %}
     <div class="alert alert-danger mt-3 small"><i class="bi bi-exclamation-circle me-1"></i>{{ error }}</div>
+    {% endif %}
+
+    {% if is_write and rows_affected is not none and not error %}
+    <div class="alert alert-success mt-3 small">
+      <i class="bi bi-check-circle me-1"></i>
+      Statement executed successfully — <strong>{{ rows_affected }} row{{ 's' if rows_affected != 1 }} affected</strong>.
+    </div>
     {% endif %}
 
     {% if results is not none %}
@@ -309,20 +316,22 @@
 {# Handy queries #}
 <div class="card shadow-sm">
   <div class="card-header fw-semibold small">
-    <i class="bi bi-clipboard-pulse me-1"></i>Handy Diagnostic Queries
+    <i class="bi bi-clipboard-pulse me-1"></i>Handy Queries
   </div>
   <div class="card-body small">
-    <p class="text-muted mb-3">Click a query to copy it to the console above.</p>
+    <p class="text-muted mb-3">Click a query to load it into the console above.</p>
     <div class="d-flex flex-wrap gap-2" id="snippetButtons">
       {% set snippets = [
-        ("All settings",         "SELECT key, value FROM settings ORDER BY key;"),
-        ("Users (no hashes)",    "SELECT id, username, is_admin, created_at, needs_password_setup FROM users;"),
-        ("App counts per user",  "SELECT user_id, COUNT(*) AS apps FROM applications GROUP BY user_id;"),
-        ("AI settings",          "SELECT user_id, ai_provider, ai_model, profile_skills FROM user_ai_settings;"),
-        ("Recent applications",  "SELECT id, job_desc, company, status, date_applied FROM applications ORDER BY id DESC LIMIT 20;"),
-        ("Status list",          "SELECT name, sort_order, user_id FROM statuses ORDER BY sort_order;"),
-        ("Pending reminders",    "SELECT * FROM reminders WHERE dismissed=0 ORDER BY created_at DESC;"),
-        ("Table sizes",          "SELECT name, (SELECT COUNT(*) FROM applications) AS rows FROM sqlite_master WHERE type='table' ORDER BY name;"),
+        ("All settings",              "SELECT key, value FROM settings ORDER BY key;"),
+        ("Users (no hashes)",         "SELECT id, username, is_admin, created_at, needs_password_setup FROM users;"),
+        ("App counts per user",       "SELECT user_id, COUNT(*) AS apps FROM applications GROUP BY user_id;"),
+        ("AI settings",               "SELECT user_id, ai_provider, ai_model, profile_skills FROM user_ai_settings;"),
+        ("Recent applications",       "SELECT id, job_desc, company, status, date_applied FROM applications ORDER BY id DESC LIMIT 20;"),
+        ("Status list",               "SELECT name, sort_order, user_id FROM statuses ORDER BY sort_order;"),
+        ("Pending reminders",         "SELECT * FROM reminders WHERE dismissed=0 ORDER BY created_at DESC;"),
+        ("Reassign apps user 0→1",    "UPDATE applications SET user_id=1 WHERE user_id=0;"),
+        ("Disable login",             "UPDATE settings SET value='0' WHERE key='login_enabled';"),
+        ("Complete onboarding",       "UPDATE settings SET value='1' WHERE key='onboarding_complete';"),
       ] %}
       {% for label, query in snippets %}
       <button type="button" class="btn btn-sm btn-outline-secondary snippet-btn"
