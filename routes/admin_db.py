@@ -5,7 +5,7 @@ Provides:
   GET  /admin/db/<table>        — paginated row viewer
   GET  /admin/db/<table>/<pk>   — edit form for a single row
   POST /admin/db/<table>/<pk>   — save edits to a single row
-  POST /admin/db/query          — run a read-only SELECT query
+  POST /admin/db/query          — run a SELECT/UPDATE/INSERT/DELETE query
 
 All routes require admin access (login_required + is_admin).
 Sensitive columns (password_hash, api_key) are masked in the viewer.
@@ -265,34 +265,56 @@ def _db_row_impl(table: str, pk):
 @bp.route("/admin/db/query", methods=["GET", "POST"])
 @admin_required
 def db_query():
-    """Read-only SQL query console (SELECT only)."""
+    """SQL query console supporting SELECT, PRAGMA, UPDATE, INSERT, and DELETE."""
     results = None
     columns = []
     error = None
     sql = ""
+    rows_affected = None
+    is_write = False
+
+    # DML verbs allowed to modify data (table rows only — not schema).
+    _WRITE_VERBS = {"UPDATE", "INSERT", "DELETE"}
+    # DDL verbs that are always blocked to protect the schema.
+    _BLOCKED_VERBS = {"DROP", "CREATE", "ALTER", "ATTACH", "DETACH", "VACUUM", "REINDEX", "REPLACE"}
 
     if request.method == "POST":
         sql = request.form.get("sql", "").strip()
-        # Only allow SELECT/PRAGMA — WAL mode + query_only PRAGMA reinforce this.
         normalised = sql.upper().lstrip()
-        if not normalised.startswith("SELECT") and not normalised.startswith("PRAGMA"):
-            error = "Only SELECT and PRAGMA statements are permitted."
+        first_word = normalised.split()[0] if normalised.split() else ""
+
+        if first_word in _BLOCKED_VERBS:
+            error = (
+                f"'{first_word}' statements are not permitted. "
+                "Only SELECT, PRAGMA, UPDATE, INSERT, and DELETE are allowed."
+            )
+        elif first_word not in {"SELECT", "PRAGMA"} | _WRITE_VERBS:
+            error = "Only SELECT, PRAGMA, UPDATE, INSERT, and DELETE statements are permitted."
         else:
+            is_write = first_word in _WRITE_VERBS
             conn = get_connection()
             try:
-                conn.execute("PRAGMA query_only=ON")
-                # Intentional: this is an admin-only read-only SQL console.
-                # Access is gated by @admin_required, PRAGMA query_only=ON is set,
-                # and only SELECT/PRAGMA statements are accepted above.
-                cur = conn.execute(sql)  # nosec B608
-                rows_raw = cur.fetchmany(500)
-                columns = [d[0] for d in cur.description] if cur.description else []
-                results = [dict(zip(columns, r)) for r in rows_raw]
-                for row in results:
-                    for k in list(row.keys()):
-                        if k in _SENSITIVE_COLUMNS:
-                            row[k] = "••••••••"
+                if is_write:
+                    # Intentional: admin-only DML console gated by @admin_required.
+                    # DDL verbs are blocked above; only row-level changes are allowed.
+                    cur = conn.execute(sql)  # nosec B608
+                    rows_affected = cur.rowcount
+                    conn.commit()
+                else:
+                    conn.execute("PRAGMA query_only=ON")
+                    # Intentional: admin-only read-only SQL console gated by @admin_required.
+                    # PRAGMA query_only=ON is set; only SELECT/PRAGMA reach this branch.
+                    cur = conn.execute(sql)  # nosec B608
+                    rows_raw = cur.fetchmany(500)
+                    columns = [d[0] for d in cur.description] if cur.description else []
+                    results = [dict(zip(columns, r)) for r in rows_raw]
+                    for row in results:
+                        for k in list(row.keys()):
+                            if k in _SENSITIVE_COLUMNS:
+                                row[k] = "••••••••"
             except sqlite3.Error as exc:
+                if is_write:
+                    conn.rollback()
                 error = str(exc)
             finally:
                 conn.close()
@@ -304,4 +326,6 @@ def db_query():
         results=results,
         columns=columns,
         error=error,
+        rows_affected=rows_affected,
+        is_write=is_write,
     )
