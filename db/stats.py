@@ -5,6 +5,17 @@ from datetime import date
 from .connection import get_connection, get_dynamic_years
 from .init_db import PENDING_STATUSES
 
+# Statuses that have NOT yet been submitted (or will never be submitted).
+# Applications in any of these states are excluded from the "submitted" count.
+_NON_SUBMITTED_STATUSES = {
+    "Select_Status",
+    "Drafting_Application",
+    "Drafting_CV",
+    "Not_Applying",
+    "Job_Expired",
+    "EOI",
+}
+
 
 def get_stats(year=None, user_id=None):
     from .applications import get_applications
@@ -12,7 +23,7 @@ def get_stats(year=None, user_id=None):
     total = len(apps)
     submitted = sum(
         1 for a in apps
-        if a["status"] not in ("Select_Status", "Drafting_CV", "Not_Applying")
+        if a["status"] not in _NON_SUBMITTED_STATUSES
     )
     rejected = sum(1 for a in apps if "Rejected" in a["status"])
     offers = sum(1 for a in apps if a["status"] == "Offer_Received")
@@ -67,7 +78,7 @@ def get_success_rate_per_year(user_id=None):
         apps = get_applications(year=y, user_id=user_id)
         submitted = sum(
             1 for a in apps
-            if a["status"] not in ("Select_Status", "Drafting_CV", "Not_Applying")
+            if a["status"] not in _NON_SUBMITTED_STATUSES
         )
         offers = sum(1 for a in apps if a["status"] == "Offer_Received")
         result[str(y)] = round((offers / submitted * 100), 1) if submitted else 0
