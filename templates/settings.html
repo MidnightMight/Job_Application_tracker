@@ -359,7 +359,7 @@
                     {% endif %}
                   </td>
                   <td class="text-muted small">{{ u.created_at[:10] }}</td>
-                  <td class="text-muted small">{{ (u.last_login_at or '') | replace('T', ' ') | truncate(16, True, '') if u.last_login_at else '—' }}</td>
+                  <td class="text-muted small">{{ u.last_login_display }}</td>
                   <td class="text-end pe-3">
                     <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}"
                           class="d-inline"

@@ -107,7 +107,7 @@
       </select>
       <button type="submit" class="btn btn-sm btn-primary">Apply</button>
       {% if selected_status %}
-      <a href="{{ url_for('dashboard.year_view', year=year, sort=sort_mode) }}" class="btn btn-sm btn-outline-secondary">Clear Filter</a>
+      <a href="{{ url_for('dashboard.year_view', year=year, sort=sort_mode) }}" class="btn btn-sm btn-outline-secondary">Clear Status Filter</a>
       {% endif %}
     </form>
   </div>

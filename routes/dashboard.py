@@ -9,6 +9,7 @@ from .auth import login_required, current_user_id
 from db.applications import _STALE_DAYS
 
 bp = Blueprint("dashboard", __name__)
+# Keep unknown statuses at the end of status-sorted lists.
 _UNKNOWN_STATUS_SORT_ORDER = 10_000
 
 
