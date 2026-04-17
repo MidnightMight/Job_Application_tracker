@@ -3,6 +3,42 @@
 from .connection import get_connection
 
 
+_NON_COMPANY_TRACKING_STATUSES = {
+    "Job_Expired",
+    "Drafting_CV",
+    "Select_Status",
+    "Not_Applying",
+}
+
+
+def _normalize_industry_tags(raw: str | None) -> str | None:
+    """Normalise comma-separated industry tags into a deduplicated string."""
+    if not raw:
+        return None
+    tags = []
+    seen: set[str] = set()
+    for part in raw.replace(";", ",").split(","):
+        tag = part.strip()
+        key = tag.lower()
+        if not tag or key in seen:
+            continue
+        seen.add(key)
+        tags.append(tag)
+    return ", ".join(tags) if tags else None
+
+
+def _merge_industry_tags(existing: str | None, incoming: str | None) -> str | None:
+    """Merge two tag strings into one normalised comma-separated value."""
+    left = _normalize_industry_tags(existing) or ""
+    right = _normalize_industry_tags(incoming) or ""
+    merged = ", ".join(x for x in (left, right) if x)
+    return _normalize_industry_tags(merged)
+
+
+def _should_track_company_year(status: str | None) -> bool:
+    return (status or "") not in _NON_COMPANY_TRACKING_STATUSES
+
+
 def get_companies(user_id: int | None = None, pool_enabled: bool = True):
     """Return companies visible to the given user.
 
@@ -42,6 +78,7 @@ def get_company(company_id: int):
 
 
 def add_company(data, user_id: int | None = None):
+    industry_tags = _normalize_industry_tags(data.get("industry", ""))
     conn = get_connection()
     conn.execute(
         """INSERT INTO companies
@@ -57,7 +94,7 @@ def add_company(data, user_id: int | None = None):
             1 if data.get("applied_2026") else 0,
             1 if data.get("applied_2027") else 0,
             user_id,
-            data.get("industry", "") or None,
+            industry_tags,
         ),
     )
     conn.commit()
@@ -65,6 +102,7 @@ def add_company(data, user_id: int | None = None):
 
 
 def update_company(company_id: int, data):
+    industry_tags = _normalize_industry_tags(data.get("industry", ""))
     conn = get_connection()
     conn.execute(
         """UPDATE companies SET
@@ -80,7 +118,7 @@ def update_company(company_id: int, data):
             1 if data.get("applied_2025") else 0,
             1 if data.get("applied_2026") else 0,
             1 if data.get("applied_2027") else 0,
-            data.get("industry", "") or None,
+            industry_tags,
             company_id,
         ),
     )
@@ -118,24 +156,65 @@ def bulk_delete_companies(ids: list) -> int:
     return count
 
 
-def _auto_add_or_update_company(company_name: str, industry: str | None = None):
-    """Create a company record if it doesn't exist; update industry if missing."""
+def _auto_add_or_update_company(
+    company_name: str,
+    industry: str | None = None,
+    *,
+    date_applied: str | None = None,
+    status: str | None = None,
+    app_id: int | None = None,
+):
+    """Create/update company and keep industry tags + applied-year flags in sync."""
     if not company_name:
         return
+    normalized_industry = _normalize_industry_tags(industry)
+    applied_col = None
+    if date_applied and _should_track_company_year(status):
+        year = (date_applied or "")[:4]
+        if year.isdigit():
+            applied_col = f"applied_{year}"
+
     conn = get_connection()
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(companies)").fetchall()}
+    can_mark_applied = bool(applied_col and applied_col in cols)
     row = conn.execute(
         "SELECT id, industry FROM companies WHERE LOWER(company_name)=?",
         (company_name.lower(),),
     ).fetchone()
+
+    company_added = False
     if row is None:
-        conn.execute(
-            "INSERT INTO companies (company_name, industry) VALUES (?,?)",
-            (company_name, industry or None),
-        )
-    elif industry and not row["industry"]:
-        conn.execute(
-            "UPDATE companies SET industry=? WHERE id=?",
-            (industry, row["id"]),
-        )
+        if can_mark_applied:
+            conn.execute(
+                f"INSERT INTO companies (company_name, industry, {applied_col}) VALUES (?,?,1)",
+                (company_name, normalized_industry),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO companies (company_name, industry) VALUES (?,?)",
+                (company_name, normalized_industry),
+            )
+        company_added = True
+    else:
+        merged = _merge_industry_tags(row["industry"], normalized_industry)
+        if can_mark_applied:
+            conn.execute(
+                f"UPDATE companies SET industry=?, {applied_col}=1 WHERE id=?",
+                (merged, row["id"]),
+            )
+        else:
+            conn.execute(
+                "UPDATE companies SET industry=? WHERE id=?",
+                (merged, row["id"]),
+            )
     conn.commit()
     conn.close()
+
+    if company_added and not normalized_industry and app_id is not None:
+        from .reminders import create_reminder
+
+        msg = (
+            f"Company '{company_name}' was added without industry tags. "
+            "Open Company Tracker to complete its industry/tags."
+        )
+        create_reminder(app_id, msg)

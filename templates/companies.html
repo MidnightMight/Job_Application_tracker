@@ -92,7 +92,7 @@
           </th>
           <th>#</th>
           <th>Company</th>
-          <th>Sector / Note</th>
+          <th>Sector / Note &amp; Tags</th>
           {% for y in years %}
           <th class="text-center">{{ y }}</th>
           {% endfor %}
@@ -118,7 +118,17 @@
             {% if c._pooled_from_other %}
             <span class="text-muted fst-italic">— (private)</span>
             {% else %}
-            {{ c.note or '—' }}
+            <div>{{ c.note or '—' }}</div>
+            {% if c.industry %}
+            <div class="mt-1">
+              {% for tag in c.industry.split(',') %}
+              {% set clean = tag.strip() %}
+              {% if clean %}
+              <span class="badge bg-info text-dark me-1 mb-1">{{ clean }}</span>
+              {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
             {% endif %}
           </td>
           {% for y in years %}

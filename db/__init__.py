@@ -46,6 +46,7 @@ from .users import (
     delete_user,
     get_user_by_username,
     set_user_password,
+    update_user_last_login,
     reassign_null_user_data,
 )
 
@@ -94,6 +95,8 @@ from .applications import (
     find_duplicate_applications,
     bulk_import_applications,
     save_ai_fit,
+    archive_application,
+    unarchive_application,
 )
 
 __all__ = [
@@ -111,6 +114,7 @@ __all__ = [
     # users
     "get_users", "count_users", "add_user", "delete_user", "get_user_by_username",
     "set_user_password", "reassign_null_user_data",
+    "update_user_last_login",
     # user_ai_settings
     "get_user_ai_settings", "save_user_ai_settings", "user_has_own_ai",
     # reminders
@@ -127,4 +131,5 @@ __all__ = [
     "get_application_timeline", "add_application", "update_application",
     "delete_application", "bulk_delete_applications", "bulk_update_applications",
     "find_duplicate_applications", "bulk_import_applications", "save_ai_fit",
+    "archive_application", "unarchive_application",
 ]

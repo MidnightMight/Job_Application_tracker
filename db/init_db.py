@@ -65,7 +65,9 @@ def init_db():
             last_modified_at  TEXT,
             job_expiry_date   TEXT,
             industry          TEXT,
-            user_id           INTEGER
+            user_id           INTEGER,
+            archived          INTEGER DEFAULT 0,
+            archived_at       TEXT
         )
     """)
 
@@ -83,6 +85,8 @@ def init_db():
     _add_column_if_missing(c, "applications", "job_expiry_date",     "TEXT")
     _add_column_if_missing(c, "applications", "industry",            "TEXT")
     _add_column_if_missing(c, "applications", "user_id",             "INTEGER")
+    _add_column_if_missing(c, "applications", "archived",            "INTEGER DEFAULT 0")
+    _add_column_if_missing(c, "applications", "archived_at",         "TEXT")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""
@@ -160,10 +164,12 @@ def init_db():
             password_hash       TEXT NOT NULL DEFAULT '',
             is_admin            INTEGER DEFAULT 0,
             created_at          TEXT NOT NULL,
-            needs_password_setup INTEGER DEFAULT 0
+            needs_password_setup INTEGER DEFAULT 0,
+            last_login_at       TEXT
         )
     """)
     _add_column_if_missing(c, "users", "needs_password_setup", "INTEGER DEFAULT 0")
+    _add_column_if_missing(c, "users", "last_login_at", "TEXT")
 
     # ── Per-user AI settings ───────────────────────────────────────────────────
     c.execute("""

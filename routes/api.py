@@ -101,7 +101,14 @@ def _call_ai(prompt: str, user_id, timeout: int = 90) -> str:
     provider = cfg.get("ai_provider", "ollama")
 
     # When the user chose to use their own provider (use_admin_ai = 0).
-    if not use_admin and provider != "ollama":
+    if not use_admin:
+        if provider == "ollama":
+            api_url = cfg.get("api_url", "").strip()
+            model = cfg.get("ai_model", "").strip() or db.get_setting("ollama_model", "llama3")
+            if not api_url:
+                raise RuntimeError("Personal Ollama URL is not configured. Go to Settings → AI Assistant.")
+            return _call_ollama(prompt, api_url, model, timeout)
+
         if provider == "openai":
             api_key = cfg.get("api_key", "").strip()
             if not api_key:
@@ -164,7 +171,26 @@ def ollama_status():
     provider  = cfg.get("ai_provider", "ollama")
 
     # When the user chose their own provider (use_admin_ai = 0).
-    if not use_admin and provider != "ollama":
+    if not use_admin:
+        if provider == "ollama":
+            api_url = cfg.get("api_url", "").strip()
+            if not api_url:
+                return jsonify({"ok": False, "provider": "ollama",
+                                "error": "Personal Ollama URL not configured."})
+            model = cfg.get("ai_model", "").strip() or db.get_setting("ollama_model", "llama3")
+            try:
+                req = urllib.request.Request(
+                    f"{api_url.rstrip('/')}/api/tags",
+                    headers={"Accept": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=4) as resp:
+                    data = json.loads(resp.read().decode())
+                models = [m.get("name", "") for m in data.get("models", [])]
+                return jsonify({"ok": True, "provider": "ollama", "model": model, "models": models})
+            except Exception:
+                return jsonify({"ok": False, "provider": "ollama",
+                                "error": "Could not connect to your personal Ollama server."})
+
         if provider == "openai":
             api_key = cfg.get("api_key", "").strip()
             if not api_key:

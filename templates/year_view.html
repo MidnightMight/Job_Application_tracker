@@ -65,25 +65,26 @@
 <!-- Progress Bar -->
 {% if stats.total > 0 %}
 <div class="card border-0 shadow-sm mb-4">
-  <div class="card-body py-2">
-    <div class="d-flex justify-content-between small text-muted mb-1">
-      <span>Application Pipeline Progress</span>
-      <span>{{ stats.submitted }} submitted / {{ stats.total }} total</span>
-    </div>
-    <div class="progress" style="height:18px;">
-      {% set pct_submitted = ((stats.submitted / stats.total) * 100) | round(1) %}
-      {% set pct_rejected  = ((stats.rejected  / stats.total) * 100) | round(1) %}
-      {% set pct_offers    = ((stats.offers    / stats.total) * 100) | round(1) %}
-      <div class="progress-bar bg-danger" style="width:{{ pct_rejected }}%"
-           title="Rejected {{ stats.rejected }}">Rejected</div>
-      <div class="progress-bar bg-warning text-dark" style="width:{{ pct_offers }}%"
-           title="Offers {{ stats.offers }}">Offers</div>
-      <div class="progress-bar bg-success"
-           style="width:{{ [pct_submitted - pct_rejected - pct_offers, 0] | max }}%"
-           title="Other submitted">Other</div>
+    <div class="card-body py-2">
+      <div class="d-flex justify-content-between small text-muted mb-1">
+        <span>Application Pipeline Progress</span>
+        <span>{{ stats.total }} total</span>
+      </div>
+      <div class="progress" style="height:18px;">
+        {% for s in status_options %}
+          {% set cnt = status_counts.get(s, 0) %}
+          {% if cnt > 0 %}
+            {% set pct = ((cnt / stats.total) * 100) | round(1) %}
+            <div class="progress-bar status-{{ s | replace(' ', '_') }}"
+                 style="width:{{ pct }}%"
+                 title="{{ s | replace('_', ' ') }} {{ cnt }}">
+              {{ s | replace('_', ' ') }}
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
     </div>
   </div>
-</div>
 {% endif %}
 
 <!-- Filter -->
@@ -99,9 +100,14 @@
         </option>
         {% endfor %}
       </select>
+      <label class="fw-semibold me-1 small">Sort:</label>
+      <select name="sort" class="form-select form-select-sm w-auto">
+        <option value="date" {% if sort_mode == 'date' %}selected{% endif %}>Date Applied</option>
+        <option value="status" {% if sort_mode == 'status' %}selected{% endif %}>Status Order</option>
+      </select>
       <button type="submit" class="btn btn-sm btn-primary">Apply</button>
       {% if selected_status %}
-      <a href="{{ url_for('dashboard.year_view', year=year) }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+      <a href="{{ url_for('dashboard.year_view', year=year, sort=sort_mode) }}" class="btn btn-sm btn-outline-secondary">Clear</a>
       {% endif %}
     </form>
   </div>
@@ -111,6 +117,7 @@
 <form method="post" action="{{ url_for('applications.bulk_action') }}" id="bulkForm">
   <input type="hidden" name="year" value="{{ year }}">
   <input type="hidden" name="status_filter" value="{{ selected_status }}">
+  <input type="hidden" name="sort_mode" value="{{ sort_mode }}">
 
   <!-- Bulk Action Toolbar -->
   <div class="card border-0 shadow-sm mb-3" id="bulkToolbar">
@@ -312,6 +319,16 @@
               {% endif %}
             </td>
             <td class="text-nowrap">
+              {% if a.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
+              <form method="post"
+                    action="{{ url_for('applications.archive_application', app_id=a.id) }}"
+                    class="d-inline"
+                    onsubmit="return confirm('Archive this application?')">
+                <button class="btn btn-outline-secondary btn-sm py-0 me-1" title="Archive">
+                  <i class="bi bi-archive"></i>
+                </button>
+              </form>
+              {% endif %}
               <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                  class="btn btn-outline-info btn-sm py-0 me-1" title="View details">
                 <i class="bi bi-eye"></i>

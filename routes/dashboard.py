@@ -49,19 +49,28 @@ def search():
 def year_view(year):
     user_id = current_user_id()
     status_filter = request.args.get("status", "")
+    sort_mode = request.args.get("sort", "date").strip().lower()
+    status_options = db.get_status_options(user_id=user_id)
     apps = db.get_applications(
         year=year,
         status=status_filter if status_filter else None,
         user_id=user_id,
     )
+    if sort_mode == "status":
+        order = {name: i for i, name in enumerate(status_options)}
+        apps.sort(key=lambda a: (order.get(a["status"], 10_000), a.get("date_applied") or "", a.get("company") or ""))
+    else:
+        sort_mode = "date"
     stats = db.get_stats(year=year, user_id=user_id)
     return render_template(
         "year_view.html",
         apps=apps,
         year=year,
         stats=stats,
+        status_counts=db.get_status_counts(year=year, user_id=user_id),
         years=db.get_dynamic_years(user_id=user_id),
-        status_options=db.get_status_options(user_id=user_id),
+        status_options=status_options,
         selected_status=status_filter,
+        sort_mode=sort_mode,
         stale_days=_STALE_DAYS,
     )

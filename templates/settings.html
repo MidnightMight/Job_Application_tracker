@@ -341,6 +341,7 @@
                   <th class="ps-3">Username</th>
                   <th>Role</th>
                   <th>Created</th>
+                  <th>Last Login</th>
                   <th class="text-end pe-3">Remove</th>
                 </tr>
               </thead>
@@ -358,6 +359,7 @@
                     {% endif %}
                   </td>
                   <td class="text-muted small">{{ u.created_at[:10] }}</td>
+                  <td class="text-muted small">{{ u.last_login_at[:16] | replace('T', ' ') if u.last_login_at else '—' }}</td>
                   <td class="text-end pe-3">
                     <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}"
                           class="d-inline"
@@ -540,9 +542,6 @@
         </span>
         {# ── Master toggle ── #}
         <div class="d-flex align-items-center gap-2">
-          <span class="small text-muted" id="aiToggleLabel">
-            {% if _use_admin %}Using admin's server{% else %}Using my own settings{% endif %}
-          </span>
           <div class="form-check form-switch mb-0">
             <input class="form-check-input" type="checkbox" role="switch"
                    id="useAdminAiToggle"
@@ -590,6 +589,9 @@
             <div class="mb-3">
               <label class="form-label fw-semibold">AI Provider</label>
               <select name="ai_provider" id="aiProviderSelect" class="form-select" style="max-width:280px;">
+                <option value="ollama"   {% if user_ai_settings.get('ai_provider','ollama') == 'ollama'    %}selected{% endif %}>
+                  🦙 Personal Ollama server
+                </option>
                 <option value="openai"   {% if user_ai_settings.get('ai_provider','') == 'openai'    %}selected{% endif %}>
                   🌐 OpenAI (ChatGPT / GPT-4o)
                 </option>
@@ -616,12 +618,12 @@
                 {% endif %}
               </div>
               <div class="mb-3" id="customUrlRow"
-                   {% if user_ai_settings.get('ai_provider','ollama') not in ('custom',) %}style="display:none"{% endif %}>
+                   {% if user_ai_settings.get('ai_provider','ollama') not in ('custom','ollama') %}style="display:none"{% endif %}>
                 <label class="form-label fw-semibold">API Base URL</label>
                 <input type="url" name="api_url" class="form-control" style="max-width:400px;"
                        value="{{ user_ai_settings.get('api_url','') }}"
                        placeholder="e.g. http://localhost:1234/v1">
-                <div class="form-text">The base URL for an OpenAI-compatible API (e.g. LM Studio, vLLM, Groq).</div>
+                <div class="form-text">Use your Ollama URL (e.g. http://localhost:11434) or OpenAI-compatible URL (e.g. LM Studio, vLLM, Groq).</div>
               </div>
               <div class="mb-3">
                 <label class="form-label fw-semibold">Model Name <span class="text-muted small fw-normal">(optional)</span></label>
@@ -643,7 +645,7 @@
     {% endif %}
 
     {# ── User Profile card — always shown when AI is available ── #}
-    <div class="card shadow-sm mb-4" id="profileCard">
+    <div class="card shadow-sm mb-4 {% if not profile_ai_enabled %}profile-card-disabled{% endif %}" id="profileCard">
       <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span>
           <i class="bi bi-person-badge me-1 text-success"></i>Your Profile
@@ -660,6 +662,13 @@
         </span>
       </div>
       <div class="card-body">
+        {% if not profile_ai_enabled %}
+        <div class="alert alert-secondary py-2 small mb-3">
+          <i class="bi bi-slash-circle me-1"></i>
+          Enable an AI server (admin or personal provider) to edit your profile.
+        </div>
+        {% endif %}
+        <fieldset id="profileCardFieldset" {% if not profile_ai_enabled %}disabled{% endif %}>
         <p class="text-muted small mb-3">
           Fill in your details below so the AI can compare your background against job descriptions.
           You can also upload a PDF CV/résumé and the app will extract the text automatically.
@@ -667,7 +676,7 @@
         </p>
 
         {# PDF upload #}
-        <div class="mb-4 p-3 border rounded bg-light">
+        <div class="mb-4 p-3 border rounded profile-upload-box">
           <label class="form-label fw-semibold mb-2">
             <i class="bi bi-file-earmark-pdf text-danger me-1"></i>Upload CV / Résumé (PDF)
           </label>
@@ -726,6 +735,7 @@
             <i class="bi bi-person-check me-1"></i>Save Profile
           </button>
         </form>
+        </fieldset>
       </div>
     </div>
 
@@ -886,19 +896,27 @@ if (fitToggle) {
   const hiddenInput    = document.getElementById('useAdminAiInput');
   const adminBanner    = document.getElementById('adminAiBanner');
   const ownSection     = document.getElementById('ownProviderSection');
-  const toggleLabel    = document.getElementById('aiToggleLabel');
   const sel            = document.getElementById('aiProviderSelect');
   const apiSection     = document.getElementById('providerApiSection');
+  const apiKeyRow      = document.getElementById('apiKeyRow');
   const customUrlRow   = document.getElementById('customUrlRow');
   const modelInput     = document.getElementById('aiModelInput');
   const modelHint      = document.getElementById('modelHint');
+  const apiUrlInput    = document.querySelector('#customUrlRow input[name="api_url"]');
+  const apiKeyInput    = document.querySelector('#apiKeyRow input[name="api_key"]');
+  const profileFieldset = document.getElementById('profileCardFieldset');
+  const profileCard    = document.getElementById('profileCard');
+  const adminToggle    = document.getElementById('ollama_enabled');
+  const adminAiEnabledStatic = {{ (settings.get('ollama_enabled', '0') == '1') | tojson }};
 
   const modelPlaceholders = {
+    ollama:    'llama3',
     openai:    'gpt-4o-mini',
     anthropic: 'claude-3-haiku-20240307',
     custom:    'e.g. mistral, llama3',
   };
   const modelHints = {
+    ollama:    'Any model available on your personal Ollama server (e.g. llama3).',
     openai:    'e.g. gpt-4o-mini, gpt-4o, gpt-3.5-turbo',
     anthropic: 'e.g. claude-3-haiku-20240307, claude-3-sonnet-20240229',
     custom:    'Model name accepted by your custom API server.',
@@ -907,16 +925,34 @@ if (fitToggle) {
   function updateProviderUI() {
     if (!sel) return;
     const provider = sel.value;
-    if (customUrlRow) customUrlRow.style.display = provider === 'custom' ? '' : 'none';
+    if (customUrlRow) customUrlRow.style.display = (provider === 'custom' || provider === 'ollama') ? '' : 'none';
+    if (apiKeyRow) apiKeyRow.style.display = (provider === 'openai' || provider === 'anthropic' || provider === 'custom') ? '' : 'none';
     if (modelInput) modelInput.placeholder = modelPlaceholders[provider] || '';
     if (modelHint)  modelHint.textContent  = modelHints[provider] || '';
+    updateProfileCardState();
+  }
+
+  function ownProviderConfigured() {
+    if (!toggle || !sel || !apiUrlInput || !apiKeyInput) return false;
+    if (toggle.checked) return false; // using admin server
+    const provider = sel.value;
+    if (provider === 'ollama' || provider === 'custom') return !!apiUrlInput.value.trim();
+    return !!apiKeyInput.value.trim();
+  }
+
+  function updateProfileCardState() {
+    if (!profileFieldset || !profileCard) return;
+    const adminEnabled = adminToggle ? adminToggle.checked : adminAiEnabledStatic;
+    const enabled = adminEnabled || ownProviderConfigured();
+    profileFieldset.disabled = !enabled;
+    profileCard.classList.toggle('profile-card-disabled', !enabled);
   }
 
   function applyToggle(useAdmin) {
     if (hiddenInput)  hiddenInput.value        = useAdmin ? '1' : '0';
     if (adminBanner)  adminBanner.style.display = useAdmin ? '' : 'none';
     if (ownSection)   ownSection.style.display  = useAdmin ? 'none' : '';
-    if (toggleLabel)  toggleLabel.textContent   = useAdmin ? "Using admin's server" : "Using my own settings";
+    updateProfileCardState();
   }
 
   if (toggle) {
@@ -928,7 +964,11 @@ if (fitToggle) {
   }
 
   if (sel) sel.addEventListener('change', updateProviderUI);
+  if (apiUrlInput) apiUrlInput.addEventListener('input', updateProfileCardState);
+  if (apiKeyInput) apiKeyInput.addEventListener('input', updateProfileCardState);
+  if (adminToggle) adminToggle.addEventListener('change', updateProfileCardState);
   updateProviderUI();
+  updateProfileCardState();
 })();
 
 // ── PDF profile upload ────────────────────────────────────────────────
