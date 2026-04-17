@@ -29,23 +29,35 @@ the repository owner.
   success rate trend, industry/sector keyword frequency; **Quick Navigation**
   card with one-click year, Company Tracker, and Import CSV links
 - **Year views** — filterable per-year table with pipeline progress bar and bulk
-  operations (set status, date, cover letter, resume, delete)
+  operations (set status, date, cover letter, resume, delete); **sort by status
+  order** matching your Settings → Statuses sequence
 - **Stale application detection** — applications with no status change for ≥ 3
   days (and not in a terminal state) float to the top and are highlighted in
   yellow; the threshold is shown as a hint on the application form
 - **Optional Date Applied** — the Date Applied field is no longer required;
   undated applications are shown in year views and flagged stale after 3 days
+- **Application archival** — applications in Rejected, Not Applying, or Job
+  Expired status can be archived in one click; archived records are hidden from
+  normal views but visible on the company detail page
 - **Application detail** — full details, status timeline, AI fit analysis card,
   `last_modified_at`, `job_expiry_date`, and additional notes
-- **Industry / Sector** — optional industry field on applications and companies;
-  auto-populated on the company record when an application is saved
+- **Company detail** — per-company view with industry tag badges, applied-year
+  summary, and all applications (active and archived) grouped by year then
+  sorted by status
+- **Industry / Sector tags** — comma-separated industry tags on applications and
+  companies; auto-merged into the company record; shown as Bootstrap badges
 - **Auto-add company** — saving an application automatically creates the company
-  record if it does not already exist
+  record if it does not already exist; syncs applied-year flags and tags on
+  every subsequent update; adds an inbox reminder when a company is created
+  without industry tags
 - **Job advert expiry date** — record when the posting closes; a hint appears
   when you change status to "Submitted" without filling it in
-- **AI fill + fit (Ollama)** — paste a job description to auto-fill the form
-  and run a personalised fit analysis (score, matching skills, gaps,
-  recommendation) — available in both Add *and* Edit mode
+- **AI fill + fit (Ollama / OpenAI / Anthropic / Custom)** — paste a job
+  description to auto-fill the form and run a personalised fit analysis (score,
+  matching skills, gaps, recommendation); fit prompt now incorporates your
+  all-time success rate so advice is calibrated to your track record
+- **Per-user AI providers** — each user can configure their own provider:
+  personal Ollama server, OpenAI, Anthropic, or any OpenAI-compatible API
 - **AI fit storage** — fit results are saved to the database and shown on the
   detail page; `/api/ai-fit-save` endpoint for JS-initiated saves
 - **Append to Notes** — one-click button to append a formatted fit summary to
@@ -62,13 +74,16 @@ the repository owner.
 - **Bulk CSV / Excel import** — column-mapping UI with per-row preview and
   duplicate warnings
 - **Global search** — queries company, role, team, comment, notes, and contact
-- **Company tracker** — cross-year applied history with sector/industry chart
+- **Company tracker** — cross-year applied history with sector/industry tag chart;
+  click any company name to open the full company detail view
 - **Reminder inbox** — background scheduler flags pending applications that
-  exceed a configurable threshold
+  exceed a configurable threshold; inbox prompts link to company tracker when
+  industry data is incomplete
 - **Export** — CSV (applications, companies) or full SQLite database backup
 - **Dark / light theme** — toggle persisted to `localStorage`
 - **Multi-user login** — optional, Docker mode only; werkzeug password hashing;
-  each user sees only their own applications, statuses, and reminders
+  each user sees only their own applications, statuses, and reminders;
+  `last_login_at` tracked per user
 - **PWA support** — Web App Manifest + service worker for offline use
 
 ---
@@ -101,8 +116,8 @@ the interface straight away.
 ```
 db/          Database layer — 9 focused modules (connection, init, applications,
              companies, statuses, users, settings, stats, reminders)
-routes/      Flask Blueprints — 10 route modules (auth, dashboard, applications,
-             import, companies, inbox, settings, api, export, onboarding)
+routes/      Flask Blueprints — 11 route modules (auth, dashboard, applications,
+             import, companies, inbox, settings, api, export, onboarding, admin_db)
 app.py       Thin entry point — registers blueprints, context processor, scheduler
 database.py  Backward-compat shim — re-exports everything from db/
 ```

@@ -87,6 +87,7 @@ from .applications import (
     search_applications,
     get_application,
     get_application_timeline,
+    get_applications_for_company,
     add_application,
     update_application,
     delete_application,
@@ -128,7 +129,8 @@ __all__ = [
     "delete_company", "bulk_delete_companies",
     # applications
     "get_applications", "search_applications", "get_application",
-    "get_application_timeline", "add_application", "update_application",
+    "get_application_timeline", "get_applications_for_company", "add_application",
+    "update_application",
     "delete_application", "bulk_delete_applications", "bulk_update_applications",
     "find_duplicate_applications", "bulk_import_applications", "save_ai_fit",
     "archive_application", "unarchive_application",

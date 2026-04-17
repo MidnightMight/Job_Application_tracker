@@ -5,6 +5,77 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## v1.2.4 — Company Detail View, Application Archival, Success-Rate AI, Status Sorting
+
+### New Features
+
+- **Company Detail View** — clicking a company name in the Company Tracker opens
+  a dedicated `/company/<id>` detail page showing:
+  - Industry tags, sector notes, and applied-year badges (each badge links to the
+    year view for that year).
+  - Summary counts: total / active / archived / offers for this company.
+  - All applications grouped by year (newest first) then sorted by status order.
+  - Active applications in a full table with stale detection, edit, archive
+    actions, and a link to the detail page.
+  - Archived applications shown in a separate sub-table beneath each year group
+    with the archived date visible.
+
+- **Application Archival** — applications in `Rejected`, `Not_Applying`, or
+  `Job_Expired` status can now be archived with a single click.  Archived
+  applications are hidden from the normal year view and search results but
+  remain visible on the Company Detail page.  New schema columns `archived`
+  (INTEGER DEFAULT 0) and `archived_at` (TEXT) added via auto-migration.
+
+- **Success Rate in AI Fit Analysis** — the AI fit prompt now receives the
+  user's all-time job-search track record (total submitted, offers received,
+  and success rate percentage).  The AI uses this to contextualise its
+  recommendation — e.g. highlighting whether a role is a realistic match or
+  a stretch goal relative to the user's current success rate.
+
+- **Year View — Sort by Status Order** — the year view now has a **Sort** dropdown
+  (Date Applied / Status Order).  Status Order sorts rows according to the
+  sequence configured in Settings → Statuses so similar statuses are grouped
+  together visually.
+
+- **Per-User Personal Ollama Server** — users can now configure their own Ollama
+  server URL and model under Settings → AI Assistant → Personal Provider.
+  Previously, personal providers were limited to cloud APIs; the local Ollama
+  option is now available per-user as well.
+
+- **Multi-Industry Tags for Companies** — the industry/sector field now stores
+  comma-separated, normalised tags (duplicates removed).  Tags are shown as
+  Bootstrap badges in the company list and company detail pages.  The field
+  auto-merges tags from applications into the company record.
+
+- **Last Login Tracking** — a `last_login_at` column is added to the `users`
+  table (auto-migrated).  The timestamp is updated every time a user logs in or
+  completes first-time password setup.  It is displayed in the Settings → Users
+  & Security table.
+
+- **Inbox Prompt for Missing Company Industry** — when an application auto-adds
+  a new company without any industry tags, an inbox reminder is created that
+  links directly to the Company Tracker to complete the record.
+
+### Bug Fixes
+
+- **Company Sync on Status/Date Changes** — updating an application's status or
+  date now correctly syncs the company tracker (applies the appropriate
+  `applied_<year>` flag).  Previously only the initial add triggered this sync.
+
+- **Pipeline Progress Bar** — the year-view pipeline progress bar now renders
+  one segment per status using real counts and the configured status colours
+  instead of a generic "Other" bucket.
+
+### UI Improvements
+
+- Profile settings section (Settings → AI → Your Profile) greys out when no
+  AI server is usable, re-enabling automatically when a valid admin server or
+  personal provider is configured.
+- Right-side toggle label removed from the personal AI provider slider.
+- CV/Resume upload box now respects dark mode correctly.
+
+---
+
 ## v1.2.3 — Admin DB Viewer, Per-User AI Providers, First-Time Login Onboarding
 
 ### New Features

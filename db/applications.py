@@ -485,6 +485,58 @@ def unarchive_application(app_id: int, user_id=None) -> bool:
     return changed
 
 
+def get_applications_for_company(company_name: str, user_id=None) -> dict:
+    """Return all applications (active and archived) for a company, grouped by year.
+
+    Returns a dict::
+
+        {
+            "active":   [<application dict>, …],   # archived=0, enriched
+            "archived": [<application dict>, …],   # archived=1, enriched
+            "by_year":  {year_str: {"active": [...], "archived": [...]}},
+        }
+
+    Both lists are sorted by year (descending) then date_applied (descending).
+    ``user_id`` scopes the results to the logged-in user when login is enabled.
+    """
+    conn = get_connection()
+    sql = (
+        "SELECT * FROM applications "
+        "WHERE LOWER(company) = ?"
+    )
+    params: list = [company_name.lower()]
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    sql += " ORDER BY date_applied DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+
+    all_apps = [_enrich(dict(r)) for r in rows]
+
+    active: list = []
+    archived: list = []
+    by_year: dict = {}
+
+    for a in all_apps:
+        year = (a.get("date_applied") or "")[:4] or "Undated"
+        if year not in by_year:
+            by_year[year] = {"active": [], "archived": []}
+        if a.get("archived"):
+            archived.append(a)
+            by_year[year]["archived"].append(a)
+        else:
+            active.append(a)
+            by_year[year]["active"].append(a)
+
+    # Sort years descending (numeric, then "Undated" at end)
+    sorted_by_year = {}
+    for k in sorted(by_year.keys(), key=lambda y: (-int(y) if y.isdigit() else 1)):
+        sorted_by_year[k] = by_year[k]
+
+    return {"active": active, "archived": archived, "by_year": sorted_by_year}
+
+
 def _dup_key(company: str, job_desc: str, team: str, date_applied: str) -> tuple:
     """Return a normalised key used to identify duplicate applications.
 

@@ -6,7 +6,7 @@ from flask import (
 )
 
 import db
-from .auth import login_required
+from .auth import login_required, current_user_id
 
 bp = Blueprint("companies", __name__)
 
@@ -31,6 +31,37 @@ def companies():
         sector_freq=sector_freq,
         pool_enabled=pool_enabled,
         current_user_id=user_id,
+    )
+
+
+@bp.route("/company/<int:company_id>")
+@login_required
+def company_detail(company_id):
+    company = db.get_company(company_id)
+    if not company:
+        flash("Company not found.", "danger")
+        return redirect(url_for("companies.companies"))
+    login_enabled = db.get_setting("login_enabled", "0") == "1"
+    user_id = session.get("user_id") if login_enabled else None
+    status_options = db.get_status_options(user_id=user_id)
+    apps_data = db.get_applications_for_company(company["company_name"], user_id=user_id)
+
+    # Sort each per-year bucket by status order then date
+    order = {name: i for i, name in enumerate(status_options)}
+    _UNKNOWN = 10_000
+    for bucket in apps_data["by_year"].values():
+        for lst in (bucket["active"], bucket["archived"]):
+            lst.sort(key=lambda a: (
+                order.get(a.get("status", ""), _UNKNOWN),
+                a.get("date_applied") or "",
+            ))
+
+    return render_template(
+        "company_detail.html",
+        company=company,
+        apps_data=apps_data,
+        status_options=status_options,
+        years=db.get_dynamic_years(user_id=user_id),
     )
 
 
