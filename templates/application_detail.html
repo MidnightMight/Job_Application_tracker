@@ -12,10 +12,18 @@
       {% if app.team %} &mdash; {{ app.team }}{% endif %}
     </div>
   </div>
-  <div class="d-flex gap-2">
-    <a href="{{ url_for('applications.edit_application', app_id=app.id) }}" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-pencil me-1"></i>Edit
-    </a>
+    <div class="d-flex gap-2">
+      {% if app.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
+      <form method="post" action="{{ url_for('applications.archive_application', app_id=app.id) }}"
+            onsubmit="return confirm('Archive this application?')">
+        <button class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-archive me-1"></i>Archive
+        </button>
+      </form>
+      {% endif %}
+      <a href="{{ url_for('applications.edit_application', app_id=app.id) }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-pencil me-1"></i>Edit
+      </a>
     <form method="post" action="{{ url_for('applications.delete_application', app_id=app.id) }}"
           onsubmit="return confirm('Delete this application?')">
       <button class="btn btn-outline-danger btn-sm">

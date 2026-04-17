@@ -40,6 +40,10 @@
       <a href="{{ url_for('applications.application_detail', app_id=r.application_id) }}" class="small text-primary">
         <i class="bi bi-arrow-right-circle me-1"></i>View application
       </a>
+      {% else %}
+      <a href="{{ url_for('companies.companies') }}" class="small text-primary">
+        <i class="bi bi-arrow-right-circle me-1"></i>Open company tracker
+      </a>
       {% endif %}
     </div>
     {% if not r.dismissed %}

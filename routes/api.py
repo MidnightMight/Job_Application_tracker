@@ -101,7 +101,14 @@ def _call_ai(prompt: str, user_id, timeout: int = 90) -> str:
     provider = cfg.get("ai_provider", "ollama")
 
     # When the user chose to use their own provider (use_admin_ai = 0).
-    if not use_admin and provider != "ollama":
+    if not use_admin:
+        if provider == "ollama":
+            api_url = cfg.get("api_url", "").strip()
+            model = cfg.get("ai_model", "").strip() or db.get_setting("ollama_model", "llama3")
+            if not api_url:
+                raise RuntimeError("Personal Ollama URL is not configured. Go to Settings → AI Assistant.")
+            return _call_ollama(prompt, api_url, model, timeout)
+
         if provider == "openai":
             api_key = cfg.get("api_key", "").strip()
             if not api_key:
@@ -164,7 +171,26 @@ def ollama_status():
     provider  = cfg.get("ai_provider", "ollama")
 
     # When the user chose their own provider (use_admin_ai = 0).
-    if not use_admin and provider != "ollama":
+    if not use_admin:
+        if provider == "ollama":
+            api_url = cfg.get("api_url", "").strip()
+            if not api_url:
+                return jsonify({"ok": False, "provider": "ollama",
+                                "error": "Personal Ollama URL not configured."})
+            model = cfg.get("ai_model", "").strip() or db.get_setting("ollama_model", "llama3")
+            try:
+                req = urllib.request.Request(
+                    f"{api_url.rstrip('/')}/api/tags",
+                    headers={"Accept": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=4) as resp:
+                    data = json.loads(resp.read().decode())
+                models = [m.get("name", "") for m in data.get("models", [])]
+                return jsonify({"ok": True, "provider": "ollama", "model": model, "models": models})
+            except Exception:
+                return jsonify({"ok": False, "provider": "ollama",
+                                "error": "Could not connect to your personal Ollama server."})
+
         if provider == "openai":
             api_key = cfg.get("api_key", "").strip()
             if not api_key:
@@ -388,19 +414,35 @@ def ai_fit():
         profile_parts.append(f"My experience:\n{experience[:1500]}")
     profile_text = "\n\n".join(profile_parts)
 
+    # Include the user's historical success rate so the AI can contextualise advice.
+    stats = db.get_stats(user_id=user_id)
+    success_rate    = stats.get("success_rate", 0)
+    total_submitted = stats.get("submitted", 0)
+    offers_received = stats.get("offers", 0)
+    success_context = (
+        f"Candidate's job-search track record: "
+        f"{total_submitted} applications submitted, "
+        f"{offers_received} offers received "
+        f"({success_rate}% success rate)."
+        if total_submitted > 0
+        else "Candidate's job-search track record: No submitted applications on record yet."
+    )
+
     prompt = (
-        "You are a career advisor. Given a candidate profile and a job description, "
-        "evaluate how well the candidate fits the role.\n\n"
+        "You are a career advisor. Given a candidate profile, their job-search track record, "
+        "and a job description, evaluate how well the candidate fits the role.\n\n"
         "Return ONLY a single valid JSON object (no markdown fences, no extra text) with these keys:\n\n"
         '  "fit_score"        — integer 0–100 representing overall fit percentage\n'
         '  "verdict"          — one of: "Strong Fit", "Good Fit", "Moderate Fit", "Weak Fit", "Not a Fit"\n'
         '  "matching_skills"  — list of skills/qualities the candidate has that match the role (list of strings, max 6)\n'
         '  "skill_gaps"       — list of key requirements the candidate appears to lack (list of strings, max 5)\n'
-        '  "recommendation"   — 2–3 sentence personalised recommendation for the candidate (string)\n\n'
+        '  "recommendation"   — 2–3 sentence personalised recommendation for the candidate, taking into account '
+        'their success rate and whether this role is a realistic match or a stretch goal (string)\n\n'
         "Candidate Profile:\n"
         "---\n"
         f"{profile_text}\n"
         "---\n\n"
+        f"Track Record:\n{success_context}\n\n"
         "Job Description:\n"
         "---\n"
         f"{job_description[:_MAX_JOB_DESC_LENGTH]}\n"

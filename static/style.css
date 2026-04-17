@@ -198,3 +198,14 @@ footer { background-color: #fff; margin-top: 3rem; }
   color: #fff !important;
 }
 
+/* Settings: profile upload + disabled profile card state */
+.profile-upload-box {
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-body-color);
+}
+[data-bs-theme="dark"] .profile-upload-box {
+  border-color: #30363d !important;
+}
+.profile-card-disabled {
+  opacity: .65;
+}

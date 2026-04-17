@@ -77,16 +77,16 @@ def user_has_own_ai(user_id: int | None) -> bool:
 
     Conditions:
     - ``use_admin_ai`` is 0 (user explicitly chose their own provider), AND
-    - a non-Ollama provider is configured with an API key  (or a custom URL for 'custom').
+    - a provider is configured with required credentials/URL.
     """
     if user_id is None:
         return False
     cfg = get_user_ai_settings(user_id)
     if int(cfg.get("use_admin_ai", 1)):
         return False
-    provider = cfg["ai_provider"]
+    provider = cfg.get("ai_provider", "ollama")
     if provider == "ollama":
-        return False
+        return bool(cfg.get("api_url", "").strip())
     if provider == "custom":
-        return bool(cfg["api_url"].strip())
-    return bool(cfg["api_key"].strip())
+        return bool(cfg.get("api_url", "").strip())
+    return bool(cfg.get("api_key", "").strip())

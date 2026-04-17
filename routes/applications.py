@@ -143,6 +143,27 @@ def delete_application(app_id):
     return redirect(url_for("dashboard.year_view", year=year))
 
 
+@bp.route("/application/archive/<int:app_id>", methods=["POST"])
+@login_required
+def archive_application(app_id):
+    user_id = current_user_id()
+    application = db.get_application(app_id, user_id=user_id)
+    if not application:
+        flash("Application not found.", "danger")
+        return redirect(url_for("dashboard.dashboard"))
+
+    allowed = {"Rejected", "Not_Applying", "Job_Expired"}
+    if application.get("status") not in allowed:
+        flash("Only Rejected, Not Applying, or Job Expired applications can be archived.", "warning")
+        year = application["date_applied"][:4] if application.get("date_applied") else str(date.today().year)
+        return redirect(url_for("dashboard.year_view", year=year))
+
+    db.archive_application(app_id, user_id=user_id)
+    flash("Application archived.", "success")
+    year = application["date_applied"][:4] if application.get("date_applied") else str(date.today().year)
+    return redirect(url_for("dashboard.year_view", year=year))
+
+
 @bp.route("/applications/bulk-action", methods=["POST"])
 @login_required
 def bulk_action():
@@ -151,6 +172,7 @@ def bulk_action():
     action        = request.form.get("action", "")
     year          = request.form.get("year", str(date.today().year))
     status_filter = request.form.get("status_filter", "")
+    sort_mode = request.form.get("sort_mode", "").strip().lower()
 
     raw_ids = request.form.getlist("selected_ids")
     try:
@@ -161,6 +183,8 @@ def bulk_action():
     redirect_kwargs: dict = {"year": year}
     if status_filter:
         redirect_kwargs["status"] = status_filter
+    if sort_mode in {"date", "status"}:
+        redirect_kwargs["sort"] = sort_mode
 
     if not selected_ids:
         flash("No applications selected.", "warning")

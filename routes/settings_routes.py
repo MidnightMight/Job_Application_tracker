@@ -222,7 +222,12 @@ def settings():
     status_rows = db.get_status_rows(user_id=user_id)
     status_styles = db.get_status_styles(user_id=user_id)
     users = db.get_users()
+    for u in users:
+        last_login = (u.get("last_login_at") or "").replace("T", " ")
+        u["last_login_display"] = last_login[:16] if last_login else "—"
     user_ai_cfg = db.get_user_ai_settings(user_id)
+    admin_ai_on = current.get("ollama_enabled", "0") == "1"
+    user_ai_on = db.user_has_own_ai(user_id)
     return render_template(
         "settings.html",
         settings=current,
@@ -235,6 +240,7 @@ def settings():
         protected_statuses=db.PROTECTED_STATUSES,
         current_is_admin=is_admin,
         user_ai_settings=user_ai_cfg,
+        profile_ai_enabled=(admin_ai_on or user_ai_on),
     )
 
 

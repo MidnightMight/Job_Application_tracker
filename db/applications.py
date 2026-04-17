@@ -47,10 +47,12 @@ def _enrich(app: dict) -> dict:
     return app
 
 
-def get_applications(year=None, status=None, user_id=None) -> list:
+def get_applications(year=None, status=None, user_id=None, include_archived: bool = False) -> list:
     conn = get_connection()
     sql = "SELECT * FROM applications WHERE 1=1"
     params: list = []
+    if not include_archived:
+        sql += " AND COALESCE(archived, 0) = 0"
     if user_id is not None:
         sql += " AND user_id = ?"
         params.append(user_id)
@@ -73,7 +75,7 @@ def get_applications(year=None, status=None, user_id=None) -> list:
     return enriched
 
 
-def search_applications(query: str, year: int | None = None, user_id=None) -> list:
+def search_applications(query: str, year: int | None = None, user_id=None, include_archived: bool = False) -> list:
     """Search applications across company, role, team, comment, notes, and contact."""
     conn = get_connection()
     like_pattern = f"%{query}%"
@@ -89,6 +91,8 @@ def search_applications(query: str, year: int | None = None, user_id=None) -> li
         )
     """
     params: list = [like_pattern] * 6
+    if not include_archived:
+        sql += " AND COALESCE(archived, 0) = 0"
     if user_id is not None:
         sql += " AND user_id = ?"
         params.append(user_id)
@@ -191,7 +195,13 @@ def add_application(data, user_id=None) -> int:
     conn.close()
 
     # Auto-create / update company record.
-    _auto_add_or_update_company(company, industry)
+    _auto_add_or_update_company(
+        company,
+        industry,
+        date_applied=data.get("date_applied", ""),
+        status=data.get("status", "Select_Status"),
+        app_id=app_id,
+    )
 
     return app_id
 
@@ -206,6 +216,8 @@ def update_application(app_id: int, data):
                  data.get("status"),
                  data.get("job_expiry_date"),
                  data.get("industry"))
+
+    from .companies import _auto_add_or_update_company
 
     now = datetime.now().isoformat(timespec="seconds")
     existing = get_application(app_id)
@@ -289,6 +301,14 @@ def update_application(app_id: int, data):
     finally:
         conn.close()
 
+    _auto_add_or_update_company(
+        data.get("company", ""),
+        data.get("industry", "") or None,
+        date_applied=data.get("date_applied", ""),
+        status=new_status,
+        app_id=app_id,
+    )
+
 
 def delete_application(app_id: int, user_id=None):
     conn = get_connection()
@@ -365,12 +385,33 @@ def bulk_update_applications(ids: list, field: str, value, user_id=None) -> int:
             (value, *ids, *user_params),
         )
 
+    sync_rows = []
+    if field in {"status", "date_applied"}:
+        sync_rows = conn.execute(
+            f"SELECT id, company, industry, date_applied, status "
+            f"FROM applications WHERE id IN ({placeholders}){user_filter}",
+            (*ids, *user_params),
+        ).fetchall()
+
     count = conn.execute(
         f"SELECT COUNT(*) FROM applications WHERE id IN ({placeholders}){user_filter}",
         (*ids, *user_params),
     ).fetchone()[0]
     conn.commit()
     conn.close()
+
+    # Keep company tracker in sync when status/date changes.
+    if sync_rows:
+        from .companies import _auto_add_or_update_company
+        for r in sync_rows:
+            _auto_add_or_update_company(
+                r["company"],
+                r["industry"],
+                date_applied=r["date_applied"] or "",
+                status=r["status"] or "",
+                app_id=r["id"],
+            )
+
     return count
 
 
@@ -400,6 +441,100 @@ def save_ai_fit(
     )
     conn.commit()
     conn.close()
+
+
+def archive_application(app_id: int, user_id=None) -> bool:
+    """Mark an application as archived."""
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    if user_id is not None:
+        cur = conn.execute(
+            "UPDATE applications SET archived=1, archived_at=?, last_modified_at=? "
+            "WHERE id=? AND user_id=?",
+            (now, now, app_id, user_id),
+        )
+    else:
+        cur = conn.execute(
+            "UPDATE applications SET archived=1, archived_at=?, last_modified_at=? WHERE id=?",
+            (now, now, app_id),
+        )
+    conn.commit()
+    changed = cur.rowcount > 0
+    conn.close()
+    return changed
+
+
+def unarchive_application(app_id: int, user_id=None) -> bool:
+    """Remove archive flag from an application."""
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    if user_id is not None:
+        cur = conn.execute(
+            "UPDATE applications SET archived=0, archived_at=NULL, last_modified_at=? "
+            "WHERE id=? AND user_id=?",
+            (now, app_id, user_id),
+        )
+    else:
+        cur = conn.execute(
+            "UPDATE applications SET archived=0, archived_at=NULL, last_modified_at=? WHERE id=?",
+            (now, app_id),
+        )
+    conn.commit()
+    changed = cur.rowcount > 0
+    conn.close()
+    return changed
+
+
+def get_applications_for_company(company_name: str, user_id=None) -> dict:
+    """Return all applications (active and archived) for a company, grouped by year.
+
+    Returns a dict::
+
+        {
+            "active":   [<application dict>, …],   # archived=0, enriched
+            "archived": [<application dict>, …],   # archived=1, enriched
+            "by_year":  {year_str: {"active": [...], "archived": [...]}},
+        }
+
+    Both lists are sorted by year (descending) then date_applied (descending).
+    ``user_id`` scopes the results to the logged-in user when login is enabled.
+    """
+    conn = get_connection()
+    sql = (
+        "SELECT * FROM applications "
+        "WHERE LOWER(company) = ?"
+    )
+    params: list = [company_name.lower()]
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    sql += " ORDER BY date_applied DESC"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+
+    all_apps = [_enrich(dict(r)) for r in rows]
+
+    active: list = []
+    archived: list = []
+    by_year: dict = {}
+
+    for a in all_apps:
+        year = (a.get("date_applied") or "")[:4] or "Undated"
+        if year not in by_year:
+            by_year[year] = {"active": [], "archived": []}
+        if a.get("archived"):
+            archived.append(a)
+            by_year[year]["archived"].append(a)
+        else:
+            active.append(a)
+            by_year[year]["active"].append(a)
+
+    # Sort years descending (numeric, then "Undated" at end)
+    sorted_by_year = {}
+    for k in sorted(by_year.keys(), key=lambda y: (-int(y) if y.isdigit() else 1)):
+        sorted_by_year[k] = by_year[k]
+
+    return {"active": active, "archived": archived, "by_year": sorted_by_year}
 
 
 def _dup_key(company: str, job_desc: str, team: str, date_applied: str) -> tuple:

@@ -9,7 +9,7 @@ from .connection import get_connection
 def get_users() -> list:
     conn = get_connection()
     rows = conn.execute(
-        "SELECT id, username, is_admin, created_at FROM users ORDER BY created_at"
+        "SELECT id, username, is_admin, created_at, last_login_at FROM users ORDER BY created_at"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -73,6 +73,18 @@ def set_user_password(user_id: int, password_hash: str) -> None:
     conn.execute(
         "UPDATE users SET password_hash=?, needs_password_setup=0 WHERE id=?",
         (password_hash, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def update_user_last_login(user_id: int) -> None:
+    """Update last_login_at for *user_id* to the current timestamp."""
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET last_login_at=? WHERE id=?",
+        (now, user_id),
     )
     conn.commit()
     conn.close()
