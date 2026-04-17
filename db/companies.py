@@ -9,6 +9,7 @@ _NON_COMPANY_TRACKING_STATUSES = {
     "Select_Status",
     "Not_Applying",
 }
+_APPLIED_YEAR_COLUMNS = {f"applied_{y}" for y in range(2023, 2028)}
 
 
 def _normalize_industry_tags(raw: str | None) -> str | None:
@@ -176,7 +177,7 @@ def _auto_add_or_update_company(
 
     conn = get_connection()
     cols = {r[1] for r in conn.execute("PRAGMA table_info(companies)").fetchall()}
-    can_mark_applied = bool(applied_col and applied_col in cols)
+    can_mark_applied = bool(applied_col and applied_col in cols and applied_col in _APPLIED_YEAR_COLUMNS)
     row = conn.execute(
         "SELECT id, industry FROM companies WHERE LOWER(company_name)=?",
         (company_name.lower(),),
@@ -185,10 +186,14 @@ def _auto_add_or_update_company(
     company_added = False
     if row is None:
         if can_mark_applied:
-            conn.execute(
-                f"INSERT INTO companies (company_name, industry, {applied_col}) VALUES (?,?,1)",
-                (company_name, normalized_industry),
-            )
+            insert_sql_by_year = {
+                "applied_2023": "INSERT INTO companies (company_name, industry, applied_2023) VALUES (?,?,1)",
+                "applied_2024": "INSERT INTO companies (company_name, industry, applied_2024) VALUES (?,?,1)",
+                "applied_2025": "INSERT INTO companies (company_name, industry, applied_2025) VALUES (?,?,1)",
+                "applied_2026": "INSERT INTO companies (company_name, industry, applied_2026) VALUES (?,?,1)",
+                "applied_2027": "INSERT INTO companies (company_name, industry, applied_2027) VALUES (?,?,1)",
+            }
+            conn.execute(insert_sql_by_year[applied_col], (company_name, normalized_industry))
         else:
             conn.execute(
                 "INSERT INTO companies (company_name, industry) VALUES (?,?)",
@@ -198,10 +203,14 @@ def _auto_add_or_update_company(
     else:
         merged = _merge_industry_tags(row["industry"], normalized_industry)
         if can_mark_applied:
-            conn.execute(
-                f"UPDATE companies SET industry=?, {applied_col}=1 WHERE id=?",
-                (merged, row["id"]),
-            )
+            update_sql_by_year = {
+                "applied_2023": "UPDATE companies SET industry=?, applied_2023=1 WHERE id=?",
+                "applied_2024": "UPDATE companies SET industry=?, applied_2024=1 WHERE id=?",
+                "applied_2025": "UPDATE companies SET industry=?, applied_2025=1 WHERE id=?",
+                "applied_2026": "UPDATE companies SET industry=?, applied_2026=1 WHERE id=?",
+                "applied_2027": "UPDATE companies SET industry=?, applied_2027=1 WHERE id=?",
+            }
+            conn.execute(update_sql_by_year[applied_col], (merged, row["id"]))
         else:
             conn.execute(
                 "UPDATE companies SET industry=? WHERE id=?",

@@ -9,6 +9,7 @@ from .auth import login_required, current_user_id
 from db.applications import _STALE_DAYS
 
 bp = Blueprint("dashboard", __name__)
+_UNKNOWN_STATUS_SORT_ORDER = 10_000
 
 
 @bp.route("/")
@@ -58,7 +59,13 @@ def year_view(year):
     )
     if sort_mode == "status":
         order = {name: i for i, name in enumerate(status_options)}
-        apps.sort(key=lambda a: (order.get(a["status"], 10_000), a.get("date_applied") or "", a.get("company") or ""))
+        apps.sort(
+            key=lambda a: (
+                order.get(a["status"], _UNKNOWN_STATUS_SORT_ORDER),
+                a.get("date_applied") or "",
+                a.get("company") or "",
+            )
+        )
     else:
         sort_mode = "date"
     stats = db.get_stats(year=year, user_id=user_id)

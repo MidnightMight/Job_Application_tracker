@@ -81,8 +81,7 @@ def search_applications(query: str, year: int | None = None, user_id=None, inclu
     like_pattern = f"%{query}%"
     sql = """
         SELECT * FROM applications
-        WHERE COALESCE(archived, 0) = 0
-          AND (
+        WHERE (
             company          LIKE ? OR
             job_desc         LIKE ? OR
             team             LIKE ? OR
@@ -92,6 +91,8 @@ def search_applications(query: str, year: int | None = None, user_id=None, inclu
         )
     """
     params: list = [like_pattern] * 6
+    if not include_archived:
+        sql += " AND COALESCE(archived, 0) = 0"
     if user_id is not None:
         sql += " AND user_id = ?"
         params.append(user_id)
