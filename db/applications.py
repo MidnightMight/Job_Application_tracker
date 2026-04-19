@@ -61,7 +61,17 @@ def _statuses_ignored_for_stale(user_id: int | None = None) -> set[str]:
         start = min(submitted_idx, rejected_idx)
         end = max(submitted_idx, rejected_idx)
         return set(ordered[start:end + 1])
+    except ValueError:
+        logger.debug(
+            "_statuses_ignored_for_stale: Submitted or Rejected missing for user_id=%s",
+            user_id,
+        )
+        return set()
+    except ImportError:
+        logger.debug("_statuses_ignored_for_stale: could not import get_status_options")
+        return set()
     except Exception:
+        logger.exception("_statuses_ignored_for_stale: unexpected error")
         return set()
 
 
