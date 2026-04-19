@@ -67,6 +67,16 @@ def settings():
             if rejected_unit in ("days", "weeks"):
                 db.set_setting("rejected_threshold_unit", rejected_unit)
 
+            # Check schedule interval
+            _valid_intervals = {"1h", "6h", "12h", "1d", "2d", "3d", "7d"}
+            check_interval = request.form.get("check_interval", "1h").strip()
+            if check_interval not in _valid_intervals:
+                check_interval = "1h"
+            db.set_setting("check_interval", check_interval)
+            # Apply the new interval to the running scheduler immediately.
+            from app import _reschedule_jobs
+            _reschedule_jobs(check_interval)
+
             flash("General settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="general"))
 

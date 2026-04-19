@@ -149,6 +149,28 @@
             </div>
           </div>
 
+          <hr class="my-3">
+
+          <div class="mb-4">
+            <label for="check_interval" class="form-label fw-semibold">
+              <i class="bi bi-clock me-1"></i>Check schedule
+            </label>
+            {% set _check_interval = settings.get('check_interval', '1h') %}
+            <select class="form-select" id="check_interval" name="check_interval" style="max-width:200px;">
+              <option value="1h"  {% if _check_interval == '1h'  %}selected{% endif %}>Every hour</option>
+              <option value="6h"  {% if _check_interval == '6h'  %}selected{% endif %}>Every 6 hours</option>
+              <option value="12h" {% if _check_interval == '12h' %}selected{% endif %}>Every 12 hours</option>
+              <option value="1d"  {% if _check_interval == '1d'  %}selected{% endif %}>Daily (24 hours)</option>
+              <option value="2d"  {% if _check_interval == '2d'  %}selected{% endif %}>Every 2 days</option>
+              <option value="3d"  {% if _check_interval == '3d'  %}selected{% endif %}>Every 3 days</option>
+              <option value="7d"  {% if _check_interval == '7d'  %}selected{% endif %}>Weekly</option>
+            </select>
+            <div class="form-text">
+              How often the background scheduler checks for stale applications and creates inbox
+              reminders. Changes take effect immediately without restarting the server.
+            </div>
+          </div>
+
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-save me-1"></i>Save
           </button>
@@ -162,8 +184,9 @@
       </div>
       <div class="card-body text-muted small">
         <p>The built-in reminder system uses a background scheduler (APScheduler) that runs
-        inside the Flask server process. It checks for pending applications every hour and adds
-        a message to the <a href="{{ url_for('inbox.inbox') }}">Inbox</a> when the threshold is exceeded.</p>
+        inside the Flask server process. It checks for pending applications at the configured
+        schedule interval above and adds a message to the
+        <a href="{{ url_for('inbox.inbox') }}">Inbox</a> when a threshold is exceeded.</p>
         <p class="mb-0">No external services, emails, or browser extensions are required.</p>
       </div>
     </div>

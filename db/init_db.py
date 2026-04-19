@@ -211,6 +211,7 @@ def init_db():
             ("stale_threshold_unit",    "weeks"),
             ("rejected_threshold_value", "4"),
             ("rejected_threshold_unit", "weeks"),
+            ("check_interval",          "1h"),
         ]
         c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
         conn.commit()
@@ -231,6 +232,7 @@ def init_db():
             ("stale_threshold_unit",    "weeks"),
             ("rejected_threshold_value", "4"),
             ("rejected_threshold_unit", "weeks"),
+            ("check_interval",          "1h"),
         ]
         for key, value in migrations:
             if key not in existing_keys:

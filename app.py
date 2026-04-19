@@ -276,10 +276,42 @@ def _check_stale_submitted_applications():
         pass
 
 
+# ---------------------------------------------------------------------------
+# Scheduler interval helpers
+# ---------------------------------------------------------------------------
+
+# Map setting value → APScheduler interval kwargs.
+_INTERVAL_MAP = {
+    "1h":  {"hours":   1},
+    "6h":  {"hours":   6},
+    "12h": {"hours":  12},
+    "1d":  {"hours":  24},
+    "2d":  {"hours":  48},
+    "3d":  {"hours":  72},
+    "7d":  {"hours": 168},
+}
+
+
+def _interval_kwargs() -> dict:
+    """Return APScheduler interval kwargs for the currently configured check_interval."""
+    val = db.get_setting("check_interval", "1h")
+    return _INTERVAL_MAP.get(val, {"hours": 1})
+
+
+def _reschedule_jobs(interval_key: str):
+    """Reschedule both background jobs to the given interval (live, no restart needed)."""
+    if not os.environ.get("WERKZEUG_RUN_MAIN") == "false":
+        kwargs = _INTERVAL_MAP.get(interval_key, {"hours": 1})
+        for job_id in ("reminders", "stale_check"):
+            _scheduler.reschedule_job(job_id, trigger="interval", **kwargs)
+        logger.info("Scheduler jobs rescheduled to interval: %s (%s)", interval_key, kwargs)
+
+
 if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
     _scheduler = BackgroundScheduler(daemon=True)
-    _scheduler.add_job(_check_and_create_reminders, "interval", hours=1, id="reminders")
-    _scheduler.add_job(_check_stale_submitted_applications, "interval", hours=1, id="stale_check")
+    _init_kwargs = _interval_kwargs()
+    _scheduler.add_job(_check_and_create_reminders, "interval", id="reminders", **_init_kwargs)
+    _scheduler.add_job(_check_stale_submitted_applications, "interval", id="stale_check", **_init_kwargs)
     _scheduler.start()
     _check_and_create_reminders()
     _check_stale_submitted_applications()
