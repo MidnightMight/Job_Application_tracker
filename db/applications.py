@@ -50,7 +50,7 @@ def _enrich(app: dict, stale_ignored_statuses: set[str] | None = None) -> dict:
     return app
 
 
-def _statuses_ignored_for_stale(user_id=None) -> set[str]:
+def _statuses_ignored_for_stale(user_id: int | None = None) -> set[str]:
     """Statuses in the Submitted→Rejected range should not be flagged stale."""
     try:
         from .statuses import get_status_options
@@ -58,11 +58,9 @@ def _statuses_ignored_for_stale(user_id=None) -> set[str]:
         ordered = get_status_options(user_id=user_id)
         submitted_idx = ordered.index("Submitted")
         rejected_idx = ordered.index("Rejected")
-        if submitted_idx < rejected_idx:
-            return set(ordered[submitted_idx:rejected_idx])
-        if rejected_idx < submitted_idx:
-            return set(ordered[rejected_idx + 1:submitted_idx + 1])
-        return {"Submitted"}
+        start = min(submitted_idx, rejected_idx)
+        end = max(submitted_idx, rejected_idx)
+        return set(ordered[start:end + 1])
     except Exception:
         return set()
 
