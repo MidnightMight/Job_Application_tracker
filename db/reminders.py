@@ -80,15 +80,20 @@ def get_stalled_submitted_applications(threshold_days: int, user_id=None) -> lis
         return []
 
     placeholders = ",".join("?" for _ in statuses)
+    # Use julianday() for all date arithmetic to avoid string-comparison edge cases.
+    # When both status_changed_at and last_contact_date are NULL the inner expression
+    # falls back to date_applied; if that is also NULL the row evaluates to NULL > ?
+    # which is FALSE in SQLite — the application is silently excluded (correct behaviour).
     sql = f"""
         SELECT a.* FROM applications a
         WHERE a.status IN ({placeholders})
           AND COALESCE(a.archived, 0) = 0
           AND julianday('now') - julianday(
                 CASE
-                  WHEN COALESCE(a.last_contact_date, '') >= COALESCE(a.status_changed_at, a.date_applied, '')
+                  WHEN julianday(a.last_contact_date) IS NOT NULL
+                   AND julianday(a.last_contact_date) >= julianday(COALESCE(a.status_changed_at, a.date_applied))
                   THEN a.last_contact_date
-                  ELSE COALESCE(a.status_changed_at, a.date_applied, '')
+                  ELSE COALESCE(a.status_changed_at, a.date_applied)
                 END
               ) > ?
           AND NOT EXISTS (
@@ -127,7 +132,7 @@ def get_likely_rejected_applications(threshold_days: int, user_id=None) -> list:
         WHERE a.status IN ({placeholders})
           AND COALESCE(a.archived, 0) = 0
           AND julianday('now') - julianday(
-                COALESCE(a.status_changed_at, a.date_applied, '')
+                COALESCE(a.status_changed_at, a.date_applied)
               ) > ?
           AND NOT EXISTS (
               SELECT 1 FROM reminders r

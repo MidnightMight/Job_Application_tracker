@@ -225,6 +225,7 @@ def _check_stale_submitted_applications():
     * Likely Rejected (threshold 2): no status change →
       lower success_chance to ≤ 10 % and create an 'Update to Likely Rejected?' reminder.
     """
+    from datetime import date as _date
     try:
         stall_value = int(db.get_setting("stale_threshold_value", "2"))
         stall_unit  = db.get_setting("stale_threshold_unit", "weeks")
@@ -234,9 +235,21 @@ def _check_stale_submitted_applications():
         rejected_unit  = db.get_setting("rejected_threshold_unit", "weeks")
         rejected_days  = rejected_value * (7 if rejected_unit == "weeks" else 1)
 
+        today = _date.today()
+
         for app_record in db.get_stalled_submitted_applications(stall_days):
+            # Compute stale duration: days since most recent activity (status or contact).
+            last_contact = app_record.get("last_contact_date") or ""
+            last_status  = (app_record.get("status_changed_at") or
+                            app_record.get("date_applied") or "")
+            last_activity = max(last_contact[:10], last_status[:10]) if last_contact else last_status[:10]
+            try:
+                from datetime import datetime as _dt
+                stale_since = (_date.today() - _dt.fromisoformat(last_activity).date()).days
+            except Exception:
+                stale_since = app_record["duration"]
             msg = (
-                f"No activity for {app_record['duration']} days on "
+                f"No activity for {stale_since} day(s) on "
                 f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
                 f"({app_record['status'].replace('_', ' ')}). "
                 "Consider checking in with HR."
@@ -245,9 +258,17 @@ def _check_stale_submitted_applications():
 
         for app_record in db.get_likely_rejected_applications(rejected_days):
             db.lower_success_chance_for_stale(app_record["id"])
+            # Compute stale duration: days since last status change.
+            last_status = (app_record.get("status_changed_at") or
+                           app_record.get("date_applied") or "")
+            try:
+                from datetime import datetime as _dt
+                status_stale = (_date.today() - _dt.fromisoformat(last_status[:10]).date()).days
+            except Exception:
+                status_stale = app_record["duration"]
             msg = (
                 f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
-                f"has had no status change for {app_record['duration']} days. "
+                f"has had no status change for {status_stale} day(s). "
                 "Consider updating the status to Likely Rejected."
             )
             db.create_reminder(app_record["id"], msg, reminder_type="likely_rejected")

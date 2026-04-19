@@ -478,12 +478,15 @@ def lower_success_chance_for_stale(app_id: int, max_chance: float = 0.1):
 
     Only decreases the value — if the user has already set a lower value it is
     left unchanged.  A NULL value is treated as 1.0 (100%) so it gets capped
-    down to *max_chance*.
+    down to *max_chance*.  The WHERE guard avoids a no-op write when the value
+    is already at or below the cap.
     """
     conn = get_connection()
     conn.execute(
-        "UPDATE applications SET success_chance = MIN(COALESCE(success_chance, 1.0), ?) WHERE id=?",
-        (max_chance, app_id),
+        "UPDATE applications"
+        " SET success_chance = ?"
+        " WHERE id = ? AND COALESCE(success_chance, 1.0) > ?",
+        (max_chance, app_id, max_chance),
     )
     conn.commit()
     conn.close()
