@@ -58,10 +58,12 @@ def _statuses_ignored_for_stale(user_id=None) -> set[str]:
         ordered = get_status_options(user_id=user_id)
         submitted_idx = ordered.index("Submitted")
         rejected_idx = ordered.index("Rejected")
-        start = min(submitted_idx, rejected_idx)
-        end = max(submitted_idx, rejected_idx)
-        return set(ordered[start:end + 1])
-    except (ValueError, Exception):
+        if submitted_idx < rejected_idx:
+            return set(ordered[submitted_idx:rejected_idx])
+        if rejected_idx < submitted_idx:
+            return set(ordered[rejected_idx + 1:submitted_idx + 1])
+        return {"Submitted"}
+    except Exception:
         return set()
 
 
