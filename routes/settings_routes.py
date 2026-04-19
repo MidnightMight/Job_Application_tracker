@@ -52,7 +52,7 @@ def settings():
             if stale_val.isdigit() and int(stale_val) >= 1:
                 db.set_setting("stale_threshold_value", stale_val)
             else:
-                flash("Stalled threshold must be a positive integer.", "danger")
+                flash("Stale Application threshold must be a positive integer.", "danger")
                 return redirect(url_for("settings_routes.settings", section="general"))
             if stale_unit in ("days", "weeks"):
                 db.set_setting("stale_threshold_unit", stale_unit)

@@ -300,7 +300,7 @@ def _interval_kwargs() -> dict:
 
 def _reschedule_jobs(interval_key: str):
     """Reschedule both background jobs to the given interval (live, no restart needed)."""
-    if not os.environ.get("WERKZEUG_RUN_MAIN") == "false":
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
         kwargs = _INTERVAL_MAP.get(interval_key, {"hours": 1})
         for job_id in ("reminders", "stale_check"):
             _scheduler.reschedule_job(job_id, trigger="interval", **kwargs)
