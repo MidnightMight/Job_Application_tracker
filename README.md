@@ -1,9 +1,13 @@
 # Job Application Tracker
 
 A personal, local web application for tracking job applications, company history,
-stage progression, and success rates across multiple years.
+stage progression, and success rates across multiple years. 
 
 [![Licence: MIT](https://img.shields.io/badge/Licence-MIT-yellow.svg)](LICENSE)
+
+### Motivation: 
+I just made it cause I am bored and job application updating via excel works but it crashed too many time. Soo I built this to be free for use and open source. It will be continually improving as I go.
+Update: tested with multi user and friend for feedback. feel free to give me feedback or create issue for feature suggestion or actual issue with the implemented code so far. 
 
 ---
 
