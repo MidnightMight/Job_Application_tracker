@@ -51,7 +51,7 @@ def _enrich(app: dict, stale_ignored_statuses: set[str] | None = None) -> dict:
 
 
 def _statuses_ignored_for_stale(user_id: int | None = None) -> set[str]:
-    """Statuses in the Submitted→Rejected range should not be flagged stale."""
+    """Statuses in the Submitted→Rejected range (inclusive) are stale-ignored."""
     try:
         from .statuses import get_status_options
 
@@ -633,6 +633,7 @@ def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
     for i, row in enumerate(rows, start=1):
         company = (row.get("company") or "").strip()
         job_desc = (row.get("job_desc") or "").strip()
+        row_label = company or job_desc
         if not company and not job_desc:
             errors.append(
                 f"Row {i}: either 'company' or 'job_desc' is required — row skipped."
@@ -640,7 +641,6 @@ def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
             continue
         date_applied = (row.get("date_applied") or "").strip()
         if not date_applied:
-            row_label = company or job_desc
             errors.append(f"Row {i} ({row_label}): 'date_applied' is required — row skipped.")
             continue
         for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
@@ -652,7 +652,6 @@ def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
         team = (row.get("team") or "").strip()
         lookup_key = _dup_key(company, job_desc, team, date_applied)
         if lookup_key in existing_keys:
-            row_label = company or job_desc
             errors.append(
                 f"Row {i} ({row_label}): duplicate application already in database — row skipped."
             )
