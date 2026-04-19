@@ -116,9 +116,10 @@
                      name="stale_threshold_value" min="1" max="365"
                      value="{{ settings.get('stale_threshold_value', '2') }}"
                      style="max-width:100px;">
+              {% set _stale_unit = settings.get('stale_threshold_unit', 'weeks') %}
               <select class="form-select" name="stale_threshold_unit" style="max-width:110px;">
-                <option value="weeks" {% if settings.get('stale_threshold_unit', 'weeks') == 'weeks' %}selected{% endif %}>Weeks</option>
-                <option value="days"  {% if settings.get('stale_threshold_unit', 'weeks') == 'days'  %}selected{% endif %}>Days</option>
+                <option value="weeks" {% if _stale_unit == 'weeks' %}selected{% endif %}>Weeks</option>
+                <option value="days"  {% if _stale_unit == 'days'  %}selected{% endif %}>Days</option>
               </select>
             </div>
             <div class="form-text">
@@ -135,14 +136,15 @@
                      name="rejected_threshold_value" min="1" max="365"
                      value="{{ settings.get('rejected_threshold_value', '4') }}"
                      style="max-width:100px;">
+              {% set _rejected_unit = settings.get('rejected_threshold_unit', 'weeks') %}
               <select class="form-select" name="rejected_threshold_unit" style="max-width:110px;">
-                <option value="weeks" {% if settings.get('rejected_threshold_unit', 'weeks') == 'weeks' %}selected{% endif %}>Weeks</option>
-                <option value="days"  {% if settings.get('rejected_threshold_unit', 'weeks') == 'days'  %}selected{% endif %}>Days</option>
+                <option value="weeks" {% if _rejected_unit == 'weeks' %}selected{% endif %}>Weeks</option>
+                <option value="days"  {% if _rejected_unit == 'days'  %}selected{% endif %}>Days</option>
               </select>
             </div>
             <div class="form-text">
               Default: <strong>4 weeks</strong>. When a submitted application has had no status
-              change for this long, the success probability is capped at 10 % and a
+              change for this long, the success probability is capped at 10% and a
               "Consider updating to Likely Rejected" reminder is added to the inbox.
             </div>
           </div>

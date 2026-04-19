@@ -477,11 +477,12 @@ def lower_success_chance_for_stale(app_id: int, max_chance: float = 0.1):
     """Reduce success_chance to at most *max_chance* for a likely-rejected application.
 
     Only decreases the value — if the user has already set a lower value it is
-    left unchanged.
+    left unchanged.  A NULL value is treated as 1.0 (100%) so it gets capped
+    down to *max_chance*.
     """
     conn = get_connection()
     conn.execute(
-        "UPDATE applications SET success_chance = MIN(COALESCE(success_chance, 0), ?) WHERE id=?",
+        "UPDATE applications SET success_chance = MIN(COALESCE(success_chance, 1.0), ?) WHERE id=?",
         (max_chance, app_id),
     )
     conn.commit()
