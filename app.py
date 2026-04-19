@@ -245,11 +245,11 @@ def _check_stale_submitted_applications():
             last_activity = max(last_contact[:10], last_status[:10]) if last_contact else last_status[:10]
             try:
                 from datetime import datetime as _dt
-                stale_since = (_date.today() - _dt.fromisoformat(last_activity).date()).days
+                stale_days = (_date.today() - _dt.fromisoformat(last_activity).date()).days
             except Exception:
-                stale_since = app_record["duration"]
+                stale_days = app_record["duration"]
             msg = (
-                f"No activity for {stale_since} day(s) on "
+                f"No activity for {stale_days} day(s) on "
                 f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
                 f"({app_record['status'].replace('_', ' ')}). "
                 "Consider checking in with HR."
@@ -263,12 +263,12 @@ def _check_stale_submitted_applications():
                            app_record.get("date_applied") or "")
             try:
                 from datetime import datetime as _dt
-                status_stale = (_date.today() - _dt.fromisoformat(last_status[:10]).date()).days
+                days_since_status_change = (_date.today() - _dt.fromisoformat(last_status[:10]).date()).days
             except Exception:
-                status_stale = app_record["duration"]
+                days_since_status_change = app_record["duration"]
             msg = (
                 f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
-                f"has had no status change for {status_stale} day(s). "
+                f"has had no status change for {days_since_status_change} day(s). "
                 "Consider updating the status to Likely Rejected."
             )
             db.create_reminder(app_record["id"], msg, reminder_type="likely_rejected")

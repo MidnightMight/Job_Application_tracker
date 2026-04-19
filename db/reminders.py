@@ -47,7 +47,14 @@ def create_reminder(application_id: int, message: str, reminder_type: str = ""):
 
 
 def _get_submitted_range_statuses(user_id=None) -> list:
-    """Return the ordered statuses between Submitted and Rejected (exclusive of Rejected)."""
+    """Return the ordered statuses between Submitted (inclusive) and Rejected (exclusive).
+
+    This gives the set of "active waiting" statuses to check for stale reminders —
+    Rejected itself is excluded because an already-rejected application needs no
+    check-in.  Compare with ``_statuses_ignored_for_stale`` in applications.py which
+    includes Rejected (inclusive) for a different purpose: suppressing the general
+    stale badge in the UI.
+    """
     try:
         from .statuses import get_status_options
         ordered = get_status_options(user_id=user_id)
