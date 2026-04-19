@@ -1,9 +1,12 @@
 """Reminders / inbox helpers."""
 
+import logging
 from datetime import datetime
 
 from .connection import get_connection
 from .init_db import PENDING_STATUSES
+
+logger = logging.getLogger(__name__)
 
 
 def get_pending_for_reminders(days_threshold: int, user_id=None) -> list:
@@ -31,15 +34,118 @@ def get_pending_for_reminders(days_threshold: int, user_id=None) -> list:
     return [_enrich(dict(r)) for r in rows]
 
 
-def create_reminder(application_id: int, message: str):
+def create_reminder(application_id: int, message: str, reminder_type: str = ""):
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
     conn.execute(
-        "INSERT INTO reminders (application_id, message, created_at, dismissed) VALUES (?,?,?,0)",
-        (application_id, message, now),
+        "INSERT INTO reminders (application_id, message, created_at, dismissed, reminder_type)"
+        " VALUES (?,?,?,0,?)",
+        (application_id, message, now, reminder_type or None),
     )
     conn.commit()
     conn.close()
+
+
+def _get_submitted_range_statuses(user_id=None) -> list:
+    """Return the ordered statuses between Submitted and Rejected (exclusive of Rejected)."""
+    try:
+        from .statuses import get_status_options
+        ordered = get_status_options(user_id=user_id)
+        submitted_idx = ordered.index("Submitted")
+        rejected_idx = ordered.index("Rejected")
+        start = min(submitted_idx, rejected_idx)
+        end = max(submitted_idx, rejected_idx)
+        # Submitted inclusive, Rejected exclusive — the "active waiting" range.
+        return ordered[start:end]
+    except (ValueError, ImportError):
+        logger.debug("_get_submitted_range_statuses: falling back to defaults")
+        return [
+            "Submitted", "Online_Assessment", "Awaiting_Response",
+            "Interview_Scheduled", "Interview_In_Person",
+        ]
+    except Exception:
+        logger.exception("_get_submitted_range_statuses: unexpected error")
+        return []
+
+
+def get_stalled_submitted_applications(threshold_days: int, user_id=None) -> list:
+    """Return submitted-range applications with no status change AND no recorded contact
+    for longer than *threshold_days*, that don't already have a recent stall_checkin reminder.
+
+    Both ``status_changed_at`` and ``last_contact_date`` are considered — whichever is
+    more recent resets the stall clock.
+    """
+    statuses = _get_submitted_range_statuses(user_id=user_id)
+    if not statuses:
+        return []
+
+    placeholders = ",".join("?" for _ in statuses)
+    sql = f"""
+        SELECT a.* FROM applications a
+        WHERE a.status IN ({placeholders})
+          AND COALESCE(a.archived, 0) = 0
+          AND julianday('now') - julianday(
+                CASE
+                  WHEN COALESCE(a.last_contact_date, '') >= COALESCE(a.status_changed_at, a.date_applied, '')
+                  THEN a.last_contact_date
+                  ELSE COALESCE(a.status_changed_at, a.date_applied, '')
+                END
+              ) > ?
+          AND NOT EXISTS (
+              SELECT 1 FROM reminders r
+              WHERE r.application_id = a.id
+                AND r.dismissed = 0
+                AND r.reminder_type = 'stall_checkin'
+                AND julianday('now') - julianday(r.created_at) < 7
+          )
+    """
+    params: list = [*statuses, threshold_days]
+    if user_id is not None:
+        sql += " AND a.user_id = ?"
+        params.append(user_id)
+    conn = get_connection()
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    from .applications import _enrich
+    return [_enrich(dict(r)) for r in rows]
+
+
+def get_likely_rejected_applications(threshold_days: int, user_id=None) -> list:
+    """Return submitted-range applications with no status change for longer than
+    *threshold_days*, that don't already have a recent likely_rejected reminder.
+
+    Only ``status_changed_at`` is used here — contact alone does not prevent an
+    application from being flagged as likely rejected.
+    """
+    statuses = _get_submitted_range_statuses(user_id=user_id)
+    if not statuses:
+        return []
+
+    placeholders = ",".join("?" for _ in statuses)
+    sql = f"""
+        SELECT a.* FROM applications a
+        WHERE a.status IN ({placeholders})
+          AND COALESCE(a.archived, 0) = 0
+          AND julianday('now') - julianday(
+                COALESCE(a.status_changed_at, a.date_applied, '')
+              ) > ?
+          AND NOT EXISTS (
+              SELECT 1 FROM reminders r
+              WHERE r.application_id = a.id
+                AND r.dismissed = 0
+                AND r.reminder_type = 'likely_rejected'
+                AND julianday('now') - julianday(r.created_at) < 7
+          )
+    """
+    params: list = [*statuses, threshold_days]
+    if user_id is not None:
+        sql += " AND a.user_id = ?"
+        params.append(user_id)
+    conn = get_connection()
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    from .applications import _enrich
+    return [_enrich(dict(r)) for r in rows]
 
 
 def get_reminders(unread_only: bool = False, user_id=None) -> list:

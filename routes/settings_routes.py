@@ -45,6 +45,28 @@ def settings():
                 "company_pool_enabled",
                 "1" if request.form.get("company_pool_enabled") else "0",
             )
+
+            # Stale application thresholds
+            stale_val = request.form.get("stale_threshold_value", "2").strip()
+            stale_unit = request.form.get("stale_threshold_unit", "weeks").strip()
+            if stale_val.isdigit() and int(stale_val) >= 1:
+                db.set_setting("stale_threshold_value", stale_val)
+            else:
+                flash("Stalled threshold must be a positive integer.", "danger")
+                return redirect(url_for("settings_routes.settings", section="general"))
+            if stale_unit in ("days", "weeks"):
+                db.set_setting("stale_threshold_unit", stale_unit)
+
+            rejected_val = request.form.get("rejected_threshold_value", "4").strip()
+            rejected_unit = request.form.get("rejected_threshold_unit", "weeks").strip()
+            if rejected_val.isdigit() and int(rejected_val) >= 1:
+                db.set_setting("rejected_threshold_value", rejected_val)
+            else:
+                flash("Likely Rejected threshold must be a positive integer.", "danger")
+                return redirect(url_for("settings_routes.settings", section="general"))
+            if rejected_unit in ("days", "weeks"):
+                db.set_setting("rejected_threshold_unit", rejected_unit)
+
             flash("General settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="general"))
 

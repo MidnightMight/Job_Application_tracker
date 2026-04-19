@@ -63,6 +63,8 @@ from .reminders import (
     dismiss_reminder,
     dismiss_all_reminders,
     get_unread_reminder_count,
+    get_stalled_submitted_applications,
+    get_likely_rejected_applications,
 )
 
 from .stats import (
@@ -96,6 +98,7 @@ from .applications import (
     find_duplicate_applications,
     bulk_import_applications,
     save_ai_fit,
+    lower_success_chance_for_stale,
     archive_application,
     unarchive_application,
 )
@@ -121,6 +124,7 @@ __all__ = [
     # reminders
     "get_pending_for_reminders", "create_reminder", "get_reminders",
     "dismiss_reminder", "dismiss_all_reminders", "get_unread_reminder_count",
+    "get_stalled_submitted_applications", "get_likely_rejected_applications",
     # stats
     "get_stats", "get_status_counts", "get_apps_per_year",
     "get_success_rate_per_year", "get_company_note_frequency",
@@ -133,5 +137,6 @@ __all__ = [
     "update_application",
     "delete_application", "bulk_delete_applications", "bulk_update_applications",
     "find_duplicate_applications", "bulk_import_applications", "save_ai_fit",
+    "lower_success_chance_for_stale",
     "archive_application", "unarchive_application",
 ]

@@ -101,6 +101,52 @@
             </div>
           </div>
 
+          <hr class="my-3">
+
+          <h6 class="fw-semibold mb-3"><i class="bi bi-hourglass-split me-1"></i>Stale Application Detection</h6>
+          <p class="text-muted small mb-3">
+            Automatically creates inbox reminders for submitted applications that have
+            received no activity for too long.
+          </p>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Stalled Application threshold</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="number" class="form-control" id="stale_threshold_value"
+                     name="stale_threshold_value" min="1" max="365"
+                     value="{{ settings.get('stale_threshold_value', '2') }}"
+                     style="max-width:100px;">
+              <select class="form-select" name="stale_threshold_unit" style="max-width:110px;">
+                <option value="weeks" {% if settings.get('stale_threshold_unit', 'weeks') == 'weeks' %}selected{% endif %}>Weeks</option>
+                <option value="days"  {% if settings.get('stale_threshold_unit', 'weeks') == 'days'  %}selected{% endif %}>Days</option>
+              </select>
+            </div>
+            <div class="form-text">
+              Default: <strong>2 weeks</strong>. When a submitted application has had no status
+              change <em>and</em> no recorded contact for this long, a check-in reminder is added
+              to the inbox.
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Application Likely Rejected threshold</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="number" class="form-control" id="rejected_threshold_value"
+                     name="rejected_threshold_value" min="1" max="365"
+                     value="{{ settings.get('rejected_threshold_value', '4') }}"
+                     style="max-width:100px;">
+              <select class="form-select" name="rejected_threshold_unit" style="max-width:110px;">
+                <option value="weeks" {% if settings.get('rejected_threshold_unit', 'weeks') == 'weeks' %}selected{% endif %}>Weeks</option>
+                <option value="days"  {% if settings.get('rejected_threshold_unit', 'weeks') == 'days'  %}selected{% endif %}>Days</option>
+              </select>
+            </div>
+            <div class="form-text">
+              Default: <strong>4 weeks</strong>. When a submitted application has had no status
+              change for this long, the success probability is capped at 10 % and a
+              "Consider updating to Likely Rejected" reminder is added to the inbox.
+            </div>
+          </div>
+
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-save me-1"></i>Save
           </button>

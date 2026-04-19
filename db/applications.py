@@ -473,6 +473,21 @@ def save_ai_fit(
     conn.close()
 
 
+def lower_success_chance_for_stale(app_id: int, max_chance: float = 0.1):
+    """Reduce success_chance to at most *max_chance* for a likely-rejected application.
+
+    Only decreases the value — if the user has already set a lower value it is
+    left unchanged.
+    """
+    conn = get_connection()
+    conn.execute(
+        "UPDATE applications SET success_chance = MIN(COALESCE(success_chance, 0), ?) WHERE id=?",
+        (max_chance, app_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 def archive_application(app_id: int, user_id=None) -> bool:
     """Mark an application as archived."""
     now = datetime.now().isoformat(timespec="seconds")

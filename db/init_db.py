@@ -152,9 +152,11 @@ def init_db():
             message        TEXT NOT NULL,
             created_at     TEXT NOT NULL,
             dismissed      INTEGER DEFAULT 0,
+            reminder_type  TEXT,
             FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
         )
     """)
+    _add_column_if_missing(c, "reminders", "reminder_type", "TEXT")
 
     # ── Users ─────────────────────────────────────────────────────────────────
     c.execute("""
@@ -205,6 +207,10 @@ def init_db():
             ("user_profile_experience", ""),
             ("user_profile_summary",    ""),
             ("onboarding_complete",     "0"),
+            ("stale_threshold_value",   "2"),
+            ("stale_threshold_unit",    "weeks"),
+            ("rejected_threshold_value", "4"),
+            ("rejected_threshold_unit", "weeks"),
         ]
         c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
         conn.commit()
@@ -221,6 +227,10 @@ def init_db():
             ("user_profile_experience", ""),
             ("user_profile_summary",    ""),
             ("onboarding_complete",     "1"),
+            ("stale_threshold_value",   "2"),
+            ("stale_threshold_unit",    "weeks"),
+            ("rejected_threshold_value", "4"),
+            ("rejected_threshold_unit", "weeks"),
         ]
         for key, value in migrations:
             if key not in existing_keys:

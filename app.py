@@ -217,11 +217,51 @@ def _check_and_create_reminders():
         pass
 
 
+def _check_stale_submitted_applications():
+    """Scheduled task: stale-application logic for the submitted → rejected range.
+
+    * Stall check-in (threshold 1): no status change AND no recorded contact →
+      create a 'Check in with HR' inbox reminder.
+    * Likely Rejected (threshold 2): no status change →
+      lower success_chance to ≤ 10 % and create an 'Update to Likely Rejected?' reminder.
+    """
+    try:
+        stall_value = int(db.get_setting("stale_threshold_value", "2"))
+        stall_unit  = db.get_setting("stale_threshold_unit", "weeks")
+        stall_days  = stall_value * (7 if stall_unit == "weeks" else 1)
+
+        rejected_value = int(db.get_setting("rejected_threshold_value", "4"))
+        rejected_unit  = db.get_setting("rejected_threshold_unit", "weeks")
+        rejected_days  = rejected_value * (7 if rejected_unit == "weeks" else 1)
+
+        for app_record in db.get_stalled_submitted_applications(stall_days):
+            msg = (
+                f"No activity for {app_record['duration']} days on "
+                f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
+                f"({app_record['status'].replace('_', ' ')}). "
+                "Consider checking in with HR."
+            )
+            db.create_reminder(app_record["id"], msg, reminder_type="stall_checkin")
+
+        for app_record in db.get_likely_rejected_applications(rejected_days):
+            db.lower_success_chance_for_stale(app_record["id"])
+            msg = (
+                f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
+                f"has had no status change for {app_record['duration']} days. "
+                "Consider updating the status to Likely Rejected."
+            )
+            db.create_reminder(app_record["id"], msg, reminder_type="likely_rejected")
+    except Exception:
+        pass
+
+
 if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
     _scheduler = BackgroundScheduler(daemon=True)
     _scheduler.add_job(_check_and_create_reminders, "interval", hours=1, id="reminders")
+    _scheduler.add_job(_check_stale_submitted_applications, "interval", hours=1, id="stale_check")
     _scheduler.start()
     _check_and_create_reminders()
+    _check_stale_submitted_applications()
 
 
 # ---------------------------------------------------------------------------
