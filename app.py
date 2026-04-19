@@ -217,11 +217,104 @@ def _check_and_create_reminders():
         pass
 
 
+def _check_stale_submitted_applications():
+    """Scheduled task: stale-application logic for the submitted → rejected range.
+
+    * Stall check-in (threshold 1): no status change AND no recorded contact →
+      create a 'Check in with HR' inbox reminder.
+    * Likely Rejected (threshold 2): no status change →
+      lower success_chance to ≤ 10 % and create an 'Update to Likely Rejected?' reminder.
+    """
+    from datetime import date as _date
+    try:
+        stall_value = int(db.get_setting("stale_threshold_value", "2"))
+        stall_unit  = db.get_setting("stale_threshold_unit", "weeks")
+        stall_days  = stall_value * (7 if stall_unit == "weeks" else 1)
+
+        rejected_value = int(db.get_setting("rejected_threshold_value", "4"))
+        rejected_unit  = db.get_setting("rejected_threshold_unit", "weeks")
+        rejected_days  = rejected_value * (7 if rejected_unit == "weeks" else 1)
+
+        today = _date.today()
+
+        for app_record in db.get_stalled_submitted_applications(stall_days):
+            # Compute stale duration: days since most recent activity (status or contact).
+            last_contact = app_record.get("last_contact_date") or ""
+            last_status  = (app_record.get("status_changed_at") or
+                            app_record.get("date_applied") or "")
+            last_activity = max(last_contact[:10], last_status[:10]) if last_contact else last_status[:10]
+            try:
+                from datetime import datetime as _dt
+                stale_days = (_date.today() - _dt.fromisoformat(last_activity).date()).days
+            except Exception:
+                stale_days = app_record["duration"]
+            msg = (
+                f"No activity for {stale_days} day(s) on "
+                f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
+                f"({app_record['status'].replace('_', ' ')}). "
+                "Consider checking in with HR."
+            )
+            db.create_reminder(app_record["id"], msg, reminder_type="stall_checkin")
+
+        for app_record in db.get_likely_rejected_applications(rejected_days):
+            db.lower_success_chance_for_stale(app_record["id"])
+            # Compute stale duration: days since last status change.
+            last_status = (app_record.get("status_changed_at") or
+                           app_record.get("date_applied") or "")
+            try:
+                from datetime import datetime as _dt
+                days_since_status_change = (_date.today() - _dt.fromisoformat(last_status[:10]).date()).days
+            except Exception:
+                days_since_status_change = app_record["duration"]
+            msg = (
+                f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
+                f"has had no status change for {days_since_status_change} day(s). "
+                "Consider updating the status to Likely Rejected."
+            )
+            db.create_reminder(app_record["id"], msg, reminder_type="likely_rejected")
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Scheduler interval helpers
+# ---------------------------------------------------------------------------
+
+# Map setting value → APScheduler interval kwargs.
+_INTERVAL_MAP = {
+    "1h":  {"hours":   1},
+    "6h":  {"hours":   6},
+    "12h": {"hours":  12},
+    "1d":  {"hours":  24},
+    "2d":  {"hours":  48},
+    "3d":  {"hours":  72},
+    "7d":  {"hours": 168},
+}
+
+
+def _interval_kwargs() -> dict:
+    """Return APScheduler interval kwargs for the currently configured check_interval."""
+    val = db.get_setting("check_interval", "1h")
+    return _INTERVAL_MAP.get(val, {"hours": 1})
+
+
+def _reschedule_jobs(interval_key: str):
+    """Reschedule both background jobs to the given interval (live, no restart needed)."""
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
+        kwargs = _INTERVAL_MAP.get(interval_key, {"hours": 1})
+        for job_id in ("reminders", "stale_check"):
+            _scheduler.reschedule_job(job_id, trigger="interval", **kwargs)
+        logger.info("Scheduler jobs rescheduled to interval: %s (%s)", interval_key, kwargs)
+
+
 if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
     _scheduler = BackgroundScheduler(daemon=True)
-    _scheduler.add_job(_check_and_create_reminders, "interval", hours=1, id="reminders")
+    _init_kwargs = _interval_kwargs()
+    _scheduler.add_job(_check_and_create_reminders, "interval", id="reminders", **_init_kwargs)
+    _scheduler.add_job(_check_stale_submitted_applications, "interval", id="stale_check", **_init_kwargs)
     _scheduler.start()
     _check_and_create_reminders()
+    _check_stale_submitted_applications()
 
 
 # ---------------------------------------------------------------------------

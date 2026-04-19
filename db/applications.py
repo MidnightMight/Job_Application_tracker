@@ -23,7 +23,7 @@ _TERMINAL_STATUSES = frozenset({
 _STALE_DAYS = 3
 
 
-def _enrich(app: dict) -> dict:
+def _enrich(app: dict, stale_ignored_statuses: set[str] | None = None) -> dict:
     """Add computed fields: 'duration' (days since applied) and 'is_stale'."""
     today = date.today()
 
@@ -37,7 +37,10 @@ def _enrich(app: dict) -> dict:
     # is_stale — True when status has not changed in >= _STALE_DAYS days and
     # the application is not in a terminal state.
     app["is_stale"] = False
-    if app.get("status") not in _TERMINAL_STATUSES:
+    if (
+        app.get("status") not in _TERMINAL_STATUSES
+        and app.get("status") not in (stale_ignored_statuses or set())
+    ):
         ref = app.get("status_changed_at") or app.get("date_applied") or ""
         try:
             ref_date = datetime.fromisoformat(ref[:10]).date()
@@ -45,6 +48,31 @@ def _enrich(app: dict) -> dict:
         except Exception:
             pass
     return app
+
+
+def _statuses_ignored_for_stale(user_id: int | None = None) -> set[str]:
+    """Statuses in the Submitted→Rejected range (inclusive) are stale-ignored."""
+    try:
+        from .statuses import get_status_options
+
+        ordered = get_status_options(user_id=user_id)
+        submitted_idx = ordered.index("Submitted")
+        rejected_idx = ordered.index("Rejected")
+        start = min(submitted_idx, rejected_idx)
+        end = max(submitted_idx, rejected_idx)
+        return set(ordered[start:end + 1])
+    except ValueError:
+        logger.debug(
+            "_statuses_ignored_for_stale: Submitted or Rejected missing for user_id=%s",
+            user_id,
+        )
+        return set()
+    except ImportError:
+        logger.debug("_statuses_ignored_for_stale: could not import get_status_options")
+        return set()
+    except Exception:
+        logger.exception("_statuses_ignored_for_stale: unexpected error")
+        return set()
 
 
 def get_applications(year=None, status=None, user_id=None, include_archived: bool = False) -> list:
@@ -69,7 +97,8 @@ def get_applications(year=None, status=None, user_id=None, include_archived: boo
     sql += " ORDER BY date_applied DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    enriched = [_enrich(dict(r)) for r in rows]
+    stale_ignored = _statuses_ignored_for_stale(user_id=user_id)
+    enriched = [_enrich(dict(r), stale_ignored) for r in rows]
     # Stale applications float to the top so they get immediate attention.
     enriched.sort(key=lambda a: (0 if a["is_stale"] else 1, a.get("date_applied") or ""))
     return enriched
@@ -102,7 +131,8 @@ def search_applications(query: str, year: int | None = None, user_id=None, inclu
     sql += " ORDER BY date_applied DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    return [_enrich(dict(r)) for r in rows]
+    stale_ignored = _statuses_ignored_for_stale(user_id=user_id)
+    return [_enrich(dict(r), stale_ignored) for r in rows]
 
 
 def get_application(app_id: int, user_id=None):
@@ -443,6 +473,25 @@ def save_ai_fit(
     conn.close()
 
 
+def lower_success_chance_for_stale(app_id: int, max_chance: float = 0.1):
+    """Reduce success_chance to at most *max_chance* for a likely-rejected application.
+
+    Only decreases the value — if the user has already set a lower value it is
+    left unchanged.  A NULL value is treated as 1.0 (100%) so it gets capped
+    down to *max_chance*.  The WHERE guard avoids a no-op write when the value
+    is already at or below the cap.
+    """
+    conn = get_connection()
+    conn.execute(
+        "UPDATE applications"
+        " SET success_chance = ?"
+        " WHERE id = ? AND COALESCE(success_chance, 1.0) > ?",
+        (max_chance, app_id, max_chance),
+    )
+    conn.commit()
+    conn.close()
+
+
 def archive_application(app_id: int, user_id=None) -> bool:
     """Mark an application as archived."""
     now = datetime.now().isoformat(timespec="seconds")
@@ -602,12 +651,16 @@ def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
     errors: list[str] = []
     for i, row in enumerate(rows, start=1):
         company = (row.get("company") or "").strip()
-        if not company:
-            errors.append(f"Row {i}: 'company' is required — row skipped.")
+        job_desc = (row.get("job_desc") or "").strip()
+        row_label = company or job_desc
+        if not company and not job_desc:
+            errors.append(
+                f"Row {i}: either 'company' or 'job_desc' is required — row skipped."
+            )
             continue
         date_applied = (row.get("date_applied") or "").strip()
         if not date_applied:
-            errors.append(f"Row {i} ({company}): 'date_applied' is required — row skipped.")
+            errors.append(f"Row {i} ({row_label}): 'date_applied' is required — row skipped.")
             continue
         for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
             try:
@@ -615,12 +668,11 @@ def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
                 break
             except ValueError:
                 pass
-        job_desc = (row.get("job_desc") or "").strip()
         team = (row.get("team") or "").strip()
         lookup_key = _dup_key(company, job_desc, team, date_applied)
         if lookup_key in existing_keys:
             errors.append(
-                f"Row {i} ({company}): duplicate application already in database — row skipped."
+                f"Row {i} ({row_label}): duplicate application already in database — row skipped."
             )
             duplicates += 1
             continue

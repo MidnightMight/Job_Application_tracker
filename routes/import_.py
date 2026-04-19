@@ -24,9 +24,9 @@ os.makedirs(_UPLOAD_TMP_DIR, exist_ok=True)
 
 CSV_IMPORT_FIELDS = [
     ("",                "(ignore this column)"),
-    ("company",         "Company *"),
+    ("company",         "Company (required if Role is empty)"),
     ("date_applied",    "Date Applied *"),
-    ("job_desc",        "Job Description / Role"),
+    ("job_desc",        "Job Description / Role (required if Company is empty)"),
     ("team",            "Team / Division"),
     ("status",          "Status"),
     ("cover_letter",    "Cover Letter (1/0)"),
