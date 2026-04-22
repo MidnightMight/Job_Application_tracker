@@ -260,7 +260,7 @@ def set_attention_snooze(application_id: int, hours: int, user_id=None):
                 (application_id,),
             )
     else:
-        until = (datetime.now() + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
+        until = (datetime.fromisoformat(now) + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
         if user_id is not None:
             row = conn.execute(
                 "SELECT id FROM attention_snoozes WHERE application_id=? AND user_id=?",

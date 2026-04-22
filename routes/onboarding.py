@@ -49,7 +49,7 @@ def onboarding():
                 )
 
             pw_hash = generate_password_hash(password)
-            ok, msg = db.add_user(username, pw_hash, is_admin=True, onboarding_complete=True)
+            ok, msg = db.add_user(username, pw_hash, is_admin=True, onboarding_complete=False)
             if not ok:
                 flash(msg, "danger")
                 return render_template(
