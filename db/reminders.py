@@ -1,7 +1,7 @@
 """Reminders / inbox helpers."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .connection import get_connection
 from .init_db import PENDING_STATUSES
@@ -38,8 +38,8 @@ def create_reminder(application_id: int, message: str, reminder_type: str = ""):
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
     conn.execute(
-        "INSERT INTO reminders (application_id, message, created_at, dismissed, reminder_type)"
-        " VALUES (?,?,?,0,?)",
+        "INSERT INTO reminders (application_id, message, created_at, dismissed, reminder_type, snooze_until)"
+        " VALUES (?,?,?,0,?,NULL)",
         (application_id, message, now, reminder_type or None),
     )
     conn.commit()
@@ -171,6 +171,8 @@ def get_reminders(unread_only: bool = False, user_id=None) -> list:
     params: list = []
     if unread_only:
         conditions.append("r.dismissed=0")
+    conditions.append("(r.snooze_until IS NULL OR r.snooze_until <= ?)")
+    params.append(datetime.now().isoformat(timespec="seconds"))
     if user_id is not None:
         conditions.append("(a.user_id = ? OR a.user_id IS NULL)")
         params.append(user_id)
@@ -184,7 +186,7 @@ def get_reminders(unread_only: bool = False, user_id=None) -> list:
 
 def dismiss_reminder(reminder_id: int):
     conn = get_connection()
-    conn.execute("UPDATE reminders SET dismissed=1 WHERE id=?", (reminder_id,))
+    conn.execute("UPDATE reminders SET dismissed=1, snooze_until=NULL WHERE id=?", (reminder_id,))
     conn.commit()
     conn.close()
 
@@ -193,7 +195,7 @@ def dismiss_all_reminders(user_id=None):
     conn = get_connection()
     if user_id is not None:
         conn.execute(
-            "UPDATE reminders SET dismissed=1 WHERE id IN ("
+            "UPDATE reminders SET dismissed=1, snooze_until=NULL WHERE id IN ("
             "  SELECT r.id FROM reminders r "
             "  LEFT JOIN applications a ON a.id = r.application_id "
             "  WHERE a.user_id = ? OR a.user_id IS NULL"
@@ -201,23 +203,128 @@ def dismiss_all_reminders(user_id=None):
             (user_id,),
         )
     else:
-        conn.execute("UPDATE reminders SET dismissed=1")
+        conn.execute("UPDATE reminders SET dismissed=1, snooze_until=NULL")
     conn.commit()
     conn.close()
 
 
 def get_unread_reminder_count(user_id=None) -> int:
     conn = get_connection()
+    now = datetime.now().isoformat(timespec="seconds")
     if user_id is not None:
         count = conn.execute(
             "SELECT COUNT(*) FROM reminders r "
             "LEFT JOIN applications a ON a.id = r.application_id "
-            "WHERE r.dismissed=0 AND (a.user_id = ? OR a.user_id IS NULL)",
-            (user_id,),
+            "WHERE r.dismissed=0 "
+            "AND (r.snooze_until IS NULL OR r.snooze_until <= ?) "
+            "AND (a.user_id = ? OR a.user_id IS NULL)",
+            (now, user_id),
         ).fetchone()[0]
     else:
         count = conn.execute(
-            "SELECT COUNT(*) FROM reminders WHERE dismissed=0"
+            "SELECT COUNT(*) FROM reminders WHERE dismissed=0 "
+            "AND (snooze_until IS NULL OR snooze_until <= ?)",
+            (now,),
         ).fetchone()[0]
     conn.close()
     return count
+
+
+def snooze_reminder(reminder_id: int, hours: int = 1):
+    safe_hours = max(0, min(72, int(hours)))
+    until = (datetime.now() + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
+    conn = get_connection()
+    conn.execute(
+        "UPDATE reminders SET dismissed=0, snooze_until=? WHERE id=?",
+        (until, reminder_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def set_attention_snooze(application_id: int, hours: int, user_id=None):
+    """Snooze dashboard attention entry for 0-72 hours."""
+    safe_hours = max(0, min(72, int(hours)))
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    if safe_hours == 0:
+        if user_id is not None:
+            conn.execute(
+                "DELETE FROM attention_snoozes WHERE application_id=? AND user_id=?",
+                (application_id, user_id),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM attention_snoozes WHERE application_id=? AND user_id IS NULL",
+                (application_id,),
+            )
+    else:
+        until = (datetime.now() + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
+        if user_id is not None:
+            row = conn.execute(
+                "SELECT id FROM attention_snoozes WHERE application_id=? AND user_id=?",
+                (application_id, user_id),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    "UPDATE attention_snoozes SET snooze_until=?, created_at=? WHERE id=?",
+                    (until, now, row["id"]),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO attention_snoozes (application_id, user_id, snooze_until, created_at)"
+                    " VALUES (?,?,?,?)",
+                    (application_id, user_id, until, now),
+                )
+        else:
+            row = conn.execute(
+                "SELECT id FROM attention_snoozes WHERE application_id=? AND user_id IS NULL",
+                (application_id,),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    "UPDATE attention_snoozes SET snooze_until=?, created_at=? WHERE id=?",
+                    (until, now, row["id"]),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO attention_snoozes (application_id, user_id, snooze_until, created_at)"
+                    " VALUES (?,NULL,?,?)",
+                    (application_id, until, now),
+                )
+    conn.commit()
+    conn.close()
+
+
+def get_attention_applications(user_id=None) -> list:
+    """Return stale submitted-range applications, excluding currently snoozed ones."""
+    from .settings import get_setting
+
+    stall_value = int(get_setting("stale_threshold_value", "2"))
+    stall_unit = get_setting("stale_threshold_unit", "weeks")
+    stall_days = stall_value * (7 if stall_unit == "weeks" else 1)
+
+    apps = get_stalled_submitted_applications(stall_days, user_id=user_id)
+    now = datetime.now().isoformat(timespec="seconds")
+    conn = get_connection()
+    if user_id is not None:
+        rows = conn.execute(
+            "SELECT application_id, snooze_until FROM attention_snoozes "
+            "WHERE user_id=? AND snooze_until > ?",
+            (user_id, now),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT application_id, snooze_until FROM attention_snoozes "
+            "WHERE user_id IS NULL AND snooze_until > ?",
+            (now,),
+        ).fetchall()
+    conn.close()
+    snoozed = {r["application_id"]: r["snooze_until"] for r in rows}
+    visible = []
+    for app in apps:
+        if app["id"] in snoozed:
+            continue
+        app["attention_snoozed_until"] = None
+        visible.append(app)
+    return visible

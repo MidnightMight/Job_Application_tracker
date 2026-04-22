@@ -80,6 +80,14 @@
             <i class="bi bi-gear me-1"></i>Settings
           </a>
         </li>
+        {% if ai_available %}
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint == 'dashboard.assistant' %}active{% endif %}"
+             href="{{ url_for('dashboard.assistant') }}">
+            <i class="bi bi-robot me-1"></i>O.t.t.o
+          </a>
+        </li>
+        {% endif %}
       </ul>
 
       <!-- Global search -->

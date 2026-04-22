@@ -58,7 +58,7 @@ def get_companies(user_id: int | None = None, pool_enabled: bool = True):
         d = dict(r)
         owner = d.get("user_id")
         if not pool_enabled and user_id is not None:
-            if owner is not None and owner != user_id:
+            if owner != user_id:
                 continue
         if pool_enabled and user_id is not None and owner is not None and owner != user_id:
             d["note"] = None
@@ -102,39 +102,63 @@ def add_company(data, user_id: int | None = None):
     conn.close()
 
 
-def update_company(company_id: int, data):
+def update_company(company_id: int, data, user_id: int | None = None):
     industry_tags = _normalize_industry_tags(data.get("industry", ""))
     conn = get_connection()
-    conn.execute(
-        """UPDATE companies SET
-           company_name=?, note=?,
-           applied_2023=?, applied_2024=?, applied_2025=?,
-           applied_2026=?, applied_2027=?, industry=?
-           WHERE id=?""",
-        (
-            data.get("company_name", ""),
-            data.get("note", ""),
-            1 if data.get("applied_2023") else 0,
-            1 if data.get("applied_2024") else 0,
-            1 if data.get("applied_2025") else 0,
-            1 if data.get("applied_2026") else 0,
-            1 if data.get("applied_2027") else 0,
-            industry_tags,
-            company_id,
-        ),
-    )
+    if user_id is not None:
+        conn.execute(
+            """UPDATE companies SET
+               company_name=?, note=?,
+               applied_2023=?, applied_2024=?, applied_2025=?,
+               applied_2026=?, applied_2027=?, industry=?
+               WHERE id=? AND user_id=?""",
+            (
+                data.get("company_name", ""),
+                data.get("note", ""),
+                1 if data.get("applied_2023") else 0,
+                1 if data.get("applied_2024") else 0,
+                1 if data.get("applied_2025") else 0,
+                1 if data.get("applied_2026") else 0,
+                1 if data.get("applied_2027") else 0,
+                industry_tags,
+                company_id,
+                user_id,
+            ),
+        )
+    else:
+        conn.execute(
+            """UPDATE companies SET
+               company_name=?, note=?,
+               applied_2023=?, applied_2024=?, applied_2025=?,
+               applied_2026=?, applied_2027=?, industry=?
+               WHERE id=?""",
+            (
+                data.get("company_name", ""),
+                data.get("note", ""),
+                1 if data.get("applied_2023") else 0,
+                1 if data.get("applied_2024") else 0,
+                1 if data.get("applied_2025") else 0,
+                1 if data.get("applied_2026") else 0,
+                1 if data.get("applied_2027") else 0,
+                industry_tags,
+                company_id,
+            ),
+        )
     conn.commit()
     conn.close()
 
 
-def delete_company(company_id: int):
+def delete_company(company_id: int, user_id: int | None = None):
     conn = get_connection()
-    conn.execute("DELETE FROM companies WHERE id=?", (company_id,))
+    if user_id is not None:
+        conn.execute("DELETE FROM companies WHERE id=? AND user_id=?", (company_id, user_id))
+    else:
+        conn.execute("DELETE FROM companies WHERE id=?", (company_id,))
     conn.commit()
     conn.close()
 
 
-def bulk_delete_companies(ids: list) -> int:
+def bulk_delete_companies(ids: list, user_id: int | None = None) -> int:
     """Delete multiple companies by ID. Returns number of rows deleted."""
     if not ids:
         return 0
@@ -150,16 +174,44 @@ def bulk_delete_companies(ids: list) -> int:
         return 0
     placeholders = ",".join("?" for _ in safe_ids)
     conn = get_connection()
-    conn.execute(f"DELETE FROM companies WHERE id IN ({placeholders})", safe_ids)
+    if user_id is not None:
+        conn.execute(
+            f"DELETE FROM companies WHERE id IN ({placeholders}) AND user_id=?",
+            (*safe_ids, user_id),
+        )
+    else:
+        conn.execute(f"DELETE FROM companies WHERE id IN ({placeholders})", safe_ids)
     count = conn.execute("SELECT changes()").fetchone()[0]
     conn.commit()
     conn.close()
     return count
 
 
+def get_industry_tag_suggestions(
+    user_id: int | None = None,
+    pool_enabled: bool = True,
+    limit: int = 120,
+) -> list[str]:
+    """Return unique industry tags visible to the current user."""
+    tags: list[str] = []
+    seen: set[str] = set()
+    for company in get_companies(user_id=user_id, pool_enabled=pool_enabled):
+        for raw in (company.get("industry") or "").split(","):
+            tag = raw.strip()
+            key = tag.lower()
+            if not tag or key in seen:
+                continue
+            seen.add(key)
+            tags.append(tag)
+            if len(tags) >= limit:
+                return tags
+    return tags
+
+
 def _auto_add_or_update_company(
     company_name: str,
     industry: str | None = None,
+    user_id: int | None = None,
     *,
     date_applied: str | None = None,
     status: str | None = None,
@@ -178,10 +230,16 @@ def _auto_add_or_update_company(
     conn = get_connection()
     cols = {r[1] for r in conn.execute("PRAGMA table_info(companies)").fetchall()}
     can_mark_applied = bool(applied_col and applied_col in cols and applied_col in _APPLIED_YEAR_COLUMNS)
-    row = conn.execute(
-        "SELECT id, industry FROM companies WHERE LOWER(company_name)=?",
-        (company_name.lower(),),
-    ).fetchone()
+    if user_id is not None:
+        row = conn.execute(
+            "SELECT id, industry FROM companies WHERE LOWER(company_name)=? AND user_id=?",
+            (company_name.lower(), user_id),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT id, industry FROM companies WHERE LOWER(company_name)=? AND user_id IS NULL",
+            (company_name.lower(),),
+        ).fetchone()
 
     company_added = False
     if row is None:
@@ -194,10 +252,15 @@ def _auto_add_or_update_company(
                 "applied_2027": "INSERT INTO companies (company_name, industry, applied_2027) VALUES (?,?,1)",
             }
             conn.execute(insert_sql_by_year[applied_col], (company_name, normalized_industry))
+            if user_id is not None:
+                conn.execute(
+                    "UPDATE companies SET user_id=? WHERE id=last_insert_rowid()",
+                    (user_id,),
+                )
         else:
             conn.execute(
-                "INSERT INTO companies (company_name, industry) VALUES (?,?)",
-                (company_name, normalized_industry),
+                "INSERT INTO companies (company_name, industry, user_id) VALUES (?,?,?)",
+                (company_name, normalized_industry, user_id),
             )
         company_added = True
     else:

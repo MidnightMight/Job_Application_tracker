@@ -73,6 +73,72 @@
   </div>
 </div>
 
+<!-- Pending Applications -->
+{% if attention_apps %}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-transparent fw-semibold">
+    <i class="bi bi-hourglass-split text-danger me-2"></i>
+    Applications Requiring Attention
+    <span class="badge bg-danger ms-2">{{ attention_apps | length }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Company</th><th>Role</th><th>Status</th>
+          <th>Date Applied</th><th>Days</th><th>Comment</th><th>Snooze</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in attention_apps %}
+        <tr>
+          <td class="fw-semibold">{{ a.company }}</td>
+          <td>{{ a.job_desc }}</td>
+          <td>
+            <span class="badge status-badge status-{{ a.status | replace(' ', '_') }}">
+              {{ a.status | replace('_', ' ') }}
+            </span>
+          </td>
+          <td>{{ a.date_applied }}</td>
+          <td>
+            <span class="badge {% if a.duration > 60 %}bg-danger{% elif a.duration > 30 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+              {{ a.duration }}d
+            </span>
+          </td>
+          <td class="text-muted small">{{ a.comment or '—' }}</td>
+          <td>
+            <form method="post" action="{{ url_for('dashboard.snooze_attention', app_id=a.id) }}" class="d-flex gap-1">
+              <select name="hours" class="form-select form-select-sm">
+                <option value="0">0h</option>
+                <option value="1">1h</option>
+                <option value="3">3h</option>
+                <option value="6">6h</option>
+                <option value="12">12h</option>
+                <option value="24" selected>24h</option>
+                <option value="48">48h</option>
+                <option value="72">72h</option>
+              </select>
+              <button class="btn btn-outline-secondary btn-sm">Set</button>
+            </form>
+          </td>
+          <td>
+            <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
+               class="btn btn-outline-info btn-sm py-0 me-1" title="View details">
+              <i class="bi bi-eye"></i>
+            </a>
+            <a href="{{ url_for('applications.edit_application', app_id=a.id) }}"
+               class="btn btn-outline-primary btn-sm py-0">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- Charts Row 1 -->
 <div class="row g-3 mb-4">
   <div class="col-lg-7">
@@ -120,57 +186,6 @@
     </div>
   </div>
 </div>
-
-<!-- Pending Applications -->
-{% if stats.pending %}
-<div class="card border-0 shadow-sm mb-4">
-  <div class="card-header bg-transparent fw-semibold">
-    <i class="bi bi-hourglass-split text-danger me-2"></i>
-    Applications Requiring Attention
-    <span class="badge bg-danger ms-2">{{ stats.pending | length }}</span>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-hover table-sm mb-0 align-middle">
-      <thead class="table-dark">
-        <tr>
-          <th>Company</th><th>Role</th><th>Status</th>
-          <th>Date Applied</th><th>Days</th><th>Comment</th><th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in stats.pending %}
-        <tr>
-          <td class="fw-semibold">{{ a.company }}</td>
-          <td>{{ a.job_desc }}</td>
-          <td>
-            <span class="badge status-badge status-{{ a.status | replace(' ', '_') }}">
-              {{ a.status | replace('_', ' ') }}
-            </span>
-          </td>
-          <td>{{ a.date_applied }}</td>
-          <td>
-            <span class="badge {% if a.duration > 60 %}bg-danger{% elif a.duration > 30 %}bg-warning text-dark{% else %}bg-success{% endif %}">
-              {{ a.duration }}d
-            </span>
-          </td>
-          <td class="text-muted small">{{ a.comment or '—' }}</td>
-          <td>
-            <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
-               class="btn btn-outline-info btn-sm py-0 me-1" title="View details">
-              <i class="bi bi-eye"></i>
-            </a>
-            <a href="{{ url_for('applications.edit_application', app_id=a.id) }}"
-               class="btn btn-outline-primary btn-sm py-0">
-              <i class="bi bi-pencil"></i>
-            </a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
 
 {% endblock %}
 

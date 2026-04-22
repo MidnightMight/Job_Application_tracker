@@ -12,7 +12,7 @@ bp = Blueprint("inbox", __name__)
 @login_required
 def inbox():
     user_id = current_user_id()
-    reminders = db.get_reminders(user_id=user_id)
+    reminders = db.get_reminders(unread_only=True, user_id=user_id)
     return render_template("inbox.html", reminders=reminders)
 
 
@@ -20,6 +20,15 @@ def inbox():
 @login_required
 def dismiss_reminder(reminder_id):
     db.dismiss_reminder(reminder_id)
+    flash("Notification dismissed.", "info")
+    return redirect(url_for("inbox.inbox"))
+
+
+@bp.route("/inbox/snooze/<int:reminder_id>", methods=["POST"])
+@login_required
+def snooze_reminder(reminder_id):
+    db.snooze_reminder(reminder_id, hours=1)
+    flash("Notification snoozed for 1 hour.", "success")
     return redirect(url_for("inbox.inbox"))
 
 

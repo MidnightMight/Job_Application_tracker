@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}O.t.t.o Assistant — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-dark text-white fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-robot me-2 text-warning"></i>O.t.t.o (Organised Tracking &amp; Target Opportunity)</span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">Bounce ideas, ask job-hunt questions, and plan next steps with O.t.t.o.</p>
+        <div id="ottoChatLog" class="border rounded p-3 mb-3 bg-body-tertiary" style="height:360px; overflow-y:auto;"></div>
+        <div class="input-group">
+          <input id="ottoPrompt" type="text" class="form-control" placeholder="Ask O.t.t.o anything about your applications...">
+          <button id="ottoSend" class="btn btn-warning" type="button">
+            <i class="bi bi-send me-1"></i>Send
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const log = document.getElementById('ottoChatLog');
+  const input = document.getElementById('ottoPrompt');
+  const send = document.getElementById('ottoSend');
+
+  function esc(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function add(role, message) {
+    const cls = role === 'user' ? 'text-end' : 'text-start';
+    const badge = role === 'user' ? 'bg-primary' : 'bg-warning text-dark';
+    const name = role === 'user' ? 'You' : 'O.t.t.o';
+    const html = '<div class="' + cls + ' mb-2"><span class="badge ' + badge + ' mb-1">' + name + '</span><div>' + esc(message) + '</div></div>';
+    log.insertAdjacentHTML('beforeend', html);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function sendPrompt() {
+    const prompt = input.value.trim();
+    if (!prompt) return;
+    input.value = '';
+    add('user', prompt);
+    send.disabled = true;
+    try {
+      const resp = await fetch('{{ url_for("api.assistant_chat") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: prompt}),
+      });
+      const data = await resp.json();
+      if (!data.ok) {
+        add('assistant', data.error || 'I could not answer that just now.');
+      } else {
+        add('assistant', data.reply);
+      }
+    } catch {
+      add('assistant', 'Connection issue. Please try again.');
+    } finally {
+      send.disabled = false;
+      input.focus();
+    }
+  }
+
+  send.addEventListener('click', sendPrompt);
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendPrompt();
+    }
+  });
+  add('assistant', 'Hi! I’m O.t.t.o 🤖 — how can I help with your applications today?');
+})();
+</script>
+{% endblock %}

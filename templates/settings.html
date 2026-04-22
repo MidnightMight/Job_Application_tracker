@@ -171,6 +171,20 @@
             </div>
           </div>
 
+          <div class="mb-4">
+            <label for="applications_default_sort" class="form-label fw-semibold">
+              <i class="bi bi-list-check me-1"></i>Application page default view
+            </label>
+            {% set _default_sort = settings.get('applications_default_sort', 'status') %}
+            <select class="form-select" id="applications_default_sort" name="applications_default_sort" style="max-width:220px;">
+              <option value="status" {% if _default_sort == 'status' %}selected{% endif %}>By status order</option>
+              <option value="date" {% if _default_sort == 'date' %}selected{% endif %}>By date applied</option>
+            </select>
+            <div class="form-text">
+              Default sorting used on yearly application pages when no sort option is specified.
+            </div>
+          </div>
+
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-save me-1"></i>Save
           </button>

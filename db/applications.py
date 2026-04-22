@@ -228,6 +228,7 @@ def add_application(data, user_id=None) -> int:
     _auto_add_or_update_company(
         company,
         industry,
+        user_id=user_id,
         date_applied=data.get("date_applied", ""),
         status=data.get("status", "Select_Status"),
         app_id=app_id,
@@ -334,6 +335,7 @@ def update_application(app_id: int, data):
     _auto_add_or_update_company(
         data.get("company", ""),
         data.get("industry", "") or None,
+        user_id=existing.get("user_id") if existing else None,
         date_applied=data.get("date_applied", ""),
         status=new_status,
         app_id=app_id,
@@ -437,6 +439,7 @@ def bulk_update_applications(ids: list, field: str, value, user_id=None) -> int:
             _auto_add_or_update_company(
                 r["company"],
                 r["industry"],
+                user_id=user_id,
                 date_applied=r["date_applied"] or "",
                 status=r["status"] or "",
                 app_id=r["id"],

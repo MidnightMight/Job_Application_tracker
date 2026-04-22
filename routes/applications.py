@@ -1,6 +1,7 @@
 """Application CRUD and bulk-action routes."""
 
 import logging
+import random
 from datetime import date
 from types import SimpleNamespace
 
@@ -15,6 +16,17 @@ from db.applications import _STALE_DAYS
 
 bp = Blueprint("applications", __name__)
 logger = logging.getLogger(__name__)
+
+_OTTO_OFFER_MESSAGES = [
+    "🎉 O.t.t.o says: Offer received! You did it — time to celebrate this win! 🚀",
+    "🥳 O.t.t.o here: Incredible news — an offer landed! Your effort paid off! 🌟",
+    "💼✨ O.t.t.o cheers: Offer unlocked! That is a huge milestone, congrats!",
+    "🔥 O.t.t.o update: Offer received! Momentum is on your side — amazing work!",
+]
+
+
+def _offer_flash():
+    return random.choice(_OTTO_OFFER_MESSAGES)
 
 
 @bp.route("/application/<int:app_id>")
@@ -37,6 +49,7 @@ def application_detail(app_id):
 @login_required
 def add_application():
     user_id = current_user_id()
+    pool_enabled = db.get_setting("company_pool_enabled", "0") == "1"
     if request.method == "POST":
         company     = request.form.get("company", "").strip()
         job_desc    = request.form.get("job_desc", "").strip()
@@ -74,19 +87,22 @@ def add_application():
                 return render_template(
                     "application_form.html",
                     app=form_data,
-                    companies=db.get_companies(),
+                    companies=db.get_companies(user_id=user_id, pool_enabled=pool_enabled),
                     status_options=db.get_status_options(user_id=user_id),
                     action="Add",
                     duplicate_warning=True,
                     duplicates=duplicates,
                     stale_days=_STALE_DAYS,
+                    industry_tags=db.get_industry_tag_suggestions(user_id=user_id, pool_enabled=pool_enabled),
                 )
 
         db.add_application(request.form, user_id=user_id)
         flash("Application added.", "success")
+        if request.form.get("status", "Select_Status") == "Offer_Received":
+            flash(_offer_flash(), "success")
         year = request.form.get("date_applied", "")[:4] or str(date.today().year)
         return redirect(url_for("dashboard.year_view", year=year))
-    companies_list = db.get_companies()
+    companies_list = db.get_companies(user_id=user_id, pool_enabled=pool_enabled)
     return render_template(
         "application_form.html",
         app=None,
@@ -94,6 +110,7 @@ def add_application():
         status_options=db.get_status_options(user_id=user_id),
         action="Add",
         stale_days=_STALE_DAYS,
+        industry_tags=db.get_industry_tag_suggestions(user_id=user_id, pool_enabled=pool_enabled),
     )
 
 
@@ -101,6 +118,7 @@ def add_application():
 @login_required
 def edit_application(app_id):
     user_id = current_user_id()
+    pool_enabled = db.get_setting("company_pool_enabled", "0") == "1"
     application = db.get_application(app_id, user_id=user_id)
     if not application:
         flash("Application not found.", "danger")
@@ -110,15 +128,19 @@ def edit_application(app_id):
                     app_id,
                     request.form.get("status"),
                     request.form.get("job_expiry_date"))
+        old_status = application.get("status")
+        new_status = request.form.get("status", "Select_Status")
         try:
             db.update_application(app_id, request.form)
         except Exception:
             logger.exception("edit_application: update_application raised for id=%s", app_id)
             raise
         flash("Application updated.", "success")
+        if old_status != "Offer_Received" and new_status == "Offer_Received":
+            flash(_offer_flash(), "success")
         year = request.form.get("date_applied", "")[:4] or str(date.today().year)
         return redirect(url_for("dashboard.year_view", year=year))
-    companies_list = db.get_companies()
+    companies_list = db.get_companies(user_id=user_id, pool_enabled=pool_enabled)
     return render_template(
         "application_form.html",
         app=application,
@@ -126,6 +148,7 @@ def edit_application(app_id):
         status_options=db.get_status_options(user_id=user_id),
         action="Edit",
         stale_days=_STALE_DAYS,
+        industry_tags=db.get_industry_tag_suggestions(user_id=user_id, pool_enabled=pool_enabled),
     )
 
 
@@ -205,6 +228,8 @@ def bulk_action():
                 f"for {count} application(s).",
                 "success",
             )
+            if new_status == "Offer_Received" and count > 0:
+                flash(_offer_flash(), "success")
 
     elif action == "set_date_applied":
         new_date = request.form.get("bulk_date_applied", "").strip()

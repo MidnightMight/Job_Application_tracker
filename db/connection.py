@@ -18,6 +18,7 @@ YEARS = [2023, 2024, 2025, 2026, 2027]
 _ALLOWED_TABLES = {
     "applications", "companies", "status_history",
     "statuses", "reminders", "settings", "users", "user_ai_settings",
+    "attention_snoozes",
 }
 _ALLOWED_COLUMNS = {
     "contact", "additional_notes", "status_changed_at", "last_contact_date",
@@ -25,6 +26,7 @@ _ALLOWED_COLUMNS = {
     "ai_recommendation", "last_modified_at", "job_expiry_date", "industry",
     "bg_color", "text_color", "user_id", "needs_password_setup", "use_admin_ai",
     "last_login_at", "archived", "archived_at", "reminder_type",
+    "snooze_until",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0", "INTEGER", "REAL", "TEXT DEFAULT ''"}
 

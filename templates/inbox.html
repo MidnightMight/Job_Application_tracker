@@ -47,11 +47,18 @@
       {% endif %}
     </div>
     {% if not r.dismissed %}
+    <div class="d-flex gap-1 flex-shrink-0">
+      <form method="post" action="{{ url_for('inbox.snooze_reminder', reminder_id=r.id) }}" class="m-0">
+        <button type="submit" class="btn btn-sm btn-outline-info" title="Snooze for 1 hour">
+          <i class="bi bi-clock-history"></i>
+        </button>
+      </form>
     <form method="post" action="{{ url_for('inbox.dismiss_reminder', reminder_id=r.id) }}" class="m-0 flex-shrink-0">
       <button type="submit" class="btn btn-sm btn-outline-secondary" title="Dismiss">
         <i class="bi bi-x-lg"></i>
       </button>
     </form>
+    </div>
     {% endif %}
   </div>
   {% endfor %}

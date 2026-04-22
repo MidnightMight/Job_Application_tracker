@@ -152,11 +152,26 @@ def init_db():
             message        TEXT NOT NULL,
             created_at     TEXT NOT NULL,
             dismissed      INTEGER DEFAULT 0,
+            snooze_until   TEXT,
             reminder_type  TEXT,
             FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
         )
     """)
     _add_column_if_missing(c, "reminders", "reminder_type", "TEXT")
+    _add_column_if_missing(c, "reminders", "snooze_until", "TEXT")
+
+    # ── Dashboard attention snoozes ────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS attention_snoozes (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id INTEGER NOT NULL,
+            user_id        INTEGER,
+            snooze_until   TEXT NOT NULL,
+            created_at     TEXT NOT NULL,
+            UNIQUE(application_id, user_id),
+            FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+        )
+    """)
 
     # ── Users ─────────────────────────────────────────────────────────────────
     c.execute("""
@@ -212,6 +227,7 @@ def init_db():
             ("rejected_threshold_value", "4"),
             ("rejected_threshold_unit", "weeks"),
             ("check_interval",          "1h"),
+            ("applications_default_sort", "status"),
         ]
         c.executemany("INSERT INTO settings (key, value) VALUES (?,?)", default_settings)
         conn.commit()
@@ -233,6 +249,7 @@ def init_db():
             ("rejected_threshold_value", "4"),
             ("rejected_threshold_unit", "weeks"),
             ("check_interval",          "1h"),
+            ("applications_default_sort", "status"),
         ]
         for key, value in migrations:
             if key not in existing_keys:

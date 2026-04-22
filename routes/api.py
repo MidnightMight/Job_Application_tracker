@@ -16,6 +16,7 @@ bp = Blueprint("api", __name__)
 _MAX_JOB_DESC_LENGTH  = 4000
 _MAX_ERROR_MSG_LENGTH = 120
 _MAX_PROFILE_LENGTH   = 8000
+_MAX_CHAT_MSG_LENGTH  = 1200
 
 # ---------------------------------------------------------------------------
 # AI provider helpers
@@ -520,3 +521,39 @@ def ai_fit_save():
 
     db.save_ai_fit(app_id, fit_score, verdict, matching_skills, skill_gaps, recommendation)
     return jsonify({"ok": True})
+
+
+@bp.route("/api/assistant-chat", methods=["POST"])
+@login_required
+def assistant_chat():
+    """AJAX: chat with O.t.t.o when AI is enabled for this user."""
+    user_id = current_user_id()
+    if not _ai_available(user_id):
+        return jsonify({"ok": False, "error": "O.t.t.o is unavailable because AI is not enabled."})
+
+    body = request.get_json(silent=True) or {}
+    message = (body.get("message") or "").strip()
+    if not message:
+        return jsonify({"ok": False, "error": "Please enter a message."})
+
+    prompt = (
+        "You are O.t.t.o, the Job Application Tracker system assistant.\n"
+        "O.t.t.o stands for Organised Tracking & Target Opportunity.\n"
+        "Be practical, concise, positive, and helpful.\n"
+        "Use occasional light emoji, but keep it readable.\n"
+        "If asked about unrelated dangerous topics, refuse briefly and steer back to career support.\n\n"
+        f"User message:\n{message[:_MAX_CHAT_MSG_LENGTH]}\n\n"
+        "Reply as O.t.t.o:"
+    )
+    try:
+        reply = _call_ai(prompt, user_id, timeout=90)
+        reply = (reply or "").strip()
+        if not reply:
+            return jsonify({"ok": False, "error": "O.t.t.o did not return a response. Please try again."})
+        return jsonify({"ok": True, "reply": reply[:3000]})
+    except RuntimeError as exc:
+        return jsonify({"ok": False, "error": str(exc)[:200]})
+    except urllib.error.URLError:
+        return jsonify({"ok": False, "error": "Could not connect to the AI server."})
+    except Exception:
+        return jsonify({"ok": False, "error": "An unexpected error occurred while contacting O.t.t.o."})

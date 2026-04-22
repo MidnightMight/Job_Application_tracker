@@ -73,6 +73,11 @@ def settings():
             if check_interval not in _valid_intervals:
                 check_interval = "1h"
             db.set_setting("check_interval", check_interval)
+
+            default_sort = request.form.get("applications_default_sort", "status").strip().lower()
+            if default_sort not in {"date", "status"}:
+                default_sort = "status"
+            db.set_setting("applications_default_sort", default_sort)
             # Apply the new interval to the running scheduler immediately.
             from app import _reschedule_jobs
             _reschedule_jobs(check_interval)

@@ -307,9 +307,10 @@
               <label class="form-label fw-semibold">
                 <i class="bi bi-diagram-3 text-info me-1"></i>Industry Tags
               </label>
-              <input type="text" name="industry" class="form-control"
+              <input type="text" name="industry" id="industry" class="form-control"
                      value="{{ app.industry if app and app.industry else '' }}"
                      placeholder="e.g. Mining, Engineering, Finance">
+              <div id="industrySuggestions" class="mt-2 d-flex flex-wrap gap-1"></div>
               <div class="form-text">Optional — comma-separated tags auto-apply to the company record.</div>
             </div>
 
@@ -424,6 +425,46 @@
 
 {% block scripts %}
 <script>
+// Industry tag suggestions for comma-separated input.
+(function () {
+  const input = document.getElementById('industry');
+  const box = document.getElementById('industrySuggestions');
+  const allTags = {{ (industry_tags or []) | tojson }};
+  if (!input || !box || !allTags.length) return;
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function currentToken(value) {
+    const parts = value.split(',');
+    return (parts[parts.length - 1] || '').trim().toLowerCase();
+  }
+  function replaceLastToken(value, tag) {
+    const parts = value.split(',');
+    parts[parts.length - 1] = ' ' + tag;
+    return parts.join(',').replace(/^ /, '') + ', ';
+  }
+  function renderSuggestions() {
+    const token = currentToken(input.value);
+    if (!token) {
+      box.innerHTML = '';
+      return;
+    }
+    const matches = allTags.filter(t => t.toLowerCase().startsWith(token)).slice(0, 8);
+    box.innerHTML = matches.map(t => (
+      '<button type="button" class="btn btn-outline-info btn-sm py-0 px-2 tag-suggestion" data-tag="' + esc(t) + '">' + esc(t) + '</button>'
+    )).join('');
+    box.querySelectorAll('.tag-suggestion').forEach(btn => {
+      btn.addEventListener('click', function () {
+        input.value = replaceLastToken(input.value, this.dataset.tag);
+        input.focus();
+        renderSuggestions();
+      });
+    });
+  }
+  input.addEventListener('input', renderSuggestions);
+})();
+
 // "Today" buttons — fill the linked date input with today's date.
 document.querySelectorAll('.today-btn').forEach(function (btn) {
   btn.addEventListener('click', function () {

@@ -86,21 +86,22 @@ def get_success_rate_per_year(user_id=None):
 
 
 def get_company_note_frequency(user_id=None):
-    """Return top sectors/notes from the companies table."""
+    """Return top industry/tag keywords from the companies table."""
     conn = get_connection()
     if user_id is not None:
         rows = conn.execute(
-            "SELECT note FROM companies WHERE note IS NOT NULL AND note != '' AND user_id=?",
+            "SELECT industry FROM companies WHERE industry IS NOT NULL AND industry != '' AND user_id=?",
             (user_id,),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT note FROM companies WHERE note IS NOT NULL AND note != ''"
+            "SELECT industry FROM companies WHERE industry IS NOT NULL AND industry != ''"
         ).fetchall()
     conn.close()
     freq: dict = {}
     for r in rows:
-        note = r["note"].strip()
-        if note:
-            freq[note] = freq.get(note, 0) + 1
+        for raw in (r["industry"] or "").replace(";", ",").split(","):
+            tag = raw.strip()
+            if tag:
+                freq[tag] = freq.get(tag, 0) + 1
     return dict(sorted(freq.items(), key=lambda x: x[1], reverse=True)[:15])

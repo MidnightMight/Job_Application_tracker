@@ -65,6 +65,9 @@ from .reminders import (
     get_unread_reminder_count,
     get_stalled_submitted_applications,
     get_likely_rejected_applications,
+    snooze_reminder,
+    set_attention_snooze,
+    get_attention_applications,
 )
 
 from .stats import (
@@ -82,6 +85,7 @@ from .companies import (
     update_company,
     delete_company,
     bulk_delete_companies,
+    get_industry_tag_suggestions,
 )
 
 from .applications import (
@@ -125,12 +129,13 @@ __all__ = [
     "get_pending_for_reminders", "create_reminder", "get_reminders",
     "dismiss_reminder", "dismiss_all_reminders", "get_unread_reminder_count",
     "get_stalled_submitted_applications", "get_likely_rejected_applications",
+    "snooze_reminder", "set_attention_snooze", "get_attention_applications",
     # stats
     "get_stats", "get_status_counts", "get_apps_per_year",
     "get_success_rate_per_year", "get_company_note_frequency",
     # companies
     "get_companies", "get_company", "add_company", "update_company",
-    "delete_company", "bulk_delete_companies",
+    "delete_company", "bulk_delete_companies", "get_industry_tag_suggestions",
     # applications
     "get_applications", "search_applications", "get_application",
     "get_application_timeline", "get_applications_for_company", "add_application",
