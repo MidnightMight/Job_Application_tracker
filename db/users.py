@@ -9,7 +9,8 @@ from .connection import get_connection
 def get_users() -> list:
     conn = get_connection()
     rows = conn.execute(
-        "SELECT id, username, is_admin, created_at, last_login_at FROM users ORDER BY created_at"
+        "SELECT id, username, is_admin, created_at, last_login_at, onboarding_complete "
+        "FROM users ORDER BY created_at"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -22,8 +23,13 @@ def count_users() -> int:
     return n
 
 
-def add_user(username: str, password_hash: str, is_admin: bool = False,
-             needs_password_setup: bool = False) -> tuple[bool, str]:
+def add_user(
+    username: str,
+    password_hash: str,
+    is_admin: bool = False,
+    needs_password_setup: bool = False,
+    onboarding_complete: bool = False,
+) -> tuple[bool, str]:
     username = username.strip()
     if not username:
         return False, "Username cannot be empty."
@@ -31,9 +37,16 @@ def add_user(username: str, password_hash: str, is_admin: bool = False,
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO users (username, password_hash, is_admin, created_at, needs_password_setup)"
-            " VALUES (?,?,?,?,?)",
-            (username, password_hash, 1 if is_admin else 0, now, 1 if needs_password_setup else 0),
+            "INSERT INTO users (username, password_hash, is_admin, created_at, needs_password_setup, onboarding_complete)"
+            " VALUES (?,?,?,?,?,?)",
+            (
+                username,
+                password_hash,
+                1 if is_admin else 0,
+                now,
+                1 if needs_password_setup else 0,
+                1 if onboarding_complete else 0,
+            ),
         )
         conn.commit()
         return True, f"User '{username}' added."
@@ -59,7 +72,7 @@ def delete_user(user_id: int) -> tuple[bool, str]:
 def get_user_by_username(username: str) -> dict | None:
     conn = get_connection()
     row = conn.execute(
-        "SELECT id, username, password_hash, is_admin, needs_password_setup"
+        "SELECT id, username, password_hash, is_admin, needs_password_setup, onboarding_complete"
         " FROM users WHERE username=?",
         (username,),
     ).fetchone()
@@ -85,6 +98,26 @@ def update_user_last_login(user_id: int) -> None:
     conn.execute(
         "UPDATE users SET last_login_at=? WHERE id=?",
         (now, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, username, is_admin, needs_password_setup, onboarding_complete FROM users WHERE id=?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def set_user_onboarding_complete(user_id: int, complete: bool = True) -> None:
+    conn = get_connection()
+    conn.execute(
+        "UPDATE users SET onboarding_complete=? WHERE id=?",
+        (1 if complete else 0, user_id),
     )
     conn.commit()
     conn.close()

@@ -56,7 +56,7 @@ def snooze_attention(app_id):
         hours = int(request.form.get("hours", "1"))
     except (TypeError, ValueError):
         hours = 1
-    hours = max(0, min(72, hours))
+    hours = max(0, min(db.MAX_SNOOZE_HOURS, hours))
     db.set_attention_snooze(app_id, hours, user_id=user_id)
     if hours == 0:
         flash("Attention snooze cleared.", "info")

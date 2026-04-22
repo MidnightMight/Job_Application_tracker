@@ -182,11 +182,13 @@ def init_db():
             is_admin            INTEGER DEFAULT 0,
             created_at          TEXT NOT NULL,
             needs_password_setup INTEGER DEFAULT 0,
-            last_login_at       TEXT
+            last_login_at       TEXT,
+            onboarding_complete INTEGER DEFAULT 0
         )
     """)
     _add_column_if_missing(c, "users", "needs_password_setup", "INTEGER DEFAULT 0")
     _add_column_if_missing(c, "users", "last_login_at", "TEXT")
+    _add_column_if_missing(c, "users", "onboarding_complete", "INTEGER DEFAULT 0")
 
     # ── Per-user AI settings ───────────────────────────────────────────────────
     c.execute("""

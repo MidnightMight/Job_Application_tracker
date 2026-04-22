@@ -7,6 +7,7 @@ from .connection import get_connection
 from .init_db import PENDING_STATUSES
 
 logger = logging.getLogger(__name__)
+MAX_SNOOZE_HOURS = 72
 
 
 def get_pending_for_reminders(days_threshold: int, user_id=None) -> list:
@@ -231,7 +232,7 @@ def get_unread_reminder_count(user_id=None) -> int:
 
 
 def snooze_reminder(reminder_id: int, hours: int = 1):
-    safe_hours = max(0, min(72, int(hours)))
+    safe_hours = max(0, min(MAX_SNOOZE_HOURS, int(hours)))
     until = (datetime.now() + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
     conn = get_connection()
     conn.execute(
@@ -244,7 +245,7 @@ def snooze_reminder(reminder_id: int, hours: int = 1):
 
 def set_attention_snooze(application_id: int, hours: int, user_id=None):
     """Snooze dashboard attention entry for 0-72 hours."""
-    safe_hours = max(0, min(72, int(hours)))
+    safe_hours = max(0, min(MAX_SNOOZE_HOURS, int(hours)))
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
     if safe_hours == 0:
@@ -328,3 +329,23 @@ def get_attention_applications(user_id=None) -> list:
         app["attention_snoozed_until"] = None
         visible.append(app)
     return visible
+
+
+def clear_dismissed_reminders(user_id=None) -> int:
+    """Delete dismissed reminders (and snoozed reminders once dismissed)."""
+    conn = get_connection()
+    if user_id is not None:
+        cur = conn.execute(
+            "DELETE FROM reminders WHERE dismissed=1 AND id IN ("
+            "  SELECT r.id FROM reminders r "
+            "  LEFT JOIN applications a ON a.id = r.application_id "
+            "  WHERE a.user_id = ? OR a.user_id IS NULL"
+            ")",
+            (user_id,),
+        )
+    else:
+        cur = conn.execute("DELETE FROM reminders WHERE dismissed=1")
+    count = cur.rowcount
+    conn.commit()
+    conn.close()
+    return count

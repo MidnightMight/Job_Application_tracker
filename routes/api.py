@@ -551,8 +551,8 @@ def assistant_chat():
         if not reply:
             return jsonify({"ok": False, "error": "O.t.t.o did not return a response. Please try again."})
         return jsonify({"ok": True, "reply": reply[:3000]})
-    except RuntimeError as exc:
-        return jsonify({"ok": False, "error": str(exc)[:200]})
+    except RuntimeError:
+        return jsonify({"ok": False, "error": "O.t.t.o could not process that request right now."})
     except urllib.error.URLError:
         return jsonify({"ok": False, "error": "Could not connect to the AI server."})
     except Exception:

@@ -92,11 +92,8 @@ def edit_company(company_id):
     if not company:
         flash("Company not found.", "danger")
         return redirect(url_for("companies.companies"))
-    if user_id is not None and company.get("user_id") not in (None, user_id):
+    if user_id is not None and company.get("user_id") != user_id:
         flash("You do not have access to edit that company.", "danger")
-        return redirect(url_for("companies.companies"))
-    if user_id is not None and not pool_enabled and company.get("user_id") != user_id:
-        flash("You do not have access to that company.", "danger")
         return redirect(url_for("companies.companies"))
     if request.method == "POST":
         db.update_company(company_id, request.form, user_id=user_id)

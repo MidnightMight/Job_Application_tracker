@@ -135,16 +135,31 @@ app.register_blueprint(admin_db_bp)
 # Onboarding gate
 # ---------------------------------------------------------------------------
 
-_ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "auth.setup_password", "static"}
+_ONBOARDING_EXEMPT = {
+    "onboarding.onboarding",
+    "onboarding.user_onboarding",
+    "auth.login",
+    "auth.logout",
+    "auth.setup_password",
+    "static",
+}
 
 
 @app.before_request
 def _check_onboarding():
     """Redirect every request to /onboarding until the first-run wizard is done."""
+    from flask import session
+
     if request.endpoint in _ONBOARDING_EXEMPT or request.endpoint is None:
         return
     if db.get_setting("onboarding_complete", "0") == "0":
         return redirect(url_for("onboarding.onboarding"))
+    if db.get_setting("login_enabled", "0") == "1":
+        user_id = session.get("user_id")
+        if user_id:
+            user = db.get_user_by_id(user_id)
+            if user and int(user.get("onboarding_complete", 0)) == 0:
+                return redirect(url_for("onboarding.user_onboarding"))
 
 
 # ---------------------------------------------------------------------------

@@ -111,6 +111,8 @@ def login():
             session["is_admin"] = bool(user["is_admin"])
             db.update_user_last_login(user["id"])
             flash(f"Welcome back, {user['username']}!", "success")
+            if int(user.get("onboarding_complete", 0)) == 0:
+                return redirect(url_for("onboarding.user_onboarding"))
             # Retrieve the server-stored path; never use form/query input for redirect.
             stored_path = session.pop("login_next", None)
             safe = _safe_path(stored_path) if stored_path else None
@@ -163,6 +165,8 @@ def setup_password():
             session["is_admin"] = bool(user["is_admin"])
             db.update_user_last_login(user["id"])
         flash("Password set successfully! Welcome.", "success")
+        if user and int(user.get("onboarding_complete", 0)) == 0:
+            return redirect(url_for("onboarding.user_onboarding"))
         return redirect(url_for("dashboard.dashboard"))
 
     return render_template("setup_password.html", username=username)

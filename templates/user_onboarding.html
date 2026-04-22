@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Welcome — {{ narrator_name }} Guide{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-dark text-white fw-semibold">
+        <i class="bi bi-robot me-2 text-warning"></i>{{ narrator_name }} — Your Guide
+      </div>
+      <div class="card-body p-4">
+        <p class="mb-2">Hi! I’m <strong>{{ narrator_name }}</strong> (Organised Tracking &amp; Target Opportunity) 🤖</p>
+        <p class="text-muted">I’ll help you stay organised and focused while you apply.</p>
+        <ul class="mb-4">
+          <li>Track each application and status clearly</li>
+          <li>Watch dashboard signals and attention items</li>
+          <li>Use inbox reminders to stay on top of follow-ups</li>
+          <li>Use AI features (if enabled) to brainstorm and refine strategy</li>
+        </ul>
+        <form method="post">
+          <button type="submit" class="btn btn-warning fw-semibold">
+            <i class="bi bi-check2-circle me-1"></i>Start with {{ narrator_name }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

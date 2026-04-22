@@ -39,3 +39,12 @@ def dismiss_all_reminders():
     db.dismiss_all_reminders(user_id=user_id)
     flash("All reminders dismissed.", "success")
     return redirect(url_for("inbox.inbox"))
+
+
+@bp.route("/inbox/clear-dismissed", methods=["POST"])
+@login_required
+def clear_dismissed_reminders():
+    user_id = current_user_id()
+    count = db.clear_dismissed_reminders(user_id=user_id)
+    flash(f"Cleared {count} dismissed reminder(s).", "success")
+    return redirect(url_for("inbox.inbox"))

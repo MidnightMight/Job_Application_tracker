@@ -48,6 +48,8 @@ from .users import (
     set_user_password,
     update_user_last_login,
     reassign_null_user_data,
+    get_user_by_id,
+    set_user_onboarding_complete,
 )
 
 from .user_ai_settings import (
@@ -68,6 +70,8 @@ from .reminders import (
     snooze_reminder,
     set_attention_snooze,
     get_attention_applications,
+    clear_dismissed_reminders,
+    MAX_SNOOZE_HOURS,
 )
 
 from .stats import (
@@ -123,6 +127,7 @@ __all__ = [
     "get_users", "count_users", "add_user", "delete_user", "get_user_by_username",
     "set_user_password", "reassign_null_user_data",
     "update_user_last_login",
+    "get_user_by_id", "set_user_onboarding_complete",
     # user_ai_settings
     "get_user_ai_settings", "save_user_ai_settings", "user_has_own_ai",
     # reminders
@@ -130,6 +135,7 @@ __all__ = [
     "dismiss_reminder", "dismiss_all_reminders", "get_unread_reminder_count",
     "get_stalled_submitted_applications", "get_likely_rejected_applications",
     "snooze_reminder", "set_attention_snooze", "get_attention_applications",
+    "clear_dismissed_reminders", "MAX_SNOOZE_HOURS",
     # stats
     "get_stats", "get_status_counts", "get_apps_per_year",
     "get_success_rate_per_year", "get_company_note_frequency",

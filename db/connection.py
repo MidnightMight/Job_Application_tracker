@@ -27,6 +27,7 @@ _ALLOWED_COLUMNS = {
     "bg_color", "text_color", "user_id", "needs_password_setup", "use_admin_ai",
     "last_login_at", "archived", "archived_at", "reminder_type",
     "snooze_until",
+    "onboarding_complete",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0", "INTEGER", "REAL", "TEXT DEFAULT ''"}
 
