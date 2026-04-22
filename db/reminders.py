@@ -10,6 +10,14 @@ logger = logging.getLogger(__name__)
 MAX_SNOOZE_HOURS = 72
 
 
+def _safe_snooze_hours(hours, default: int = 1) -> int:
+    try:
+        parsed = int(hours)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(0, min(MAX_SNOOZE_HOURS, parsed))
+
+
 def get_pending_for_reminders(days_threshold: int, user_id=None) -> list:
     """Return pending applications that have been waiting more than days_threshold days
     and don't already have an undismissed reminder created within the last day."""
@@ -232,7 +240,7 @@ def get_unread_reminder_count(user_id=None) -> int:
 
 
 def snooze_reminder(reminder_id: int, hours: int = 1):
-    safe_hours = max(0, min(MAX_SNOOZE_HOURS, int(hours)))
+    safe_hours = _safe_snooze_hours(hours, default=1)
     until = (datetime.now() + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
     conn = get_connection()
     conn.execute(
@@ -245,7 +253,7 @@ def snooze_reminder(reminder_id: int, hours: int = 1):
 
 def set_attention_snooze(application_id: int, hours: int, user_id=None):
     """Snooze dashboard attention entry for 0-72 hours."""
-    safe_hours = max(0, min(MAX_SNOOZE_HOURS, int(hours)))
+    safe_hours = _safe_snooze_hours(hours, default=1)
     base_time = datetime.now()
     now = base_time.isoformat(timespec="seconds")
     conn = get_connection()
