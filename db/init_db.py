@@ -168,10 +168,13 @@ def init_db():
             user_id        INTEGER,
             snooze_until   TEXT NOT NULL,
             created_at     TEXT NOT NULL,
-            UNIQUE(application_id, user_id),
             FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
         )
     """)
+    c.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_attention_snooze_unique "
+        "ON attention_snoozes(application_id, COALESCE(user_id, -1))"
+    )
 
     # ── Users ─────────────────────────────────────────────────────────────────
     c.execute("""

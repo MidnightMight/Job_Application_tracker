@@ -246,7 +246,8 @@ def snooze_reminder(reminder_id: int, hours: int = 1):
 def set_attention_snooze(application_id: int, hours: int, user_id=None):
     """Snooze dashboard attention entry for 0-72 hours."""
     safe_hours = max(0, min(MAX_SNOOZE_HOURS, int(hours)))
-    now = datetime.now().isoformat(timespec="seconds")
+    base_time = datetime.now()
+    now = base_time.isoformat(timespec="seconds")
     conn = get_connection()
     if safe_hours == 0:
         if user_id is not None:
@@ -260,7 +261,7 @@ def set_attention_snooze(application_id: int, hours: int, user_id=None):
                 (application_id,),
             )
     else:
-        until = (datetime.fromisoformat(now) + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
+        until = (base_time + timedelta(hours=safe_hours)).isoformat(timespec="seconds")
         if user_id is not None:
             row = conn.execute(
                 "SELECT id FROM attention_snoozes WHERE application_id=? AND user_id=?",
