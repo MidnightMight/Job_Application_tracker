@@ -31,20 +31,32 @@ the repository owner.
 
 - **Dashboard** — Chart.js charts: status breakdown, applications per year,
   success rate trend, industry/sector keyword frequency; **Quick Navigation**
-  card with one-click year, Company Tracker, and Import CSV links
+  card with one-click year, Company Tracker, and Import CSV links;
+  **Attention Required** panel listing stalled submitted-range applications
+  with per-card snooze (1–72 h)
 - **Year views** — filterable per-year table with pipeline progress bar and bulk
-  operations (set status, date, cover letter, resume, delete); **sort by status
-  order** matching your Settings → Statuses sequence
+  operations (set status, date, last contact, cover letter, resume, delete);
+  **sort by status order** matching your Settings → Statuses sequence
 - **Stale application detection** — applications with no status change for ≥ 3
   days (and not in a terminal state) float to the top and are highlighted in
   yellow; the threshold is shown as a hint on the application form
+- **Stall Check-In Reminders** — background scheduler creates `stall_checkin`
+  inbox reminders for submitted-range applications with no status change and no
+  recorded contact for longer than the configurable stale threshold (default
+  2 weeks); considers both `status_changed_at` and `last_contact_date`
+- **Likely Rejected Auto-Flagging** — scheduler creates `likely_rejected`
+  reminders and automatically lowers success_chance to ≤ 10 % when no status
+  change for longer than the configurable rejected threshold (default 4 weeks)
+- **Last Contact Date** — record the date of the last recruiter/HR contact;
+  resets the stall clock; bulk-settable in year view
 - **Optional Date Applied** — the Date Applied field is no longer required;
   undated applications are shown in year views and flagged stale after 3 days
 - **Application archival** — applications in Rejected, Not Applying, or Job
   Expired status can be archived in one click; archived records are hidden from
   normal views but visible on the company detail page
 - **Application detail** — full details, status timeline, AI fit analysis card,
-  `last_modified_at`, `job_expiry_date`, and additional notes
+  `last_modified_at`, `job_expiry_date`, `last_contact_date`, and additional
+  notes
 - **Company detail** — per-company view with industry tag badges, applied-year
   summary, and all applications (active and archived) grouped by year then
   sorted by status
@@ -60,6 +72,9 @@ the repository owner.
   description to auto-fill the form and run a personalised fit analysis (score,
   matching skills, gaps, recommendation); fit prompt now incorporates your
   all-time success rate so advice is calibrated to your track record
+- **O.t.t.o AI Assistant Chat** — conversational AI assistant at `/assistant`;
+  ask questions about your applications or get job-hunt advice; available when
+  any AI provider is configured
 - **Per-user AI providers** — each user can configure their own provider:
   personal Ollama server, OpenAI, Anthropic, or any OpenAI-compatible API
 - **AI fit storage** — fit results are saved to the database and shown on the
@@ -80,9 +95,11 @@ the repository owner.
 - **Global search** — queries company, role, team, comment, notes, and contact
 - **Company tracker** — cross-year applied history with sector/industry tag chart;
   click any company name to open the full company detail view
+- **Configurable scheduler** — Settings → General sets how often background
+  reminder and stale-check jobs run (1 h–7 d); rescheduled live without restart
 - **Reminder inbox** — background scheduler flags pending applications that
   exceed a configurable threshold; inbox prompts link to company tracker when
-  industry data is incomplete
+  industry data is incomplete; snooze individual reminders; clear dismissed
 - **Export** — CSV (applications, companies) or full SQLite database backup
 - **Dark / light theme** — toggle persisted to `localStorage`
 - **Multi-user login** — optional, Docker mode only; werkzeug password hashing;
@@ -123,6 +140,7 @@ db/          Database layer — 9 focused modules (connection, init, application
 routes/      Flask Blueprints — 11 route modules (auth, dashboard, applications,
              import, companies, inbox, settings, api, export, onboarding, admin_db)
 app.py       Thin entry point — registers blueprints, context processor, scheduler
+             (two background jobs: reminder check + stale/likely-rejected check)
 database.py  Backward-compat shim — re-exports everything from db/
 ```
 

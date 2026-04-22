@@ -17,11 +17,13 @@ bulk operations, searching, and exporting your data.
 8. [Company tracker](#8-company-tracker)
 9. [Custom statuses](#9-custom-statuses)
 10. [Reminder inbox](#10-reminder-inbox)
-11. [Importing from CSV or Excel](#11-importing-from-csv-or-excel)
-12. [Exporting data](#12-exporting-data)
-13. [AI assistant (Ollama)](#13-ai-assistant-ollama)
-14. [Dark / light theme](#14-dark--light-theme)
-15. [Keyboard shortcuts and tips](#15-keyboard-shortcuts-and-tips)
+11. [Dashboard attention panel](#11-dashboard-attention-panel)
+12. [Importing from CSV or Excel](#12-importing-from-csv-or-excel)
+13. [Exporting data](#13-exporting-data)
+14. [AI assistant](#14-ai-assistant)
+15. [O.t.t.o AI chat](#15-otto-ai-chat)
+16. [Dark / light theme](#16-dark--light-theme)
+17. [Keyboard shortcuts and tips](#17-keyboard-shortcuts-and-tips)
 
 ---
 
@@ -41,6 +43,7 @@ summary for the current year and charts for all tracked years.
 | **Success rate trend** | Line chart of yearly offer rates |
 | **Top keywords** | Most common company notes / sectors |
 | **Pending** | Table of applications still awaiting a response |
+| **Attention Required** | Stalled submitted-range applications — see [§11](#11-dashboard-attention-panel) |
 
 ---
 
@@ -53,7 +56,7 @@ summary for the current year and charts for all tracked years.
 | Field | Required | Description |
 |---|---|---|
 | **Company** | ✅ | Employer name |
-| **Date Applied** | ✅ | Date you submitted (or intend to submit). Click **Today** to autofill. |
+| **Date Applied** | — | Date you submitted (or intend to submit). Click **Today** to autofill. |
 | **Job Title / Role** | — | Position title |
 | **Team** | — | Department or team name |
 | **Status** | — | Current stage (defaults to `Select_Status`) |
@@ -64,6 +67,7 @@ summary for the current year and charts for all tracked years.
 | **Success Chance** | — | Your personal estimate (0–1 or percentage) |
 | **Comment** | — | Short note about the application |
 | **Additional Notes** | — | Longer free-text notes |
+| **Last Contact Date** | — | Date of the last recruiter or HR contact |
 
 3. Click **Save Application**. The application is added to the year matching
    **Date Applied**.
@@ -89,10 +93,12 @@ Click the **company name** or the **eye icon** on any row to open the detail pag
 
 The detail page shows:
 
-- All fields including additional notes and contact
+- All fields including additional notes, contact, last contact date, and job expiry date
 - **Status timeline** — every status change with the date/time and how many
   days elapsed between each stage. The dots are colour-coded to match the status
   badge colours.
+- **AI fit card** — stored fit analysis result (score, verdict, matching skills,
+  gaps, recommendation) if analysis has been run
 - **Quick-edit status** button to update the current stage directly
 
 ---
@@ -235,25 +241,48 @@ Go to **Settings → Statuses** to manage your status list.
 The **bell icon** in the navbar shows a red badge when there are unread
 reminders. Click **Inbox** to view them.
 
-A reminder is automatically created when an application has been in a pending
-status (e.g. `Submitted`, `Awaiting_Response`) for longer than the configured
-threshold (default: **3 days**).
+Reminders are automatically created by the background scheduler in three cases:
+
+| Type | Trigger |
+|---|---|
+| **Pending reminder** | Application in a pending status for longer than the threshold (default: 3 days) |
+| **Stall check-in** | No status change and no recorded contact for longer than the stale threshold (default: 2 weeks) |
+| **Likely Rejected** | No status change for longer than the rejected threshold (default: 4 weeks); also lowers success_chance to ≤ 10 % |
 
 **Configure reminders:**
 
 1. Go to **Settings → General**.
 2. Toggle **Enable reminder notifications** on or off.
-3. Change the **Reminder threshold (days)** — must be ≥ 1.
-4. Click **Save**.
+3. Change the **Reminder threshold (days)**, **Stale Application** threshold, and **Likely Rejected** threshold.
+4. Optionally change the **Check Interval** (how often the scheduler runs).
+5. Click **Save**.
 
-**Dismiss reminders:**
+**Manage reminders:**
 
-- Click **Dismiss** next to a single reminder.
+- Click **Snooze** next to a reminder to hide it for 1 hour.
+- Click **Dismiss** next to a single reminder to mark it as dismissed.
 - Click **Dismiss All** at the top to clear everything at once.
+- Click **Clear dismissed** to permanently delete dismissed reminders from the database.
 
 ---
 
-## 11. Importing from CSV or Excel
+## 11. Dashboard attention panel
+
+The **Attention Required** section on the dashboard lists submitted-range
+applications that have stalled — no status change and no recorded contact for
+longer than the stale threshold.
+
+Each card shows the company, role, current status, and days since last activity.
+
+**To snooze an attention item** without dismissing the underlying reminder:
+
+1. Click the **Snooze** button on the card.
+2. Choose a snooze duration (default 1 hour, up to 72 hours).
+3. The card disappears from the dashboard until the snooze expires.
+
+---
+
+## 12. Importing from CSV or Excel
 
 1. Click **Import CSV** in the navigation bar.
 2. **Step 1 — Upload:** Select a `.csv` or `.xlsx` file. The first row must be
@@ -271,7 +300,7 @@ A results page shows imported vs. skipped rows and the reason for any skipped ro
 
 ---
 
-## 12. Exporting data
+## 13. Exporting data
 
 Go to **Export** in the navigation bar.
 
@@ -286,14 +315,15 @@ installation folder, rename it `jobs.db`, and restart the app.
 
 ---
 
-## 13. AI assistant (Ollama)
+## 14. AI assistant
 
-> Available in Docker / server mode only.
+> Available in Docker / server mode only, or when a personal AI provider is configured.
 
-The AI assistant uses a locally running [Ollama](https://ollama.com) server —
-your data never leaves your machine.
+The AI assistant uses a locally running [Ollama](https://ollama.com) server or
+a cloud provider (OpenAI, Anthropic, or any OpenAI-compatible API) — see
+Settings → AI Assistant to configure.
 
-### Setup
+### Setup (Ollama)
 
 1. Install Ollama from [ollama.com](https://ollama.com).
 2. Pull a model: `ollama pull llama3` (or `mistral`, `phi3`, etc.)
@@ -318,7 +348,25 @@ Enable **Smart Job Fit Analysis** in Settings → AI Assistant. Once enabled:
 
 ---
 
-## 14. Dark / light theme
+## 15. O.t.t.o AI chat
+
+**O.t.t.o** (Organised Tracking & Target Opportunity) is a conversational AI
+assistant available at `/assistant` in the navigation bar.
+
+Available when any AI provider is configured.
+
+1. Click **O.t.t.o** in the navbar (or navigate to `/assistant`).
+2. Type your question in the input field at the bottom of the chat.
+3. Press **Enter** or click **Send**.
+
+**Example questions:**
+- "What applications have I not heard back from in over 2 weeks?"
+- "How should I prepare for an interview at a consulting firm?"
+- "What follow-up email should I send after my interview yesterday?"
+
+---
+
+## 16. Dark / light theme
 
 Click the **moon 🌙 / sun ☀️ icon** in the navigation bar to toggle between
 dark and light themes. Your preference is saved in your browser and persists
@@ -329,7 +377,7 @@ across sessions and page reloads.
 
 ---
 
-## 15. Keyboard shortcuts and tips
+## 17. Keyboard shortcuts and tips
 
 | Tip | How |
 |---|---|
@@ -337,4 +385,6 @@ across sessions and page reloads.
 | **Quick search** | Press **/** or click the search box in the navbar to jump straight to global search |
 | **Bulk reject** | Year view → filter by `Awaiting_Response` → select all → set status to `Rejected` → Set |
 | **Jump to year** | Click a year badge on the dashboard quick-nav or use By Year in the navbar |
+| **Log contact** | Set Last Contact Date on an application to reset the stall reminder clock |
+| **Snooze attention** | Click Snooze on a Dashboard Attention card to hide it for up to 72 hours |
 | **Offline access (PWA)** | On a server / Docker deployment, add the app to your home screen for fast access and cached offline pages |

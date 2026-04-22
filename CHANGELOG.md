@@ -5,6 +5,83 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## v1.2.5 — Dashboard Attention Panel, Stall Reminders, O.t.t.o Chat, Scheduler Config
+
+### New Features
+
+- **Dashboard Attention Panel** — the dashboard now includes an "Attention
+  Required" section that lists stalled submitted-range applications directly on
+  the main page.  Each card shows the company, role, current status, and how
+  long it has been inactive.  Individual entries can be snoozed for 1–72 hours
+  via `POST /dashboard/attention/snooze/<app_id>` without dismissing the
+  underlying reminder.
+
+- **Stall Check-In Reminders** — a new background scheduler job
+  (`_check_stale_submitted_applications`) creates `stall_checkin` inbox
+  reminders for applications in the Submitted→Rejected range that have had no
+  status change **and** no recorded contact for longer than the configurable
+  stale threshold (default: **2 weeks**).  Both `status_changed_at` and
+  `last_contact_date` are evaluated — whichever is more recent resets the stall
+  clock.
+
+- **Likely Rejected Auto-Flagging** — the same scheduler job creates
+  `likely_rejected` inbox reminders and automatically lowers `success_chance`
+  to ≤ 10 % for applications with no status change for longer than the
+  configurable rejected threshold (default: **4 weeks**).
+
+- **Last Contact Date field** — applications now record a `last_contact_date`
+  (recruiter call, follow-up email, etc.).  The field appears on the Add/Edit
+  form and detail page.  It can also be set in bulk via the year-view
+  "Set Last Contact" bulk action.  Stall detection uses `max(status_changed_at,
+  last_contact_date)` so logging a contact resets the check-in clock.
+
+- **O.t.t.o AI Assistant Chat** — a dedicated `/assistant` page provides a
+  conversational interface with O.t.t.o (**O**rganised **t**racking &
+  **t**arget **o**pportunity).  Ask questions about your applications,
+  get job-hunt advice, and plan next steps.  Available whenever at least one AI
+  provider (admin Ollama or personal provider) is configured.  Route:
+  `GET /assistant`; AJAX endpoint: `POST /api/assistant-chat`.
+
+- **Configurable Scheduler Check Interval** — Settings → General now exposes a
+  "Check Interval" dropdown (1 h, 6 h, 12 h, 1 d, 2 d, 3 d, 7 d) that controls
+  how often the background reminder and stale-check jobs run.  The new interval
+  is applied **immediately** to the running scheduler via `_reschedule_jobs()`
+  without requiring a server restart.
+
+- **Stale / Rejected Threshold Settings** — Settings → General now has two
+  configurable thresholds:
+  - *Stale Application* (`stale_threshold_value` + `stale_threshold_unit`,
+    default 2 weeks) — triggers the stall check-in reminder.
+  - *Likely Rejected* (`rejected_threshold_value` + `rejected_threshold_unit`,
+    default 4 weeks) — triggers the auto-flag and success-chance reduction.
+  Both accept a numeric value and a unit (days / weeks).
+
+- **Default Sort Order Setting** — Settings → General has an "Applications
+  Default Sort" preference (Date Applied or Status Order).  Previously the
+  year-view defaulted to Status Order unconditionally; now users can set either
+  as their default and still override it per-visit with the Sort dropdown.
+
+- **Clear Dismissed Reminders** — the Inbox now has a "Clear dismissed" button
+  (`POST /inbox/clear-dismissed`) that permanently deletes dismissed reminders
+  from the database, keeping the inbox tidy.
+
+- **O.t.t.o Onboarding Persona** — the first-run setup wizard now features
+  O.t.t.o as a named guide, consistent with the AI assistant persona used
+  throughout the app.
+
+### Bug Fixes
+
+- **Hardened Snooze Hour Parsing** — `snooze_reminder()` and
+  `set_attention_snooze()` previously raised `TypeError` / `ValueError` when
+  called with non-integer input (e.g. from a malformed form POST).  A new
+  `_safe_snooze_hours()` helper validates and clamps the value to 0–72 hours,
+  returning a safe default on any parse failure.
+
+- **Onboarding Message Formatting** — a stray `<br>` tag inside the sample-data
+  tip paragraph was removed, fixing the layout of the onboarding wizard notice.
+
+---
+
 ## v1.2.4 — Company Detail View, Application Archival, Success-Rate AI, Status Sorting
 
 ### New Features

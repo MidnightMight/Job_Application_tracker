@@ -13,7 +13,8 @@ This document describes the extended features added to the Job Application Track
 5. [One-Command Launcher Scripts](#5-one-command-launcher-scripts)
 6. [Browser Extension Research](#6-browser-extension-research)
 7. [Progressive Web App (PWA)](#7-progressive-web-app-pwa)
-8. [AI Server Status Indicator](#8-ai-server-status-indicator)
+8. [O.t.t.o AI Assistant Chat](#8-otto-ai-assistant-chat)
+9. [AI Server Status Indicator](#9-ai-server-status-indicator)
 
 ---
 
@@ -21,28 +22,39 @@ This document describes the extended features added to the Job Application Track
 
 ### How It Works
 
-A background scheduler ([APScheduler](https://apscheduler.readthedocs.io/)) runs inside the Flask server process. Every hour it checks the database for applications that:
+A background scheduler ([APScheduler](https://apscheduler.readthedocs.io/)) runs inside the Flask server process. It executes **two jobs** on the configured interval (default: every hour):
 
-- Have a **pending status** (Drafting_CV, Submitted, Online_Assessment, Awaiting_Response, Interview_Scheduled, Interview_In_Person, or EOI), **and**
+**Job 1 — Pending reminder** checks for applications that:
+
+- Have a **pending status** (Drafting_Application, Drafting_CV, Submitted, Online_Assessment, Awaiting_Response, Interview_Scheduled, Interview_In_Person, or EOI), **and**
 - Have been in that status for more than the **configurable threshold** (default: **3 days**), **and**
-- Do **not** already have an undismissed reminder created in the last 24 hours (to prevent duplicate notifications).
+- Do **not** already have an undismissed reminder created in the last 24 hours.
 
-When these conditions are met, a reminder message is written to the `reminders` table and immediately appears in the Inbox.
+**Job 2 — Stale submitted-range check** runs two passes on applications in the Submitted → Rejected range:
+
+- **Stall check-in** (`stall_checkin` reminder type): no status change **and** no recorded contact for longer than the stale threshold (default: **2 weeks**).  Uses `max(status_changed_at, last_contact_date)` so logging a contact resets the clock.
+- **Likely Rejected** (`likely_rejected` reminder type): no status change for longer than the rejected threshold (default: **4 weeks**).  Also automatically lowers `success_chance` to ≤ 10 %.
 
 ### Configuration
 
-The reminder threshold and on/off toggle are stored in the `settings` table and are configurable via the [Settings page](#3-settings-page).
+All thresholds and the check interval are stored in the `settings` table and configurable via **Settings → General**.
 
 | Setting | Default | Description |
 |---|---|---|
 | `reminder_enabled` | `1` (on) | Master toggle for the reminder scheduler |
 | `reminder_days` | `3` | Days a pending application must wait before a reminder is created |
+| `stale_threshold_value` | `2` | Numeric part of the stall check-in threshold |
+| `stale_threshold_unit` | `weeks` | Unit (`days` or `weeks`) for the stall threshold |
+| `rejected_threshold_value` | `4` | Numeric part of the likely-rejected threshold |
+| `rejected_threshold_unit` | `weeks` | Unit (`days` or `weeks`) for the likely-rejected threshold |
+| `check_interval` | `1h` | How often the background jobs run (`1h`, `6h`, `12h`, `1d`, `2d`, `3d`, `7d`) |
 
 ### Technical Details
 
 - The scheduler uses `APScheduler`'s `BackgroundScheduler` (daemon thread — it stops automatically when the server exits).
 - To avoid the double-start issue with Flask's Werkzeug reloader, the scheduler only starts when `WERKZEUG_RUN_MAIN` is not `"false"`.
-- Reminders are run once on startup in addition to the hourly interval, so the inbox is populated immediately on first launch.
+- Both jobs run once on startup in addition to the scheduled interval, so the inbox is populated immediately on first launch.
+- The check interval can be changed in Settings → General and takes effect immediately via `_reschedule_jobs()` — no server restart needed.
 
 ---
 
@@ -52,9 +64,12 @@ Navigate to the **Inbox** via the bell 🔔 button in the top navigation bar.
 
 - **Unread badge** — a red count badge appears on the Inbox button when there are unread (undismissed) reminders.
 - **Message list** — each reminder shows the application company, role, current status, and how long it has been pending.
+- **Reminder types** — three types are shown with appropriate styling: general pending (`reminder`), stall check-in (`stall_checkin`), and likely rejected (`likely_rejected`).
+- **Snooze** — click the snooze button on a reminder to hide it for 1 hour (re-appears automatically).
 - **Dismiss individual** — click the × button on a reminder to mark it as dismissed.
 - **Dismiss all** — a single button clears all reminders at once.
-- Dismissed reminders remain visible in the inbox with a "Dismissed" label (they are not deleted).
+- **Clear dismissed** — permanently delete dismissed reminders to keep the inbox tidy.
+- Dismissed reminders remain visible in the inbox with a "Dismissed" label (they are not deleted until you click "Clear dismissed").
 - **Direct link** — each reminder includes a link to the full application detail page.
 
 ---
@@ -69,15 +84,11 @@ Currently configurable options:
 |---|---|---|
 | Enable reminder notifications | Toggle | Turn the hourly reminder check on or off |
 | Reminder threshold | Number (days) | Minimum days pending before a reminder is generated |
-
-### Future Settings Ideas
-
-The Settings page is designed to be extensible. Possible future additions include:
-
-- Default status for new applications
-- Email / SMTP configuration for email-based reminders
-- Custom colour themes
-- Auto-archive threshold (days after rejection)
+| Stale Application threshold | Number + unit | Triggers stall check-in reminder (default: 2 weeks) |
+| Likely Rejected threshold | Number + unit | Triggers likely-rejected reminder + success-chance reduction (default: 4 weeks) |
+| Check Interval | Dropdown | How often background jobs run (1h / 6h / 12h / 1d / 2d / 3d / 7d) — applied live |
+| Applications Default Sort | Radio | Year-view default sort order: Date Applied or Status Order |
+| Company Pool | Toggle | Share the company list across all users |
 
 ---
 
@@ -317,7 +328,44 @@ The cache is named `job-tracker-v1`. Incrementing the version string in `sw.js` 
 
 ---
 
-## 8. AI Server Status Indicator
+## 8. O.t.t.o AI Assistant Chat
+
+**O.t.t.o** (Organised Tracking & Target Opportunity) is a conversational AI
+assistant accessible at `/assistant` from the navigation bar.
+
+### Purpose
+
+O.t.t.o can:
+- Answer questions about your tracked applications and companies.
+- Give advice on job-hunt strategy, interview preparation, and follow-up timing.
+- Help plan next steps for stalled or in-progress applications.
+
+### Availability
+
+O.t.t.o is available whenever at least one AI provider is configured — either
+the shared Ollama server (admin setting) or the user's own personal provider
+(Settings → AI → Personal Provider).
+
+### How to Use
+
+1. Click **O.t.t.o** in the navigation bar (or navigate to `/assistant`).
+2. Type your question or request in the text field at the bottom of the chat.
+3. Press **Enter** or click the **Send** button.
+4. O.t.t.o's response appears in the chat log above.
+
+### Technical Details
+
+- Front-end: `templates/assistant_chat.html` — a single-page chat interface
+  that posts to `POST /api/assistant-chat`.
+- Back-end: `routes/api.py:assistant_chat()` — builds a system prompt that
+  identifies the assistant as O.t.t.o, then delegates to the user's configured
+  AI provider.
+- Chat messages are length-capped (1 200 characters) to prevent prompt abuse.
+- The route is protected by `@login_required`.
+
+---
+
+## 9. AI Server Status Indicator
 
 When the Ollama AI assistant is enabled, a live server status badge is shown in two places so users know immediately whether the AI is reachable before attempting to use it.
 
@@ -355,4 +403,4 @@ The endpoint is protected by `@login_required` and never exposes internal server
 
 ---
 
-*FEATURES.md — last updated 2026-04-06*
+*FEATURES.md — last updated 2026-04-22*
