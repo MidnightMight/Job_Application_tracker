@@ -97,6 +97,13 @@
       </form>
 
       <div class="d-flex gap-2 align-items-center">
+        {% if update_available %}
+        <a href="{{ url_for('settings_routes.settings', section='updates') }}"
+           class="btn btn-success btn-sm" id="updateAvailableBadge"
+           title="A newer version is available — see Settings → Updates">
+          <i class="bi bi-arrow-up-circle me-1"></i>Update v{{ latest_version }}
+        </a>
+        {% endif %}
         <!-- Theme toggle -->
         <button type="button" id="themeToggleBtn"
                 class="btn btn-outline-light btn-sm" title="Toggle dark / light theme"

@@ -6,9 +6,9 @@ import csv
 import sys
 import os
 
-# Ensure we can import database from the same directory
+# Ensure we can import the db package from the same directory
 sys.path.insert(0, os.path.dirname(__file__))
-import database as db
+import db
 
 
 def print_header(text):

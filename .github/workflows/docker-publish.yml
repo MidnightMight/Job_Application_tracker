@@ -1,0 +1,68 @@
+# Builds the Docker image and publishes it to GitHub Container Registry.
+#
+# Runs when a GitHub release is published (tags the image with the release
+# version and "latest"), and can be run by hand from the Actions tab.
+# NAS / Container Manager installs that use
+# ghcr.io/midnightmight/job_application_tracker:latest pick up the new image
+# the next time they pull it.
+
+name: Publish Docker image
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/midnightmight/job_application_tracker
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out image tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # V1.2.4A / v1.3.0 -> 1.2.4a / 1.3.0 (Docker tags must be lowercase)
+            version="$(echo '${{ github.event.release.tag_name }}' | sed 's/^[vV]//' | tr '[:upper:]' '[:lower:]')"
+            echo "list=${IMAGE}:latest,${IMAGE}:${version}" >> "$GITHUB_OUTPUT"
+          else
+            echo "list=${IMAGE}:latest,${IMAGE}:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # amd64 for Intel/AMD Synology models, arm64 for ARM ones.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -151,6 +151,7 @@ docker run -d \
 | `PORT` | `5000` | Port the server listens on |
 | `FLASK_DEBUG` | `0` | Set to `1` for debug mode (never use in production) |
 | `DEPLOYMENT_MODE` | Auto-detected | Force `docker` or `local` mode |
+| `JOB_TRACKER_DISABLE_SCHEDULER` | unset | Set to `1` to turn off the background reminder scheduler (used by the test suite) |
 
 Set variables before running:
 
@@ -391,6 +392,17 @@ If you do not have Git installed, you can download a release archive directly
 from GitHub and update the files manually.  See the full step-by-step
 instructions, including Docker image pull and rollback procedures, in
 [`docs/updating.md`](updating.md).
+
+---
+
+## 9a. Running the Tests
+
+The test suite uses a throwaway database and never touches `data/jobs.db`.
+
+```bash
+pip install -r requirements.txt pytest
+python -m pytest
+```
 
 ---
 

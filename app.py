@@ -13,8 +13,9 @@ from flask import Flask, redirect, request, url_for
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
+import update_check
 
-APP_VERSION = "1.2.4"
+APP_VERSION = "1.3.0"
 GITHUB_REPO = "MidnightMight/Job_Application_tracker"
 
 
@@ -193,6 +194,7 @@ def inject_globals():
         "user_profile_complete":  _profile_complete,
         "deployment_mode":        DEPLOYMENT_MODE,
         "status_styles":          db.get_status_styles(user_id=user_id),
+        **update_check.cached_update_info(APP_VERSION),
     }
 
 
@@ -214,7 +216,7 @@ def _check_and_create_reminders():
             )
             db.create_reminder(app_record["id"], msg)
     except Exception:
-        pass
+        logger.exception("Reminder check failed")
 
 
 def _check_stale_submitted_applications():
@@ -273,7 +275,12 @@ def _check_stale_submitted_applications():
             )
             db.create_reminder(app_record["id"], msg, reminder_type="likely_rejected")
     except Exception:
-        pass
+        logger.exception("Stale-application check failed")
+
+
+def _check_for_update():
+    """Scheduled task: look for a newer GitHub release once a day (cached)."""
+    update_check.refresh_latest_release(GITHUB_REPO)
 
 
 # ---------------------------------------------------------------------------
@@ -298,20 +305,31 @@ def _interval_kwargs() -> dict:
     return _INTERVAL_MAP.get(val, {"hours": 1})
 
 
+def _scheduler_enabled() -> bool:
+    """The scheduler runs unless disabled (tests) or in the reloader's watcher process."""
+    if os.environ.get("JOB_TRACKER_DISABLE_SCHEDULER") == "1":
+        return False
+    return os.environ.get("WERKZEUG_RUN_MAIN") != "false"
+
+
 def _reschedule_jobs(interval_key: str):
     """Reschedule both background jobs to the given interval (live, no restart needed)."""
-    if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
+    if _scheduler_enabled():
         kwargs = _INTERVAL_MAP.get(interval_key, {"hours": 1})
         for job_id in ("reminders", "stale_check"):
             _scheduler.reschedule_job(job_id, trigger="interval", **kwargs)
         logger.info("Scheduler jobs rescheduled to interval: %s (%s)", interval_key, kwargs)
 
 
-if os.environ.get("WERKZEUG_RUN_MAIN") != "false":
+if _scheduler_enabled():
     _scheduler = BackgroundScheduler(daemon=True)
     _init_kwargs = _interval_kwargs()
     _scheduler.add_job(_check_and_create_reminders, "interval", id="reminders", **_init_kwargs)
     _scheduler.add_job(_check_stale_submitted_applications, "interval", id="stale_check", **_init_kwargs)
+    # Daily update check; first run straight away in the background.
+    from datetime import datetime as _datetime
+    _scheduler.add_job(_check_for_update, "interval", id="update_check", hours=24,
+                       next_run_time=_datetime.now())
     _scheduler.start()
     _check_and_create_reminders()
     _check_stale_submitted_applications()

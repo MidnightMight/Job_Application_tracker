@@ -77,7 +77,7 @@
           {% endif %}
           {% endfor %}
         </div>
-        <p class="small text-muted mt-2"><span class="text-danger fw-semibold">*</span> = required for each row</p>
+        <p class="small text-muted mt-2">Each row needs at least a company or a role. Date Applied is optional — undated rows are imported as undated.</p>
       </div>
     </div>
   </div>
@@ -152,7 +152,7 @@
       <p class="px-3 pt-3 text-muted small mb-0">
         For each column detected in your file, choose which application field it contains.
         Select <em>"(ignore this column)"</em> to skip a column.
-        Columns marked <span class="text-danger fw-semibold">*</span> are required for every row.
+        Each row needs at least a company or a role.
       </p>
 
       <!-- Column mapping table -->
@@ -192,6 +192,20 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="update_existing" value="1" id="updateExisting">
+        <label class="form-check-label fw-semibold" for="updateExisting">Update existing applications</label>
+      </div>
+      <div class="form-text">
+        When ticked, a row whose Application ID (or company + role + team + date) matches an
+        application you already have updates it instead of being skipped. Only the mapped columns
+        are changed. Use this to edit applications in a spreadsheet: export, edit, re-import.
       </div>
     </div>
   </div>
@@ -240,17 +254,21 @@
       </div>
       <div class="card-body">
         <div class="row g-3 text-center mb-3">
-          <div class="col-4">
+          <div class="col-3">
             <div class="fw-bold fs-3 text-success">{{ result.imported }}</div>
             <div class="text-muted small">Rows Imported</div>
           </div>
-          <div class="col-4">
+          <div class="col-3">
+            <div class="fw-bold fs-3 {% if result.updated %}text-primary{% else %}text-muted{% endif %}">{{ result.updated }}</div>
+            <div class="text-muted small">Rows Updated</div>
+          </div>
+          <div class="col-3">
             <div class="fw-bold fs-3 {% if result.duplicates > 0 %}text-danger{% else %}text-muted{% endif %}">
               {{ result.duplicates }}
             </div>
             <div class="text-muted small">Duplicates Skipped</div>
           </div>
-          <div class="col-4">
+          <div class="col-3">
             <div class="fw-bold fs-3 {% if result.other_skipped > 0 %}text-warning{% else %}text-muted{% endif %}">
               {{ result.other_skipped }}
             </div>
@@ -264,6 +282,17 @@
           <ul class="mb-0 mt-2 small">
             {% for err in result.errors %}
             <li>{{ err }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if result.warnings %}
+        <div class="alert alert-info mb-3">
+          <strong><i class="bi bi-info-circle me-1"></i>Saved, but some values were corrected:</strong>
+          <ul class="mb-0 mt-2 small">
+            {% for warn in result.warnings %}
+            <li>{{ warn }}</li>
             {% endfor %}
           </ul>
         </div>
@@ -286,9 +315,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-// Make enumerate available in Jinja for column mapping
-</script>
 
 {% if stage == 'map' %}
 <script>
