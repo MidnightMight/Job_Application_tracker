@@ -10,8 +10,12 @@ services:
     volumes:
       - ./data:/data
     environment:
-      # REQUIRED: set a strong, unique secret key before deploying
-      - SECRET_KEY=${SECRET_KEY:?Set the SECRET_KEY environment variable before starting}
-      - FLASK_DEBUG=0
+      # The app runs as this user/group and takes ownership of ./data on start.
+      # Use your own IDs (run `id` on the host) to keep the files easy to manage.
+      - PUID=1000
+      - PGID=1000
       - PORT=5000
       - DB_PATH=/data/jobs.db
+      # Optional: left empty, a session key is generated and saved in
+      # ./data/secret_key. An existing SECRET_KEY (e.g. from .env) still wins.
+      - SECRET_KEY=${SECRET_KEY:-}

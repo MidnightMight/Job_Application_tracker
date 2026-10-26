@@ -40,3 +40,6 @@ pytest.ini
 .pytest_cache/
 .github/
 CLAUDE.md
+
+# Local data (DB, logs, generated secret_key) never goes into the image
+data/

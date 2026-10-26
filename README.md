@@ -103,7 +103,7 @@ cd Job_Application_tracker
 |---|---|
 | 🐧 Linux / 🍎 macOS | `bash launch.sh` |
 | 🪟 Windows | Double-click `launch.bat` |
-| 🐳 Docker | `export SECRET_KEY="…" && docker compose up --build -d` |
+| 🐳 Docker | `docker compose up --build -d` |
 
 Then open **http://localhost:5000** in your browser.
 

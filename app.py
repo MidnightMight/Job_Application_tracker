@@ -8,8 +8,11 @@ All database logic lives in db/.
 import logging
 import os
 import platform as _platform_module
+import secrets
+from urllib.parse import urlparse
 
-from flask import Flask, redirect, request, url_for
+from flask import Flask, flash, jsonify, redirect, request, url_for
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
@@ -41,13 +44,42 @@ def _detect_deployment_mode() -> str:
     return "docker"
 
 
+def _load_secret_key() -> str:
+    """Return the session signing key.
+
+    SECRET_KEY from the environment wins.  Otherwise a random key is generated
+    once and kept in a `secret_key` file next to the database (/data in
+    Docker), so sessions survive restarts and image updates.
+    """
+    env_key = os.environ.get("SECRET_KEY", "").strip()
+    if env_key:
+        return env_key
+    key_path = os.path.join(os.path.dirname(db.DB_PATH) or ".", "secret_key")
+    try:
+        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        with open(key_path, encoding="utf-8") as f:
+            key = f.read().strip()
+        if key:
+            return key
+        # An empty file (e.g. a crash mid-write) is replaced below.
+        fd = os.open(key_path, os.O_WRONLY | os.O_TRUNC)
+    key = secrets.token_hex(32)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(key)
+    return key
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
+app.secret_key = _load_secret_key()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
+# Tokens last as long as the session, so a form left open for hours still saves.
+app.config["WTF_CSRF_TIME_LIMIT"] = None
+csrf = CSRFProtect(app)
 
 DEPLOYMENT_MODE: str = _detect_deployment_mode()
 app.config["DEPLOYMENT_MODE"] = DEPLOYMENT_MODE
@@ -136,7 +168,8 @@ app.register_blueprint(admin_db_bp)
 # Onboarding gate
 # ---------------------------------------------------------------------------
 
-_ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "auth.setup_password", "static"}
+_ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "auth.setup_password", "static",
+                      "healthz"}
 
 
 @app.before_request
@@ -146,6 +179,41 @@ def _check_onboarding():
         return
     if db.get_setting("onboarding_complete", "0") == "0":
         return redirect(url_for("onboarding.onboarding"))
+
+
+# ---------------------------------------------------------------------------
+# Health check (Docker HEALTHCHECK, uptime monitors) — no login needed
+# ---------------------------------------------------------------------------
+
+@app.route("/healthz")
+def healthz():
+    try:
+        conn = db.get_connection()
+        try:
+            conn.execute("SELECT 1 FROM settings LIMIT 1").fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("Health check failed")
+        return jsonify(status="error"), 503
+    return jsonify(status="ok")
+
+
+# ---------------------------------------------------------------------------
+# CSRF failures — usually an old tab or an expired session
+# ---------------------------------------------------------------------------
+
+@app.errorhandler(CSRFError)
+def _handle_csrf_error(exc):
+    logger.warning("CSRF check failed on %s %s: %s", request.method, request.path, exc.description)
+    message = "The form had expired. Please try again."
+    is_form = request.mimetype in ("application/x-www-form-urlencoded", "multipart/form-data")
+    if not is_form or request.path.startswith("/api/"):
+        return jsonify(ok=False, error=message), 400
+    flash(message, "warning")
+    from routes.auth import _safe_path
+    back = _safe_path(urlparse(request.referrer or "").path) if request.referrer else None
+    return redirect(back or url_for("dashboard.dashboard"))
 
 
 # ---------------------------------------------------------------------------

@@ -138,6 +138,7 @@
       </p>
 
       <form method="post" action="{{ url_for('onboarding.onboarding') }}" id="onboardingForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="action" value="setup_admin">
 
         <div class="mb-3">
@@ -185,6 +186,7 @@
 
       {# Hidden "skip" form #}
       <form method="post" action="{{ url_for('onboarding.onboarding') }}" id="skipForm" class="d-none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="action" value="skip">
         <input type="hidden" name="clear_demo" id="skip_clear_demo" value="0">
       </form>
@@ -193,6 +195,7 @@
       {# ── Local mode: only the demo-data choice ── #}
 
       <form method="post" action="{{ url_for('onboarding.onboarding') }}" id="localForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="action" value="skip">
 
         <p class="fw-semibold mb-1"><i class="bi bi-database me-1 text-warning"></i>Sample / demo data</p>

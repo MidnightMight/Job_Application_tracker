@@ -7,8 +7,11 @@ Job_Application_tracker/
 ├── app.py                    Thin Flask entry point — creates app, registers blueprints,
 │                             context processor, APScheduler background tasks
 ├── run_script.py             CLI stats viewer and CSV exporter
-├── requirements.txt          Python dependencies (Flask, APScheduler, openpyxl, pypdf)
-├── Dockerfile                Container image definition
+├── requirements.txt          Python dependencies (Flask, Flask-WTF, APScheduler, openpyxl,
+│                             pypdf, Gunicorn)
+├── Dockerfile                Container image definition (Gunicorn, HEALTHCHECK on /healthz)
+├── docker-entrypoint.sh      Takes ownership of /data, then drops to PUID:PGID
+├── gunicorn.conf.py          Gunicorn settings (one worker, threads)
 ├── docker-compose.yml        Compose file for one-command Docker launch
 ├── .dockerignore             Files excluded from the Docker build context
 ├── launch.sh                 One-command launcher — Linux / macOS / Unix

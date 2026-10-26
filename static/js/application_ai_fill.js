@@ -96,7 +96,7 @@
     try {
       const resp = await fetch(window.APP_FORM_CONFIG.urls.aiFill, {
         method:  'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
         body:    JSON.stringify({job_description: jd}),
       });
       const data = await resp.json();

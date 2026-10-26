@@ -147,6 +147,7 @@
                   action="{{ url_for('applications.archive_application', app_id=a.id) }}"
                   class="d-inline"
                   onsubmit="return confirm('Archive this application?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <button class="btn btn-outline-secondary btn-sm py-0 ms-1" title="Archive">
                 <i class="bi bi-archive"></i>
               </button>

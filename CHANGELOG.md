@@ -5,6 +5,36 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## Unreleased
+
+### Security and Deployment
+
+- **CSRF protection** on every form and AJAX request (Flask-WTF).  Tokens last
+  for the whole session; an expired form shows "The form had expired" instead
+  of an error page.
+- **Gunicorn** replaces the Flask development server in the Docker image (one
+  worker, 4 threads, so the reminder jobs still run once).
+- **Generated secret key** — `SECRET_KEY` is now optional.  If it isn't set, a
+  random key is created once and saved as `secret_key` next to the database
+  (`/data/secret_key` in Docker).  An existing `SECRET_KEY` still wins.
+  Local installs that relied on the old built-in default get a new key, so
+  log in once more.
+- **Non-root container** — the app runs as `PUID:PGID` (default `1000:1000`).
+  On start the container takes ownership of the data folder, so databases
+  written by older (root) images stay writable.
+- **Health check** — `GET /healthz` (no login) returns `{"status": "ok"}` or
+  HTTP 503 if the database can't be read; the image's `HEALTHCHECK` uses it.
+- **Tests on every pull request** — new *Tests* workflow runs the suite and a
+  Docker smoke test (non-root user, data ownership, health check).
+
+### After updating (Docker / NAS)
+
+- Set `PUID` / `PGID` to your NAS user's IDs (optional, default `1000`).
+- Keep `SECRET_KEY` if you already set one, or remove it to use a generated key
+  (everyone logs in again once).
+
+---
+
 ## v1.3.0 — Import Upgrades and Code Tidy-up
 
 ### New Features

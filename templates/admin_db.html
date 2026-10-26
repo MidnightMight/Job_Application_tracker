@@ -209,6 +209,7 @@
   </div>
   <div class="card-body">
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       {% for col in columns %}
       <div class="mb-3">
         <label class="form-label fw-semibold small mb-1 {% if col == pk_col %}text-muted{% endif %}">
@@ -252,6 +253,7 @@
   </div>
   <div class="card-body">
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <div class="mb-3">
         <label class="form-label fw-semibold small">SQL Statement</label>
         <textarea class="form-control font-monospace" name="sql" rows="5"

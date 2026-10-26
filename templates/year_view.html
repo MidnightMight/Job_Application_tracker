@@ -115,6 +115,7 @@
 
 <!-- ── Bulk-action form wraps both the toolbar and the table ─────────────── -->
 <form method="post" action="{{ url_for('applications.bulk_action') }}" id="bulkForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <input type="hidden" name="year" value="{{ year }}">
   <input type="hidden" name="status_filter" value="{{ selected_status }}">
   <input type="hidden" name="sort_mode" value="{{ sort_mode }}">
@@ -324,6 +325,7 @@
                     action="{{ url_for('applications.archive_application', app_id=a.id) }}"
                     class="d-inline"
                     onsubmit="return confirm('Archive this application?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <button class="btn btn-outline-secondary btn-sm py-0 me-1" title="Archive">
                   <i class="bi bi-archive"></i>
                 </button>
@@ -341,6 +343,7 @@
                     action="{{ url_for('applications.delete_application', app_id=a.id) }}"
                     class="d-inline"
                     onsubmit="return confirm('Delete this application?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 <button class="btn btn-outline-danger btn-sm py-0">
                   <i class="bi bi-trash"></i>
                 </button>

@@ -26,7 +26,7 @@ if (testBtn) {
     try {
       const resp = await fetch(window.SETTINGS_CONFIG.urls.ollamaTest, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
         body: JSON.stringify({url}),
       });
       const data = await resp.json();
@@ -178,6 +178,7 @@ if (uploadBtn) {
     try {
       const resp = await fetch(window.SETTINGS_CONFIG.urls.uploadProfilePdf, {
         method: 'POST',
+        headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
         body: formData,
       });
       const data = await resp.json();

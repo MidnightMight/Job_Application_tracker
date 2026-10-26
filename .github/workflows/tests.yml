@@ -1,0 +1,66 @@
+# Runs the test suite on every pull request and on pushes to dev / main,
+# then builds the Docker image and checks that it starts as a non-root user,
+# takes over root-owned data from older images and passes its health check.
+
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t job-tracker:ci .
+
+      - name: Start with root-owned data (like an install from an older image)
+        run: |
+          mkdir data
+          sudo touch data/jobs.db data/app.log
+          sudo chown -R root:root data
+          docker run -d --name jt -p 5000:5000 -e PUID=1234 -e PGID=1234 \
+            -v "$PWD/data:/data" job-tracker:ci
+
+      - name: Wait for the health check
+        run: |
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' jt)"
+            echo "health: $status"
+            [ "$status" = healthy ] && exit 0
+            sleep 3
+          done
+          docker logs jt
+          exit 1
+
+      - name: Check user, ownership and the generated secret key
+        run: |
+          curl -fsS http://localhost:5000/healthz
+          test "$(docker exec jt sh -c 'stat -c %u /proc/1')" = 1234
+          test -z "$(sudo find data ! -user 1234)"
+          sudo test -s data/secret_key
+          test "$(sudo stat -c %a data/secret_key)" = 600
+
+      - name: Logs
+        if: always()
+        run: docker logs jt || true

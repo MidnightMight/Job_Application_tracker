@@ -53,6 +53,7 @@
       </div>
       <div class="card-body">
         <form method="post" action="{{ url_for('settings_routes.settings', section='general') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="action" value="save_general">
 
           <div class="mb-3">
@@ -238,6 +239,7 @@
                     <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}"
                           class="d-flex align-items-center gap-1 colour-form"
                           data-preview="preview-{{ loop.index }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                       <input type="hidden" name="action" value="update_status_colors">
                       <input type="hidden" name="name" value="{{ s }}">
                       <label class="mb-0 small text-muted" title="Background colour">BG</label>
@@ -270,6 +272,7 @@
                     <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}"
                           class="d-inline"
                           onsubmit="return confirm('Delete status \'{{ s }}\'? This cannot be done if any applications use it.')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                       <input type="hidden" name="action" value="delete_status">
                       <input type="hidden" name="name" value="{{ s }}">
                       <button class="btn btn-outline-danger btn-sm py-0">
@@ -293,6 +296,7 @@
           </div>
           <div class="card-body">
             <form method="post" action="{{ url_for('settings_routes.settings', section='statuses') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <input type="hidden" name="action" value="add_status">
               <div class="mb-3">
                 <label class="form-label fw-semibold">Status Name</label>
@@ -373,6 +377,7 @@
           </div>
           <div class="card-body">
             <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <input type="hidden" name="action" value="save_security">
               <div class="mb-3">
                 <div class="form-check form-switch">
@@ -435,6 +440,7 @@
                     <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}"
                           class="d-inline"
                           onsubmit="return confirm('Delete user \'{{ u.username }}\'?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                       <input type="hidden" name="action" value="delete_user">
                       <input type="hidden" name="user_id" value="{{ u.id }}">
                       <button class="btn btn-outline-danger btn-sm py-0">
@@ -463,6 +469,7 @@
           </div>
           <div class="card-body">
             <form method="post" action="{{ url_for('settings_routes.settings', section='users') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <input type="hidden" name="action" value="add_user">
               <div class="mb-3">
                 <label class="form-label fw-semibold">Username</label>
@@ -525,6 +532,7 @@
       </div>
       <div class="card-body">
         <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}" id="aiForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="action" value="save_ai">
 
           <div class="mb-3">
@@ -644,6 +652,7 @@
 
         <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}"
               id="userAiForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="action" value="save_user_ai">
           {# Hidden field tracks the toggle state; JS keeps it in sync. #}
           <input type="hidden" name="use_admin_ai" id="useAdminAiInput"
@@ -767,6 +776,7 @@
 
         {# Manual profile form #}
         <form method="post" action="{{ url_for('settings_routes.settings', section='ai') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="action" value="save_profile">
 
           <div class="mb-3">
