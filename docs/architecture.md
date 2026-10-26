@@ -46,6 +46,7 @@ Job_Application_tracker/
 │   ├── api.py                /api/ai-fill, /api/ai-fit, /api/ai-fit-save,
 │   │                         /api/ollama-status, /api/upload-profile-pdf
 │   ├── export.py             /export, /export/applications|companies|db
+│   ├── report.py             /report/workforce (+ .csv) — fortnightly Workforce Australia report
 │   └── onboarding.py         /onboarding (first-run wizard)
 │
 ├── docs/                     Detailed documentation
@@ -71,6 +72,7 @@ Job_Application_tracker/
 │   ├── onboarding.html       First-run setup wizard
 │   ├── settings.html         Settings — general, statuses (with 🔒 lock), users, AI
 │   ├── export.html           Export and backup
+│   ├── workforce_report.html Workforce Australia fortnightly report
 │   └── login.html            Login page
 │
 └── static/

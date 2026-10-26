@@ -100,6 +100,8 @@ from .applications import (
     lower_success_chance_for_stale,
     archive_application,
     unarchive_application,
+    HOW_APPLIED_OPTIONS,
+    get_applications_applied_between,
 )
 
 __all__ = [
@@ -138,4 +140,5 @@ __all__ = [
     "find_duplicate_applications", "bulk_import_applications", "save_ai_fit",
     "lower_success_chance_for_stale",
     "archive_application", "unarchive_application",
+    "HOW_APPLIED_OPTIONS", "get_applications_applied_between",
 ]

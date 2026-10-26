@@ -135,6 +135,7 @@ import json as _json
 db.init_db()
 
 app.jinja_env.globals["enumerate"] = enumerate
+app.jinja_env.globals["how_applied_options"] = db.HOW_APPLIED_OPTIONS
 app.jinja_env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 
 # ---------------------------------------------------------------------------
@@ -152,6 +153,7 @@ from routes.settings_routes import bp as settings_bp
 from routes.api             import bp as api_bp
 from routes.export          import bp as export_bp
 from routes.admin_db        import bp as admin_db_bp
+from routes.report          import bp as report_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(onboarding_bp)
@@ -164,6 +166,7 @@ app.register_blueprint(settings_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(admin_db_bp)
+app.register_blueprint(report_bp)
 
 # ---------------------------------------------------------------------------
 # Onboarding gate

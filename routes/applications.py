@@ -53,6 +53,8 @@ def add_application():
                     company=company,
                     team=team,
                     contact=request.form.get("contact", ""),
+                    how_applied=request.form.get("how_applied", ""),
+                    employer_contact=request.form.get("employer_contact", ""),
                     date_applied=date_applied,
                     status=request.form.get("status", "Select_Status"),
                     success_chance=request.form.get("success_chance", "0"),

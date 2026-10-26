@@ -27,6 +27,17 @@ All notable changes are documented here.  Format loosely follows
 - **Tests on every pull request** — new *Tests* workflow runs the suite and a
   Docker smoke test (non-root user, data ownership, health check).
 
+### Workforce Australia Report
+
+- **How Applied** and **Employer Contact** fields on applications (form,
+  detail page, CSV export and import).  Added automatically on start-up; the
+  existing *Known Contact / Connection* field is unchanged.
+- **Report** page (`/report/workforce`): applications applied for in one
+  fortnight, lined up with the reporting period start date you save (per
+  user).  Rows missing how-applied or employer-contact details are flagged.
+  Per-row **Copy**, **Copy all** (tab-separated) and **Download CSV**; copying
+  also works over plain `http://`.
+
 ### Fixes
 
 - **Search no longer crashes** when a matching application has no date applied.

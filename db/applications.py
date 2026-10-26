@@ -104,6 +104,38 @@ def get_applications(year=None, status=None, user_id=None, include_archived: boo
     return enriched
 
 
+# Choices for "How applied" on the form.  Stored as the text shown, so exports
+# and the Workforce Australia report read naturally.  Imports keep any text.
+HOW_APPLIED_OPTIONS = (
+    "Online (job board)",
+    "Company website",
+    "Email",
+    "In person",
+    "Phone",
+    "Recruitment agency",
+    "Other",
+)
+
+
+def get_applications_applied_between(start: str, end: str, user_id=None) -> list:
+    """Applications with a date applied from *start* to *end* (YYYY-MM-DD, inclusive).
+
+    Archived applications are included: they were still applied for in that
+    period.  Oldest first, as a job search report lists them.
+    """
+    conn = get_connection()
+    sql = ("SELECT * FROM applications"
+           " WHERE substr(date_applied, 1, 10) BETWEEN ? AND ?")
+    params: list = [start, end]
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    sql += " ORDER BY substr(date_applied, 1, 10), id"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def search_applications(query: str, year: int | None = None, user_id=None, include_archived: bool = False) -> list:
     """Search applications across company, role, team, comment, notes, and contact."""
     conn = get_connection()
@@ -193,8 +225,9 @@ def add_application(data, user_id=None) -> int:
            (job_desc, team, company, date_applied, status,
             cover_letter, resume, comment, success_chance, link,
             contact, additional_notes, status_changed_at, last_contact_date,
-            last_modified_at, job_expiry_date, industry, user_id)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            last_modified_at, job_expiry_date, industry, user_id,
+            how_applied, employer_contact)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
@@ -214,6 +247,8 @@ def add_application(data, user_id=None) -> int:
             data.get("job_expiry_date") or None,
             industry,
             user_id,
+            (data.get("how_applied") or "").strip(),
+            (data.get("employer_contact") or "").strip(),
         ),
     )
     app_id = cur.lastrowid
@@ -274,6 +309,8 @@ def update_application(app_id: int, data):
         or existing.get("last_contact_date")     != (data.get("last_contact_date") or None)
         or existing.get("job_expiry_date")       != (data.get("job_expiry_date")   or None)
         or existing.get("industry")              != (data.get("industry")           or None)
+        or (existing.get("how_applied")      or "") != (data.get("how_applied")      or "").strip()
+        or (existing.get("employer_contact") or "") != (data.get("employer_contact") or "").strip()
     )
 
     live_cols: list = []
@@ -288,7 +325,7 @@ def update_application(app_id: int, data):
                job_desc=?, team=?, company=?, date_applied=?, status=?,
                cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
                contact=?, additional_notes=?, last_contact_date=?,
-               job_expiry_date=?, industry=?,
+               job_expiry_date=?, industry=?, how_applied=?, employer_contact=?,
                status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END,
                last_modified_at=CASE WHEN ? THEN ? ELSE last_modified_at END
                WHERE id=?""",
@@ -308,6 +345,8 @@ def update_application(app_id: int, data):
                 data.get("last_contact_date") or None,
                 data.get("job_expiry_date")   or None,
                 data.get("industry")          or None,
+                (data.get("how_applied")      or "").strip(),
+                (data.get("employer_contact") or "").strip(),
                 new_status,
                 now,
                 1 if _changed else 0,
@@ -633,6 +672,7 @@ IMPORTABLE_FIELDS = (
     "company", "job_desc", "team", "date_applied", "status",
     "cover_letter", "resume", "success_chance", "link", "contact",
     "comment", "additional_notes", "industry", "job_expiry_date",
+    "how_applied", "employer_contact",
 )
 
 _DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d")

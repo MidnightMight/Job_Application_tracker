@@ -205,6 +205,34 @@
                      placeholder="e.g. Jane Smith (recruiter), LinkedIn connection">
             </div>
 
+            <!-- How Applied (Workforce Australia report) -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="how_applied">
+                <i class="bi bi-send text-info me-1"></i>How Applied
+              </label>
+              {%- set current_how = app.how_applied if app and app.how_applied else '' %}
+              <select name="how_applied" id="how_applied" class="form-select">
+                <option value="">—</option>
+                {% for opt in how_applied_options %}
+                <option value="{{ opt }}" {% if current_how == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+                {% if current_how and current_how not in how_applied_options %}
+                <option value="{{ current_how }}" selected>{{ current_how }}</option>
+                {% endif %}
+              </select>
+            </div>
+
+            <!-- Employer Contact (Workforce Australia report) -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="employer_contact">
+                <i class="bi bi-person-badge text-info me-1"></i>Employer Contact
+              </label>
+              <input type="text" name="employer_contact" id="employer_contact" class="form-control"
+                     value="{{ app.employer_contact if app and app.employer_contact else '' }}"
+                     placeholder="e.g. Jane Smith, 03 9000 0000, jobs@acme.com.au">
+              <div class="form-text">Who you applied to, for your Workforce Australia report.</div>
+            </div>
+
             <!-- Date Applied -->
             <div class="col-md-4">
               <label class="form-label fw-semibold">

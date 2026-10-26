@@ -83,6 +83,8 @@ the repository owner.
 - **Reminder inbox** — background scheduler flags pending applications that
   exceed a configurable threshold; inbox prompts link to company tracker when
   industry data is incomplete
+- **Workforce Australia report** — "How applied" and "Employer contact" fields
+  plus a fortnightly report page with per-row copy buttons and CSV download
 - **Export** — CSV (applications, companies) or full SQLite database backup
 - **Dark / light theme** — toggle persisted to `localStorage`
 - **Multi-user login** — optional, Docker mode only; werkzeug password hashing;

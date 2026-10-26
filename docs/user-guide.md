@@ -22,6 +22,7 @@ bulk operations, searching, and exporting your data.
 13. [AI assistant (Ollama)](#13-ai-assistant-ollama)
 14. [Dark / light theme](#14-dark--light-theme)
 15. [Keyboard shortcuts and tips](#15-keyboard-shortcuts-and-tips)
+16. [Workforce Australia report](#16-workforce-australia-report)
 
 ---
 
@@ -60,7 +61,9 @@ summary for the current year and charts for all tracked years.
 | **Cover Letter** | — | Tick if you included a cover letter |
 | **Resume / CV** | — | Tick if you sent a CV (ticked by default) |
 | **Link** | — | URL to the job posting |
-| **Contact** | — | Recruiter or hiring manager name |
+| **Contact** | — | Known contact or connection (e.g. a referral) |
+| **How Applied** | — | Online (job board), company website, email, in person, phone, recruitment agency or other — used by the Workforce Australia report |
+| **Employer Contact** | — | Who you applied to: name, phone or email — used by the Workforce Australia report |
 | **Success Chance** | — | Your personal estimate (0–1 or percentage) |
 | **Comment** | — | Short note about the application |
 | **Additional Notes** | — | Longer free-text notes |
@@ -295,6 +298,7 @@ Go to **Export** in the navigation bar.
 | Export | Format | Filters |
 |---|---|---|
 | Applications | CSV | Year, status, company name |
+| Workforce Australia report | CSV | One fortnight (see [section 16](#16-workforce-australia-report)) |
 | Company list | CSV | — |
 | Full database | SQLite `.db` | — |
 
@@ -355,3 +359,36 @@ across sessions and page reloads.
 | **Bulk reject** | Year view → filter by `Awaiting_Response` → select all → set status to `Rejected` → Set |
 | **Jump to year** | Click a year badge on the dashboard quick-nav or use By Year in the navbar |
 | **Offline access (PWA)** | On a server / Docker deployment, add the app to your home screen for fast access and cached offline pages |
+
+---
+
+## 16. Workforce Australia report
+
+**Report** in the navigation bar lists the applications you applied for in one
+fortnight, ready to report as job search efforts.
+
+- **Your reporting period.**  Enter the start date of any of your Workforce
+  Australia reporting periods under *My reporting period starts on* and click
+  **Save**.  The report then always opens on your current fortnight; the
+  arrows step back and forward a fortnight at a time.  Until you save one,
+  fortnights start on this week's Monday.  Each user has their own date.
+- **What is listed.**  Every application whose **Date Applied** falls in the
+  fortnight (first and last day included), archived ones too.  Undated
+  applications are not listed.
+- **Missing details.**  Rows without **How Applied** or **Employer Contact**
+  are highlighted, with an **Add details** button that opens the application.
+- **Copy** on a row copies that application as labelled lines (Date applied,
+  Job title, Employer, How applied, Employer contact, …) to paste into the
+  Workforce Australia site or app, an email, or a note.
+- **Copy all** copies the whole table as tab-separated text, which pastes into
+  a spreadsheet as columns.
+- **Download CSV** saves the fortnight as
+  `workforce-report_<start>_to_<end>.csv` (dates as DD/MM/YYYY).
+
+Copying works over plain `http://` too (e.g. a NAS address), where browsers
+block the newer clipboard API.
+
+> The report helps you keep and copy your records; it does not send anything
+> to Workforce Australia.  Check their site or your provider for what you must
+> report and by when.
+

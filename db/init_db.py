@@ -67,7 +67,9 @@ def init_db():
             industry          TEXT,
             user_id           INTEGER,
             archived          INTEGER DEFAULT 0,
-            archived_at       TEXT
+            archived_at       TEXT,
+            how_applied       TEXT,
+            employer_contact  TEXT
         )
     """)
 
@@ -87,6 +89,8 @@ def init_db():
     _add_column_if_missing(c, "applications", "user_id",             "INTEGER")
     _add_column_if_missing(c, "applications", "archived",            "INTEGER DEFAULT 0")
     _add_column_if_missing(c, "applications", "archived_at",         "TEXT")
+    _add_column_if_missing(c, "applications", "how_applied",         "TEXT")
+    _add_column_if_missing(c, "applications", "employer_contact",    "TEXT")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""

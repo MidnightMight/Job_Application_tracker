@@ -96,6 +96,20 @@
           <dd class="col-sm-8">{{ app.contact }}</dd>
           {% endif %}
 
+          {% if app.how_applied %}
+          <dt class="col-sm-4 text-muted">
+            <i class="bi bi-send text-info me-1"></i>How Applied
+          </dt>
+          <dd class="col-sm-8">{{ app.how_applied }}</dd>
+          {% endif %}
+
+          {% if app.employer_contact %}
+          <dt class="col-sm-4 text-muted">
+            <i class="bi bi-person-badge text-info me-1"></i>Employer Contact
+          </dt>
+          <dd class="col-sm-8">{{ app.employer_contact }}</dd>
+          {% endif %}
+
           <dt class="col-sm-4 text-muted">Cover Letter</dt>
           <dd class="col-sm-8">
             {% if app.cover_letter %}

@@ -35,6 +35,8 @@ CSV_IMPORT_FIELDS = [
     ("success_chance",  "Success Chance"),
     ("link",            "Application Link"),
     ("contact",         "Known Contact / Connection"),
+    ("how_applied",     "How Applied (e.g. Online, Email, In person)"),
+    ("employer_contact", "Employer Contact (name, phone or email)"),
     ("comment",         "Comment / Notes"),
     ("additional_notes", "Additional Notes"),
     ("industry",        "Industry / Sector"),
