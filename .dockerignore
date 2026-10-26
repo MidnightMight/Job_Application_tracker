@@ -39,3 +39,4 @@ tests/
 pytest.ini
 .pytest_cache/
 .github/
+CLAUDE.md
