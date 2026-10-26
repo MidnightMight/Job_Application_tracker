@@ -321,15 +321,13 @@
             </td>
             <td class="text-nowrap">
               {% if a.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
-              <form method="post"
-                    action="{{ url_for('applications.archive_application', app_id=a.id) }}"
-                    class="d-inline"
-                    onsubmit="return confirm('Archive this application?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button class="btn btn-outline-secondary btn-sm py-0 me-1" title="Archive">
-                  <i class="bi bi-archive"></i>
-                </button>
-              </form>
+              {# Rows sit inside bulkForm and forms can't nest, so these buttons
+                 submit bulkForm (and its CSRF token) to their own URL instead. #}
+              <button class="btn btn-outline-secondary btn-sm py-0 me-1" title="Archive"
+                      formaction="{{ url_for('applications.archive_application', app_id=a.id) }}"
+                      onclick="return confirm('Archive this application?')">
+                <i class="bi bi-archive"></i>
+              </button>
               {% endif %}
               <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                  class="btn btn-outline-info btn-sm py-0 me-1" title="View details">
@@ -339,15 +337,11 @@
                  class="btn btn-outline-primary btn-sm py-0 me-1">
                 <i class="bi bi-pencil"></i>
               </a>
-              <form method="post"
-                    action="{{ url_for('applications.delete_application', app_id=a.id) }}"
-                    class="d-inline"
-                    onsubmit="return confirm('Delete this application?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <button class="btn btn-outline-danger btn-sm py-0">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </form>
+              <button class="btn btn-outline-danger btn-sm py-0" title="Delete"
+                      formaction="{{ url_for('applications.delete_application', app_id=a.id) }}"
+                      onclick="return confirm('Delete this application?')">
+                <i class="bi bi-trash"></i>
+              </button>
             </td>
           </tr>
           {% else %}

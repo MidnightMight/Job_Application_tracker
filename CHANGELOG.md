@@ -27,6 +27,14 @@ All notable changes are documented here.  Format loosely follows
 - **Tests on every pull request** — new *Tests* workflow runs the suite and a
   Docker smoke test (non-root user, data ownership, health check).
 
+### Fixes
+
+- **Search no longer crashes** when a matching application has no date applied.
+- **Year view Archive and Delete buttons work again.** They sat inside the bulk-action form, so clicking one did nothing.
+- **Missing pages return "404 Not Found"** instead of "500 Internal Server Error" (and no longer fill the log with stack traces).
+- **No more service-worker error** in the browser console on every page (Docker mode).
+- **Logout is now a button that posts a form**, so another site can't log you out with a link.
+
 ### After updating (Docker / NAS)
 
 - Set `PUID` / `PGID` to your NAS user's IDs (optional, default `1000`).

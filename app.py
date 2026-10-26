@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from flask import Flask, flash, jsonify, redirect, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
+from werkzeug.exceptions import HTTPException
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
@@ -197,6 +198,14 @@ def healthz():
         logger.exception("Health check failed")
         return jsonify(status="error"), 503
     return jsonify(status="ok")
+
+
+@app.after_request
+def _allow_root_service_worker(response):
+    """The service worker lives in /static but controls the whole site."""
+    if request.path == "/static/sw.js":
+        response.headers["Service-Worker-Allowed"] = "/"
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +418,8 @@ if _scheduler_enabled():
 
 @app.errorhandler(Exception)
 def _handle_unhandled_exception(exc):
+    if isinstance(exc, HTTPException):
+        return exc  # 404, 405 and friends are normal responses, not crashes
     logger.exception(
         "Unhandled exception on %s %s", request.method, request.path
     )
