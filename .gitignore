@@ -33,3 +33,5 @@ Thumbs.db
 # Local data directory (DB, logs, backups) — keep the folder but not the files
 data/*
 !data/.gitkeep
+
+.pytest_cache/

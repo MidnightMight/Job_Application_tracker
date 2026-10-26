@@ -24,8 +24,9 @@ os.makedirs(_UPLOAD_TMP_DIR, exist_ok=True)
 
 CSV_IMPORT_FIELDS = [
     ("",                "(ignore this column)"),
+    ("id",              "Application ID (only used to update existing rows)"),
     ("company",         "Company (required if Role is empty)"),
-    ("date_applied",    "Date Applied *"),
+    ("date_applied",    "Date Applied"),
     ("job_desc",        "Job Description / Role (required if Company is empty)"),
     ("team",            "Team / Division"),
     ("status",          "Status"),
@@ -37,7 +38,36 @@ CSV_IMPORT_FIELDS = [
     ("comment",         "Comment / Notes"),
     ("additional_notes", "Additional Notes"),
     ("industry",        "Industry / Sector"),
+    ("job_expiry_date", "Job Advert Expiry Date"),
 ]
+
+
+def _guess_mapping(headers: list[str]) -> list[str]:
+    """Suggest an application field for each column header.
+
+    Exact matches win (so a re-imported export maps cleanly); otherwise the
+    first field whose name contains, or is contained in, the header is used.
+    Each field is suggested at most once.
+    """
+    keys = [f[0] for f in CSV_IMPORT_FIELDS if f[0]]
+    normalised = [h.strip().lower().replace(" ", "_").replace("-", "_") for h in headers]
+    guessed = ["" for _ in headers]
+    used: set[str] = set()
+    for i, norm in enumerate(normalised):
+        if norm in keys and norm not in used:
+            guessed[i] = norm
+            used.add(norm)
+    for i, norm in enumerate(normalised):
+        if guessed[i] or not norm:
+            continue
+        for key in keys:
+            if key in used or key == "id":
+                continue
+            if key in norm or norm in key:
+                guessed[i] = key
+                used.add(key)
+                break
+    return guessed
 
 
 def _save_upload_tmp(data: bytes) -> str:
@@ -111,16 +141,7 @@ def import_csv():
             return redirect(url_for("import_.import_csv"))
 
         preview_rows = [row for i, row in enumerate(reader) if i < 10]
-        field_keys = {f[0]: f[1] for f in CSV_IMPORT_FIELDS if f[0]}
-        guessed = []
-        for h in headers:
-            normalised = h.lower().replace(" ", "_").replace("-", "_")
-            match = ""
-            for key in field_keys:
-                if key in normalised or normalised in key:
-                    match = key
-                    break
-            guessed.append(match)
+        guessed = _guess_mapping(headers)
 
         source_label = f"{filename} — {sheet_name}"
         if header_row > 1:
@@ -187,16 +208,7 @@ def import_csv():
         content = csv_buf.getvalue()
 
         preview_rows = remaining_rows[:10]
-        field_keys = {f[0]: f[1] for f in CSV_IMPORT_FIELDS if f[0]}
-        guessed = []
-        for h in headers:
-            normalised = h.lower().replace(" ", "_").replace("-", "_")
-            match = ""
-            for key in field_keys:
-                if key in normalised or normalised in key:
-                    match = key
-                    break
-            guessed.append(match)
+        guessed = _guess_mapping(headers)
 
         source_label = filename
         if header_row > 1:
@@ -231,14 +243,17 @@ def import_csv():
                     record[field] = raw_row[idx].strip()
             rows_to_import.append(record)
 
-        result = db.bulk_import_applications(rows_to_import, user_id=current_user_id())
+        update_existing = request.form.get("update_existing") == "1"
+        result = db.bulk_import_applications(
+            rows_to_import, user_id=current_user_id(), update_existing=update_existing,
+        )
         dup_note = (
             f", {result['duplicates']} duplicate(s) skipped" if result["duplicates"] else ""
         )
         flash(
-            f"Import complete — {result['imported']} added, "
+            f"Import complete — {result['imported']} added, {result['updated']} updated, "
             f"{result['skipped']} skipped{dup_note}.",
-            "success" if not result["errors"] else "warning",
+            "success" if not (result["errors"] or result["warnings"]) else "warning",
         )
         return render_template(
             "csv_import.html",

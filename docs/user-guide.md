@@ -261,13 +261,30 @@ threshold (default: **3 days**).
 3. **Step 2 — Map Columns:** Assign each detected column to an application
    field using the dropdowns. Auto-guessing fills in common column names.
    A preview of the first five rows helps you confirm the mapping.
-4. Click **Import Applications**.
+4. Optionally tick **Update existing applications** (see below).
+5. Click **Import Applications**.
 
-**Required fields per row:** `company` and `date_applied`
+**Required per row:** a `company` or a `job_desc` (role). `date_applied` is
+optional — undated rows are imported as undated.
 
-**Accepted date formats:** `YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`, `MM/DD/YYYY`
+**Accepted date formats:** `YYYY-MM-DD`, `DD/MM/YYYY`, `DD-MM-YYYY`,
+`MM/DD/YYYY`, `YYYY/MM/DD`, and ISO timestamps such as `2026-10-26T09:30:00`.
+`job_expiry_date` can be imported too.
 
-A results page shows imported vs. skipped rows and the reason for any skipped rows.
+**Yes/no columns** (`cover_letter`, `resume`) accept `1/0`, `yes/no`,
+`true/false`, `y/n` or `x`.
+
+**Editing in a spreadsheet (update mode):** export your applications
+(**Export → Applications CSV**), edit the file, then re-import it with
+**Update existing applications** ticked.  Rows whose `id` matches one of your
+applications — or whose company + role + team + date match — update that
+application instead of being added again.  Only the columns you map are
+changed, and status changes are recorded in the timeline.  Without the tick,
+exact duplicates are skipped as before.
+
+The results page shows rows added, updated and skipped, the reason for any
+skipped rows, and any values that were corrected (for example an unreadable
+date or an unknown status, which falls back to `Select_Status`).
 
 ---
 

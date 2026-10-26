@@ -5,6 +5,49 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## v1.3.0 — Import Upgrades and Code Tidy-up
+
+### New Features
+
+- **Update existing applications on import** — a new tick-box on the Map
+  Columns step lets an import update applications instead of skipping them.
+  Rows are matched by `id` (as written by the CSV export) or by company + role
+  + team + date.  Only mapped columns change, and status changes are added to
+  the timeline.  Export → edit in Excel → re-import now round-trips cleanly.
+- **Date Applied is optional on import** — undated rows import as undated,
+  matching the add/edit form.
+- **Job advert expiry date** can now be imported.
+- **Import results** show rows updated, and list values that were corrected
+  (unreadable dates, unknown statuses) separately from skipped rows.
+
+### Fixes
+
+- Import treated the text `0` in `cover_letter` / `resume` as "yes"; yes/no
+  columns now accept `1/0`, `yes/no`, `true/false`, `y/n` and `x`.
+- Unreadable dates were stored as-is; they are now left blank with a warning.
+- Unknown statuses fall back to `Select_Status` with a warning instead of
+  creating an orphaned status value.
+- Undated duplicates were not detected on import.
+- Column auto-guessing prefers exact header matches and never suggests the same
+  field twice, so a re-imported export maps correctly with no manual changes.
+- Background reminder jobs now log errors instead of silently swallowing them.
+
+### Code tidy-up
+
+- Inline JavaScript moved out of `application_form.html` and `settings.html`
+  into `static/js/` (`application_form.js`, `application_ai_fill.js`,
+  `application_ai_fit.js`, `settings.js`, `settings_statuses.js`).  Templates
+  pass URLs and flags through a small `window.*_CONFIG` object.  Script URLs
+  carry `?v=<app version>` so the service worker never serves stale copies.
+- Removed the `database.py` compatibility shim; `run_script.py` now imports
+  the `db` package directly.
+- Added a pytest suite (`tests/`) covering import behaviour, page rendering and
+  the import flow end to end.
+- New `JOB_TRACKER_DISABLE_SCHEDULER=1` environment variable to run without
+  the background scheduler (used by tests).
+
+---
+
 ## v1.2.4 — Company Detail View, Application Archival, Success-Rate AI, Status Sorting
 
 ### New Features

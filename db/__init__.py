@@ -1,8 +1,7 @@
 """Public interface for the db package.
 
-All symbols exported here were previously in ``database.py`` so existing
-``import database as db; db.foo()`` call-sites continue to work via the
-backward-compat shim in database.py.
+Use ``import db`` and call ``db.<function>()``.  Everything the routes, the
+CLI (run_script.py) and the scheduler need is re-exported here.
 """
 
 from .connection import (

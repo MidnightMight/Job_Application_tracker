@@ -625,18 +625,122 @@ def find_duplicate_applications(
     return [dict(r) for r in rows]
 
 
-def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
+# ── Bulk import ──────────────────────────────────────────────────────────────
+
+# Fields a CSV/Excel import may set.  Keys match the column names produced by
+# the CSV export, so an exported file can be re-imported without remapping.
+IMPORTABLE_FIELDS = (
+    "company", "job_desc", "team", "date_applied", "status",
+    "cover_letter", "resume", "success_chance", "link", "contact",
+    "comment", "additional_notes", "industry", "job_expiry_date",
+)
+
+_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d")
+_TRUE_VALUES = {"1", "true", "yes", "y", "x", "✓", "✔"}
+_FALSE_VALUES = {"0", "false", "no", "n", ""}
+
+
+def _parse_date(value: str) -> str | None:
+    """Return *value* as YYYY-MM-DD, "" for blank, or None if unparseable.
+
+    Accepts the common day-first and ISO formats, and ISO timestamps
+    (e.g. "2026-10-26T12:00:00") by taking the date part.
+    """
+    value = (value or "").strip()
+    if not value:
+        return ""
+    candidates = [value]
+    if len(value) > 10 and value[4:5] == "-":
+        candidates.append(value[:10])
+    for candidate in candidates:
+        for fmt in _DATE_FORMATS:
+            try:
+                return datetime.strptime(candidate, fmt).strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+    return None
+
+
+def _parse_bool(value, default: int) -> int | None:
+    """Return 1/0 for a yes/no style cell, *default* when missing, None if invalid."""
+    if value is None:
+        return default
+    text = str(value).strip().lower()
+    if text in _TRUE_VALUES:
+        return 1
+    if text in _FALSE_VALUES:
+        return 0
+    return None
+
+
+def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
+                      warnings: list[str]) -> dict:
+    """Normalise one import row.  Only keys present in *row* are returned, so
+    updates leave unmapped fields untouched.  Problems become warnings and the
+    offending value falls back to a safe default."""
+    out: dict = {}
+    for key in IMPORTABLE_FIELDS:
+        if key not in row:
+            continue
+        raw = row.get(key)
+        value = raw.strip() if isinstance(raw, str) else raw
+
+        if key in ("date_applied", "job_expiry_date"):
+            parsed = _parse_date(value or "")
+            if parsed is None:
+                warnings.append(f"{label}: could not read {key} '{value}' — left blank.")
+                parsed = ""
+            out[key] = parsed
+        elif key in ("cover_letter", "resume"):
+            default = 1 if key == "resume" else 0
+            parsed = _parse_bool(value, default)
+            if parsed is None:
+                warnings.append(f"{label}: could not read {key} '{value}' — used {default}.")
+                parsed = default
+            out[key] = parsed
+        elif key == "success_chance":
+            try:
+                out[key] = float(value) if value not in (None, "") else 0.0
+            except (TypeError, ValueError):
+                warnings.append(f"{label}: could not read success_chance '{value}' — used 0.")
+                out[key] = 0.0
+        elif key == "status":
+            if value and valid_statuses and value not in valid_statuses:
+                warnings.append(f"{label}: unknown status '{value}' — set to Select_Status.")
+                value = "Select_Status"
+            out[key] = value or "Select_Status"
+        else:
+            out[key] = value or ""
+    return out
+
+
+def bulk_import_applications(rows: list[dict], user_id=None,
+                             update_existing: bool = False) -> dict:
     """Import a list of dicts representing applications.
 
-    Returns {"imported": int, "skipped": int, "duplicates": int,
-             "other_skipped": int, "errors": list[str]}.
-    Rows that are exact duplicates (company + job_desc + team + date) are skipped.
-    When user_id is given, duplicates are checked and records created for that user.
+    * ``date_applied`` is optional — undated rows are imported as undated.
+    * When *update_existing* is True, a row whose ``id`` matches one of the
+      user's applications, or whose company + role + team + date matches an
+      existing application, updates that application instead of being skipped.
+      Only the mapped columns are changed.
+    * Otherwise exact duplicates (company + role + team + date) are skipped.
+
+    Returns {"imported", "updated", "skipped", "duplicates", "other_skipped",
+    "errors", "warnings"}.  ``errors`` describes skipped rows; ``warnings``
+    describes values that were corrected on rows that were still saved.
     """
+    from .statuses import get_status_options
+
+    try:
+        valid_statuses = set(get_status_options(user_id=user_id))
+    except Exception:  # pragma: no cover - defensive, statuses table missing
+        logger.exception("bulk_import_applications: could not load statuses")
+        valid_statuses = set()
+
     conn = get_connection()
     sql = (
-        "SELECT LOWER(TRIM(company)), LOWER(TRIM(job_desc)), "
-        "LOWER(TRIM(COALESCE(team,''))), date_applied FROM applications"
+        "SELECT id, LOWER(TRIM(company)), LOWER(TRIM(job_desc)), "
+        "LOWER(TRIM(COALESCE(team,''))), COALESCE(date_applied,'') FROM applications"
     )
     params: list = []
     if user_id is not None:
@@ -644,60 +748,65 @@ def bulk_import_applications(rows: list[dict], user_id=None) -> dict:
         params.append(user_id)
     existing_rows = conn.execute(sql, params).fetchall()
     conn.close()
-    existing_keys = {(r[0], r[1], r[2], r[3]) for r in existing_rows}
+    existing_ids = {r[0] for r in existing_rows}
+    existing_keys = {(r[1], r[2], r[3], r[4]): r[0] for r in existing_rows}
 
-    imported = 0
-    duplicates = 0
+    imported = updated = duplicates = 0
     errors: list[str] = []
+    warnings: list[str] = []
     for i, row in enumerate(rows, start=1):
         company = (row.get("company") or "").strip()
         job_desc = (row.get("job_desc") or "").strip()
-        row_label = company or job_desc
-        if not company and not job_desc:
-            errors.append(
-                f"Row {i}: either 'company' or 'job_desc' is required — row skipped."
-            )
+        label = f"Row {i} ({company or job_desc or 'blank'})"
+
+        record = _clean_import_row(row, label, valid_statuses, warnings)
+
+        target_id = None
+        if update_existing:
+            raw_id = str(row.get("id") or "").strip()
+            if raw_id.isdigit() and int(raw_id) in existing_ids:
+                target_id = int(raw_id)
+
+        if target_id is None and not company and not job_desc:
+            errors.append(f"Row {i}: either 'company' or 'job_desc' is required — row skipped.")
             continue
-        date_applied = (row.get("date_applied") or "").strip()
-        if not date_applied:
-            errors.append(f"Row {i} ({row_label}): 'date_applied' is required — row skipped.")
+
+        lookup_key = _dup_key(company, job_desc, record.get("team", ""),
+                              record.get("date_applied", ""))
+        if target_id is None and lookup_key in existing_keys:
+            if update_existing:
+                target_id = existing_keys[lookup_key]
+            else:
+                errors.append(f"{label}: duplicate application already in database — row skipped.")
+                duplicates += 1
+                continue
+
+        if target_id is not None:
+            current = get_application(target_id, user_id=user_id)
+            if current is None:
+                errors.append(f"{label}: application id {target_id} not found — row skipped.")
+                continue
+            merged = {key: current.get(key) for key in IMPORTABLE_FIELDS}
+            merged["last_contact_date"] = current.get("last_contact_date")
+            merged.update(record)
+            update_application(target_id, merged)
+            updated += 1
             continue
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
-            try:
-                date_applied = datetime.strptime(date_applied, fmt).strftime("%Y-%m-%d")
-                break
-            except ValueError:
-                pass
-        team = (row.get("team") or "").strip()
-        lookup_key = _dup_key(company, job_desc, team, date_applied)
-        if lookup_key in existing_keys:
-            errors.append(
-                f"Row {i} ({row_label}): duplicate application already in database — row skipped."
-            )
-            duplicates += 1
-            continue
-        add_application({
-            "job_desc":         job_desc,
-            "team":             team,
-            "company":          company,
-            "date_applied":     date_applied,
-            "status":           row.get("status", "Select_Status"),
-            "cover_letter":     row.get("cover_letter", ""),
-            "resume":           row.get("resume", "1"),
-            "comment":          row.get("comment", ""),
-            "success_chance":   row.get("success_chance", "0"),
-            "link":             row.get("link", ""),
-            "contact":          row.get("contact", ""),
-            "additional_notes": row.get("additional_notes", ""),
-            "industry":         row.get("industry", ""),
-        }, user_id=user_id)
-        existing_keys.add(lookup_key)
+
+        record.setdefault("status", "Select_Status")
+        record.setdefault("resume", 1)
+        new_id = add_application(record, user_id=user_id)
+        existing_ids.add(new_id)
+        existing_keys[lookup_key] = new_id
         imported += 1
-    total_skipped = len(rows) - imported
+
+    total_skipped = len(rows) - imported - updated
     return {
         "imported":      imported,
+        "updated":       updated,
         "skipped":       total_skipped,
         "duplicates":    duplicates,
         "other_skipped": total_skipped - duplicates,
         "errors":        errors,
+        "warnings":      warnings,
     }

@@ -6,7 +6,6 @@
 Job_Application_tracker/
 ├── app.py                    Thin Flask entry point — creates app, registers blueprints,
 │                             context processor, APScheduler background tasks
-├── database.py               Backward-compat shim — re-exports everything from db/
 ├── run_script.py             CLI stats viewer and CSV exporter
 ├── requirements.txt          Python dependencies (Flask, APScheduler, openpyxl, pypdf)
 ├── Dockerfile                Container image definition
@@ -83,9 +82,8 @@ Job_Application_tracker/
 ## Design Principles
 
 ### Backward compatibility
-`database.py` at the root is kept as a shim — it does nothing except
-`from db import *`.  Any external script that uses `import database as db` will
-continue to work without modification.
+The old `database.py` compatibility shim was removed in v1.3.0.  Import the
+`db` package directly (`import db`).
 
 ### Blueprint registration
 `app.py` creates the Flask application instance, stores `DEPLOYMENT_MODE` and

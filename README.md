@@ -123,7 +123,6 @@ db/          Database layer — 9 focused modules (connection, init, application
 routes/      Flask Blueprints — 11 route modules (auth, dashboard, applications,
              import, companies, inbox, settings, api, export, onboarding, admin_db)
 app.py       Thin entry point — registers blueprints, context processor, scheduler
-database.py  Backward-compat shim — re-exports everything from db/
 ```
 
 > Full package tree and design notes: [`docs/architecture.md`](docs/architecture.md)

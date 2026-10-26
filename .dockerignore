@@ -33,3 +33,8 @@ Thumbs.db
 # Git
 .git
 .gitignore
+
+# Tests
+tests/
+pytest.ini
+.pytest_cache/
