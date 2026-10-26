@@ -13,6 +13,7 @@ from flask import Flask, redirect, request, url_for
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
+import update_check
 
 APP_VERSION = "1.3.0"
 GITHUB_REPO = "MidnightMight/Job_Application_tracker"
@@ -193,6 +194,7 @@ def inject_globals():
         "user_profile_complete":  _profile_complete,
         "deployment_mode":        DEPLOYMENT_MODE,
         "status_styles":          db.get_status_styles(user_id=user_id),
+        **update_check.cached_update_info(APP_VERSION),
     }
 
 
@@ -276,6 +278,11 @@ def _check_stale_submitted_applications():
         logger.exception("Stale-application check failed")
 
 
+def _check_for_update():
+    """Scheduled task: look for a newer GitHub release once a day (cached)."""
+    update_check.refresh_latest_release(GITHUB_REPO)
+
+
 # ---------------------------------------------------------------------------
 # Scheduler interval helpers
 # ---------------------------------------------------------------------------
@@ -319,6 +326,10 @@ if _scheduler_enabled():
     _init_kwargs = _interval_kwargs()
     _scheduler.add_job(_check_and_create_reminders, "interval", id="reminders", **_init_kwargs)
     _scheduler.add_job(_check_stale_submitted_applications, "interval", id="stale_check", **_init_kwargs)
+    # Daily update check; first run straight away in the background.
+    from datetime import datetime as _datetime
+    _scheduler.add_job(_check_for_update, "interval", id="update_check", hours=24,
+                       next_run_time=_datetime.now())
     _scheduler.start()
     _check_and_create_reminders()
     _check_stale_submitted_applications()

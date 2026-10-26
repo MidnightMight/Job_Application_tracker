@@ -19,9 +19,19 @@ All notable changes are documented here.  Format loosely follows
 - **Job advert expiry date** can now be imported.
 - **Import results** show rows updated, and list values that were corrected
   (unreadable dates, unknown statuses) separately from skipped rows.
+- **Update notifications** — the app checks GitHub for a new release once a day
+  and shows a green **Update vX.Y.Z** button in the navbar when one exists.
+  Settings → Updates shows the latest release and when it was checked.
+- **Docker image publishing** — a GitHub Actions workflow builds and pushes
+  `ghcr.io/midnightmight/job_application_tracker` (`latest` + version tag,
+  amd64 and arm64) whenever a release is published, so NAS / Container Manager
+  installs have a new image to pull.
 
 ### Fixes
 
+- The update check never reported updates for release tags like `V1.2.4A`
+  (capital V and letter suffix could not be parsed).  Tags are now compared
+  leniently.
 - Import treated the text `0` in `cover_letter` / `resume` as "yes"; yes/no
   columns now accept `1/0`, `yes/no`, `true/false`, `y/n` and `x`.
 - Unreadable dates were stored as-is; they are now left blank with a warning.

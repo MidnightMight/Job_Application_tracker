@@ -12,6 +12,7 @@ import db
     "/", "/year/2026", "/search?q=acme", "/application/add", "/companies",
     "/inbox", "/export", "/application/import",
     "/settings", "/settings?section=statuses", "/settings?section=ai",
+    "/settings?section=updates",
 ])
 def test_pages_render(client, path):
     response = client.get(path)

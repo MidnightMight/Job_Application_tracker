@@ -32,6 +32,7 @@ def clean_db():
     conn.close()
     db.set_setting("onboarding_complete", "1")
     db.set_setting("login_enabled", "0")
+    db.set_setting("latest_release_tag", "")
     yield
 
 

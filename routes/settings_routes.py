@@ -312,27 +312,19 @@ def ollama_test():
 @bp.route("/settings/check-update")
 @login_required
 def check_update():
+    import update_check
+
     APP_VERSION = current_app.config.get("APP_VERSION", "")
     GITHUB_REPO = current_app.config.get("GITHUB_REPO", "")
     try:
-        req = urllib.request.Request(
-            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "Job-Tracker-App",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode())
-        latest_tag = data.get("tag_name", "").lstrip("v")
-        html_url = data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases")
-        is_newer = _version_is_newer(latest_tag, APP_VERSION)
+        release = update_check.fetch_latest_release(GITHUB_REPO)
+        update_check.store_latest_release(release["tag"], release["url"])
         return jsonify({
             "ok": True,
             "current": APP_VERSION,
-            "latest": latest_tag,
-            "update_available": is_newer,
-            "html_url": html_url,
+            "latest": update_check.display_version(release["tag"]),
+            "update_available": update_check.is_newer(release["tag"], APP_VERSION),
+            "html_url": release["url"],
         })
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
@@ -346,19 +338,6 @@ def check_update():
         return jsonify({"ok": False, "error": "Could not reach GitHub. Check your internet connection.", "current": APP_VERSION})
     except Exception:
         return jsonify({"ok": False, "error": "An unexpected error occurred while checking for updates.", "current": APP_VERSION})
-
-
-def _version_is_newer(latest: str, current: str) -> bool:
-    try:
-        l_parts = [int(x) for x in latest.split(".")]
-        c_parts = [int(x) for x in current.split(".")]
-        while len(l_parts) < len(c_parts):
-            l_parts.append(0)
-        while len(c_parts) < len(l_parts):
-            c_parts.append(0)
-        return l_parts > c_parts
-    except Exception:
-        return False
 
 
 # Backward-compat redirect for the old /statuses route.

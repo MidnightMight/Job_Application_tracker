@@ -21,6 +21,8 @@ Two methods are covered: **using Git** (recommended) and **manual download**
    - [Local install](#local-install-manual)
    - [Docker — pull image from registry](#docker--pull-image-from-registry)
    - [Docker — build from downloaded source](#docker--build-from-downloaded-source)
+4. [Synology Container Manager](#synology-container-manager)
+5. [How update notifications work](#how-update-notifications-work)
 
 ---
 
@@ -225,6 +227,44 @@ docker logs job-tracker
 
 > **Tip:** If you use a custom `docker-compose.yml`, update the `image:` line
 > to match the new image tag and run `docker compose up -d`.
+
+---
+
+## Synology Container Manager
+
+Container Manager does **not** update containers by itself, and its update
+button only helps when a newer image has actually been published.
+
+1. **Images are published when a GitHub release is created.** The
+   *Publish Docker image* workflow (`.github/workflows/docker-publish.yml`)
+   builds `ghcr.io/midnightmight/job_application_tracker:latest` (plus a
+   version tag) for both Intel/AMD and ARM Synology models.  It can also be run
+   by hand from the repository's **Actions** tab.
+2. **Use the image, not `build: .`.** If your project was created from
+   `docker-compose.yml` with the `build: .` line still in it, Container
+   Manager rebuilds from the files on the NAS and never pulls a new image.
+   Remove or comment out `build: .` so the project uses the `image:` line.
+3. **To update:** back up your data, then in Container Manager go to
+   **Registry / Image**, pull `ghcr.io/midnightmight/job_application_tracker:latest`
+   again, and rebuild the project (or stop it, *Clean*, then *Build*) so the
+   container is recreated from the new image.  Your data lives in the mounted
+   `/data` folder and is kept.
+4. **Fully automatic updates** need an extra tool such as Watchtower, which
+   watches running containers and recreates them when a new image appears.
+   It is optional and not required by this app.
+
+---
+
+## How update notifications work
+
+The app checks GitHub for the latest release once a day (and when you press
+**Check for Updates** in Settings → Updates).  When a newer release exists, a
+green **Update vX.Y.Z** button appears in the top navigation bar.  Turn the
+daily check off by setting `update_check_enabled` to `0` in the settings table
+(Admin → Database).
+
+Release tags such as `v1.3.0`, `V1.2.4` and `V1.2.4A` are all understood; a
+lettered tag counts as newer than the same number without a letter.
 
 ---
 

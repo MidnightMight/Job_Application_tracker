@@ -846,6 +846,14 @@
           <dd class="col-sm-8">
             <span class="badge bg-primary fs-6">v{{ app_version }}</span>
           </dd>
+          {% if latest_version %}
+          <dt class="col-sm-4">Latest release</dt>
+          <dd class="col-sm-8">
+            <a href="{{ latest_release_url }}" target="_blank" rel="noopener">v{{ latest_version }}</a>
+            {% if update_available %}<span class="badge bg-success ms-1">update available</span>{% endif %}
+            <div class="form-text">Checked automatically once a day.</div>
+          </dd>
+          {% endif %}
         </dl>
 
         <button type="button" class="btn btn-outline-primary" id="checkUpdateBtn">
@@ -872,6 +880,14 @@
         </ol>
         <p>If you are using Docker, rebuild the image after pulling:
           <code>docker compose up --build -d</code></p>
+        <p>
+          <strong>Pre-built image (e.g. Synology Container Manager):</strong>
+          new images are published to <code>ghcr.io/midnightmight/job_application_tracker</code>
+          when a GitHub release is created. Container Manager does not update containers on its own —
+          pull the new <code>latest</code> image, then rebuild the project or recreate the container.
+          A project whose compose file still has <code>build: .</code> rebuilds from its local files and
+          will not pick up a new image.
+        </p>
         <p class="mb-0">
           <i class="bi bi-file-earmark-text me-1"></i>
           No Git? See the
