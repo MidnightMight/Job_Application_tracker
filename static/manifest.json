@@ -4,8 +4,8 @@
   "description": "Track job applications, statuses, and stage progression.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#212529",
-  "theme_color": "#212529",
+  "background_color": "#0B1730",
+  "theme_color": "#0B1730",
   "scope": "/",
   "lang": "en-AU",
   "icons": [

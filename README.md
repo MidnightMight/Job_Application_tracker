@@ -29,9 +29,11 @@ the repository owner.
 
 ## Features
 
-- **Dashboard** — Chart.js charts: status breakdown, applications per year,
-  success rate trend, industry/sector keyword frequency; **Quick Navigation**
-  card with one-click year, Company Tracker, and Import CSV links
+- **Dashboard** — a honeycomb of this year's applications by status (click a
+  cell to filter), headline counts, the applications in progress, and charts
+  for applications per year, offer rate and industry keywords
+- **Midnight Lite look** — honeycomb logo, amber and royal-blue theme with a
+  matching dark mode that follows your device setting
 - **Year views** — filterable per-year table with pipeline progress bar and bulk
   operations (set status, date, cover letter, resume, delete); **sort by status
   order** matching your Settings → Statuses sequence

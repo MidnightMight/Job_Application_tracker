@@ -29,7 +29,7 @@
             <select name="status" class="form-select form-select-sm">
               <option value="">All statuses</option>
               {% for s in status_options %}
-              <option value="{{ s }}">{{ s | replace('_', ' ') }}</option>
+              <option value="{{ s }}">{{ s | status_label }}</option>
               {% endfor %}
             </select>
           </div>

@@ -272,7 +272,7 @@
               <select name="status" class="form-select">
                 {% for s in status_options %}
                 <option value="{{ s }}" {% if app and app.status == s %}selected{% endif %}>
-                  {{ s | replace('_', ' ') }}
+                  {{ s | status_label }}
                 </option>
                 {% endfor %}
               </select>
@@ -426,7 +426,7 @@
           <li>
             <strong>{{ d.company }}</strong> — {{ d.job_desc or '(no role)' }}
             on {{ d.date_applied }}
-            <span class="badge bg-secondary ms-1">{{ d.status | replace('_', ' ') }}</span>
+            <span class="badge bg-secondary ms-1">{{ d.status | status_label }}</span>
             <a href="{{ url_for('applications.application_detail', app_id=d.id) }}" target="_blank"
                class="ms-1 small text-primary">View</a>
           </li>

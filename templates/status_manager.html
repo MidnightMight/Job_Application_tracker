@@ -33,10 +33,10 @@
             <tr>
               <td class="ps-3 text-muted small">{{ loop.index }}</td>
               <td class="fw-semibold small">{{ s }}</td>
-              <td class="text-muted small">{{ s | replace('_', ' ') }}</td>
+              <td class="text-muted small">{{ s | status_label }}</td>
               <td>
                 <span class="badge status-badge status-{{ s | replace(' ', '_') }}">
-                  {{ s | replace('_', ' ') }}
+                  {{ s | status_label }}
                 </span>
               </td>
               <td class="text-end pe-3">

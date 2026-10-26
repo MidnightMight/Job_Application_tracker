@@ -2,116 +2,51 @@
 {% block title %}{{ year }} Applications — Job Tracker{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <h2 class="fw-bold mb-0">
-    <i class="bi bi-calendar3 text-warning me-2"></i>{{ year }} Applications
-  </h2>
-  <div class="d-flex gap-2 flex-wrap">
+<div class="d-flex justify-content-between align-items-end mb-3 flex-wrap gap-3">
+  <div>
+    <h1 class="mb-1">{{ year }} applications</h1>
+    <div class="text-secondary">{{ stats.total }} this year, {{ stats.pending | length }} in progress</div>
+  </div>
+  <nav class="btn-group ml-year-switch" aria-label="Choose a year">
     {% for y in years %}
     <a href="{{ url_for('dashboard.year_view', year=y) }}"
-       class="btn btn-sm {% if y == year %}btn-warning{% else %}btn-outline-secondary{% endif %}">
-      {{ y }}
-    </a>
+       class="btn btn-sm {% if y == year %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       {% if y == year %}aria-current="page"{% endif %}>{{ y }}</a>
     {% endfor %}
-    <a href="{{ url_for('import_.import_csv') }}" class="btn btn-sm btn-outline-info">
-      <i class="bi bi-upload me-1"></i>Import CSV
-    </a>
-    <a href="{{ url_for('applications.add_application') }}" class="btn btn-sm btn-success">
-      <i class="bi bi-plus-circle me-1"></i>Add
-    </a>
-  </div>
+  </nav>
 </div>
 
-<!-- Stats Row -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-md-2">
-    <div class="card border-0 shadow-sm text-center py-2">
-      <div class="fw-bold fs-4 text-primary">{{ stats.total }}</div>
-      <div class="small text-muted">Total</div>
-    </div>
-  </div>
-  <div class="col-6 col-md-2">
-    <div class="card border-0 shadow-sm text-center py-2">
-      <div class="fw-bold fs-4 text-success">{{ stats.submitted }}</div>
-      <div class="small text-muted">Submitted</div>
-    </div>
-  </div>
-  <div class="col-6 col-md-2">
-    <div class="card border-0 shadow-sm text-center py-2">
-      <div class="fw-bold fs-4 text-danger">{{ stats.rejected }}</div>
-      <div class="small text-muted">Rejected</div>
-    </div>
-  </div>
-  <div class="col-6 col-md-2">
-    <div class="card border-0 shadow-sm text-center py-2">
-      <div class="fw-bold fs-4 text-warning">{{ stats.offers }}</div>
-      <div class="small text-muted">Offers</div>
-    </div>
-  </div>
-  <div class="col-6 col-md-2">
-    <div class="card border-0 shadow-sm text-center py-2">
-      <div class="fw-bold fs-4 text-info">{{ stats.success_rate }}%</div>
-      <div class="small text-muted">Success Rate</div>
-    </div>
-  </div>
-  <div class="col-6 col-md-2">
-    <div class="card border-0 shadow-sm text-center py-2">
-      <div class="fw-bold fs-4 text-secondary">{{ stats.pending | length }}</div>
-      <div class="small text-muted">Pending</div>
-    </div>
-  </div>
-</div>
-
-<!-- Progress Bar -->
-{% if stats.total > 0 %}
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body py-2">
-      <div class="d-flex justify-content-between small text-muted mb-1">
-        <span>Application Pipeline Progress</span>
-        <span>{{ stats.total }} total</span>
+<!-- Counts and the status mix for the year -->
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <div class="d-flex flex-wrap gap-4 row-gap-2 mb-{{ '3' if stats.total else '0' }}">
+      {% for value, label in [(stats.total, 'Applications'), (stats.submitted, 'Sent'), (stats.pending | length, 'In progress'),
+                              (stats.offers, 'Offers'), (stats.rejected, 'Rejected'), (stats.success_rate ~ '%', 'Offer rate')] %}
+      <div>
+        <div class="stat-value" style="font-size:1.7rem">{{ value }}</div>
+        <div class="small text-secondary">{{ label }}</div>
       </div>
-      <div class="progress" style="height:18px;">
-        {% for s in status_options %}
-          {% set cnt = status_counts.get(s, 0) %}
-          {% if cnt > 0 %}
-            {% set pct = ((cnt / stats.total) * 100) | round(1) %}
-            <div class="progress-bar status-{{ s | replace(' ', '_') }}"
-                 style="width:{{ pct }}%"
-                 title="{{ s | replace('_', ' ') }} {{ cnt }}">
-              {{ s | replace('_', ' ') }}
-            </div>
-          {% endif %}
-        {% endfor %}
-      </div>
+      {% endfor %}
     </div>
-  </div>
-{% endif %}
-
-<!-- Filter -->
-<div class="card border-0 shadow-sm mb-3">
-  <div class="card-body py-2">
-    <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
-      <label class="fw-semibold me-1 small">Filter by Status:</label>
-      <select name="status" class="form-select form-select-sm w-auto">
-        <option value="">— All —</option>
-        {% for s in status_options %}
-        <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>
-          {{ s | replace('_', ' ') }}
-        </option>
-        {% endfor %}
-      </select>
-      <label class="fw-semibold me-1 small">Sort:</label>
-      <select name="sort" class="form-select form-select-sm w-auto">
-        <option value="date" {% if sort_mode == 'date' %}selected{% endif %}>Date Applied</option>
-        <option value="status" {% if sort_mode == 'status' %}selected{% endif %}>Status Order</option>
-      </select>
-      <button type="submit" class="btn btn-sm btn-primary">Apply</button>
-      {% if selected_status %}
-      <a href="{{ url_for('dashboard.year_view', year=year, sort=sort_mode) }}" class="btn btn-sm btn-outline-secondary">Show All Statuses</a>
-      {% endif %}
-    </form>
+    {% if stats.total > 0 %}
+    <div class="progress" style="height:22px;" role="img" aria-label="Applications by status">
+      {% for s in status_options %}
+        {% set cnt = status_counts.get(s, 0) %}
+        {% if cnt > 0 %}
+          {% set pct = ((cnt / stats.total) * 100) | round(1) %}
+          <a class="progress-bar status-{{ s | replace(' ', '_') }} text-decoration-none"
+             href="{{ url_for('dashboard.year_view', year=year, status=s, sort=sort_mode) }}"
+             style="width:{{ pct }}%" title="{{ s | status_label }}: {{ cnt }}">
+            {% if pct >= 12 %}<span class="d-none d-md-inline">{{ s | status_label }} {{ cnt }}</span>{% endif %}
+          </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 </div>
+
+<form method="get" id="filterForm"></form>
 
 <!-- ── Bulk-action form wraps both the toolbar and the table ─────────────── -->
 <form method="post" action="{{ url_for('applications.bulk_action') }}" id="bulkForm">
@@ -120,9 +55,9 @@
   <input type="hidden" name="status_filter" value="{{ selected_status }}">
   <input type="hidden" name="sort_mode" value="{{ sort_mode }}">
 
-  <!-- Bulk Action Toolbar -->
-  <div class="card border-0 shadow-sm mb-3" id="bulkToolbar">
-    <div class="card-body py-2">
+  <!-- Bulk actions: appear once at least one row is ticked -->
+  <div class="ml-bulkbar mb-3 d-none" id="bulkToolbar">
+    <div>
       <div class="d-flex gap-3 align-items-center flex-wrap">
 
         <!-- Selection controls -->
@@ -133,17 +68,17 @@
           <button type="button" class="btn btn-outline-secondary btn-sm" id="deselectAllBtn">
             <i class="bi bi-x-lg me-1"></i>None
           </button>
-          <span class="fw-semibold small text-muted" id="selectedCount">0 selected</span>
+          <span class="fw-semibold small" id="selectedCount">0 selected</span>
         </div>
 
         <div class="vr d-none d-md-block"></div>
 
         <!-- Set Status -->
         <div class="d-flex gap-1 align-items-center flex-wrap">
-          <label class="small text-muted mb-0">Status:</label>
+          <label class="small mb-0">Status</label>
           <select name="bulk_status" class="form-select form-select-sm" style="width:auto;min-width:120px;">
             {% for s in status_options %}
-            <option value="{{ s }}">{{ s | replace('_', ' ') }}</option>
+            <option value="{{ s }}">{{ s | status_label }}</option>
             {% endfor %}
           </select>
           <button type="submit" name="action" value="set_status"
@@ -152,7 +87,7 @@
 
         <!-- Set Date Applied -->
         <div class="d-flex gap-1 align-items-center flex-wrap">
-          <label class="small text-muted mb-0">Date Applied:</label>
+          <label class="small mb-0">Date applied</label>
           <input type="date" name="bulk_date_applied" class="form-control form-control-sm" style="width:auto;">
           <button type="submit" name="action" value="set_date_applied"
                   class="btn btn-sm btn-outline-primary bulk-action-btn" disabled>Set</button>
@@ -160,7 +95,7 @@
 
         <!-- Set Last Contact -->
         <div class="d-flex gap-1 align-items-center flex-wrap">
-          <label class="small text-muted mb-0">Last Contact:</label>
+          <label class="small mb-0">Last contact</label>
           <input type="date" name="bulk_last_contact" class="form-control form-control-sm" style="width:auto;">
           <button type="submit" name="action" value="set_last_contact"
                   class="btn btn-sm btn-outline-primary bulk-action-btn" disabled>Set</button>
@@ -168,7 +103,7 @@
 
         <!-- Set Cover Letter -->
         <div class="d-flex gap-1 align-items-center flex-wrap">
-          <label class="small text-muted mb-0">Cover Letter:</label>
+          <label class="small mb-0">Cover letter</label>
           <select name="bulk_cover_letter" class="form-select form-select-sm" style="width:auto;">
             <option value="1">Yes</option>
             <option value="0">No</option>
@@ -179,7 +114,7 @@
 
         <!-- Set Resume -->
         <div class="d-flex gap-1 align-items-center flex-wrap">
-          <label class="small text-muted mb-0">Resume:</label>
+          <label class="small mb-0">Resume</label>
           <select name="bulk_resume" class="form-select form-select-sm" style="width:auto;">
             <option value="1">Yes</option>
             <option value="0">No</option>
@@ -193,45 +128,60 @@
         <!-- Delete Selected -->
         <button type="submit" name="action" value="delete"
                 class="btn btn-sm btn-outline-danger bulk-action-btn" disabled id="bulkDeleteBtn">
-          <i class="bi bi-trash me-1"></i>Delete Selected
+          <i class="bi bi-trash me-1"></i>Delete selected
         </button>
 
       </div>
     </div>
   </div>
 
-  <!-- Applications Table -->
-  <div class="card border-0 shadow-sm">
-    <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-      <span class="fw-semibold">
-        <i class="bi bi-table me-2"></i>{{ apps | length }} Application(s)
+  <!-- Applications table -->
+  <div class="card">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span>
+        {{ apps | length }} application{{ '' if apps | length == 1 else 's' }}
         {% if selected_status %}
-          <span class="badge bg-info ms-2">{{ selected_status | replace('_', ' ') }}</span>
+          <span class="badge status-badge status-{{ selected_status | replace(' ', '_') }} ms-1 align-middle">{{ selected_status | status_label }}</span>
         {% endif %}
       </span>
+      <div class="d-flex gap-2 align-items-center flex-wrap" style="font-family:var(--bs-font-sans-serif);font-weight:400">
+        <label class="visually-hidden" for="statusFilter">Status</label>
+        <select id="statusFilter" name="status" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
+          <option value="">All statuses</option>
+          {% for s in status_options %}
+          <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s | status_label }}</option>
+          {% endfor %}
+        </select>
+        <label class="visually-hidden" for="sortMode">Sort by</label>
+        <select id="sortMode" name="sort" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
+          <option value="date" {% if sort_mode == 'date' %}selected{% endif %}>Newest first</option>
+          <option value="status" {% if sort_mode == 'status' %}selected{% endif %}>By status</option>
+        </select>
+        <noscript><button type="submit" form="filterForm" class="btn btn-sm btn-primary">Apply</button></noscript>
+      </div>
     </div>
     <div class="table-responsive">
       <table class="table table-hover table-sm align-middle mb-0">
-        <thead class="table-dark">
+        <thead>
           <tr>
             <th style="width:2rem;">
               <input type="checkbox" id="selectAllChk" class="form-check-input"
                      title="Select / deselect all">
             </th>
-            <th>#</th>
+            <th class="d-none d-xl-table-cell">#</th>
             <th>Company</th>
-            <th>Role / Team</th>
-            <th>Applied</th>
-            <th>Last Contact</th>
+            <th class="d-none d-md-table-cell">Role</th>
+            <th class="d-none d-sm-table-cell">Applied</th>
+            <th class="d-none d-xl-table-cell">Last contact</th>
             <th>Status</th>
-            <th>CL</th>
-            <th>CV</th>
+            <th class="d-none d-lg-table-cell text-center" title="Cover letter">CL</th>
+            <th class="d-none d-lg-table-cell text-center" title="Resume">CV</th>
             <th>Days</th>
-            <th>Chance</th>
-            <th>Contact</th>
-            <th>Comment</th>
-            <th>Link</th>
-            <th>Actions</th>
+            <th class="d-none d-xl-table-cell">Chance</th>
+            <th class="d-none d-xl-table-cell">Contact</th>
+            <th class="d-none d-lg-table-cell">Comment</th>
+            <th class="d-none d-md-table-cell">Link</th>
+            <th class="text-end d-none d-sm-table-cell"><span class="visually-hidden">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -241,12 +191,13 @@
               <input type="checkbox" name="selected_ids" value="{{ a.id }}"
                      class="form-check-input row-chk">
             </td>
-            <td class="text-muted small">{{ loop.index }}</td>
+            <td class="text-secondary small d-none d-xl-table-cell">{{ loop.index }}</td>
             <td class="fw-semibold">
               <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                  class="text-decoration-none link-body-emphasis stretched-link-cell">
                 {{ a.company }}
               </a>
+              <div class="d-md-none small text-secondary fw-normal">{{ a.job_desc }}</div>
               {% if a.is_stale %}
               <span class="badge bg-warning text-dark ms-1"
                     title="No status change in {{ stale_days }}+ days">
@@ -254,16 +205,16 @@
               </span>
               {% endif %}
             </td>
-            <td class="small text-muted">
+            <td class="small d-none d-md-table-cell">
               <div>{{ a.job_desc }}</div>
               {% if a.team %}
               <div class="text-secondary" style="font-size:.75rem;">{{ a.team }}</div>
               {% endif %}
             </td>
-            <td class="small">{{ a.date_applied }}</td>
-            <td class="small">
+            <td class="small text-nowrap d-none d-sm-table-cell">{{ a.date_applied }}</td>
+            <td class="small text-nowrap d-none d-xl-table-cell">
               {% if a.last_contact_date %}
-                <span class="text-info" title="Last contact date">
+                <span title="Last contact date">
                   <i class="bi bi-telephone-fill me-1"></i>{{ a.last_contact_date }}
                 </span>
               {% elif a.status_changed_at %}
@@ -276,23 +227,21 @@
             </td>
             <td>
               <span class="badge status-badge status-{{ a.status | replace(' ', '_') }}">
-                {{ a.status | replace('_', ' ') }}
+                {{ a.status | status_label }}
               </span>
             </td>
-            <td class="text-center">
-              {% if a.cover_letter %}<i class="bi bi-check-circle-fill text-success"></i>
-              {% else %}<i class="bi bi-x-circle-fill text-danger"></i>{% endif %}
+            <td class="text-center d-none d-lg-table-cell">
+              {% if a.cover_letter %}<i class="bi bi-check-lg text-success" title="Cover letter sent"></i>
+              {% else %}<span class="text-secondary" title="No cover letter">–</span>{% endif %}
             </td>
-            <td class="text-center">
-              {% if a.resume %}<i class="bi bi-check-circle-fill text-success"></i>
-              {% else %}<i class="bi bi-x-circle-fill text-danger"></i>{% endif %}
-            </td>
-            <td>
-              <span class="badge {% if a.duration > 120 %}bg-secondary{% elif a.duration > 60 %}bg-warning text-dark{% else %}bg-light text-dark border{% endif %}">
-                {{ a.duration }}d
-              </span>
+            <td class="text-center d-none d-lg-table-cell">
+              {% if a.resume %}<i class="bi bi-check-lg text-success" title="Resume sent"></i>
+              {% else %}<span class="text-secondary" title="No resume">–</span>{% endif %}
             </td>
             <td>
+              <span class="small text-nowrap {% if a.duration > 120 %}text-secondary{% elif a.duration > 60 %}fw-semibold text-warning-emphasis{% endif %}">{{ a.duration }}d</span>
+            </td>
+            <td class="d-none d-xl-table-cell">
               {% if a.success_chance >= 1 %}
                 <span class="badge bg-success">{{ a.success_chance }}</span>
               {% elif a.success_chance > 0 %}
@@ -301,40 +250,36 @@
                 <span class="text-muted small">—</span>
               {% endif %}
             </td>
-            <td class="small text-muted" style="max-width:120px;">
+            <td class="small text-secondary d-none d-xl-table-cell" style="max-width:120px;">
               <span class="text-truncate d-inline-block" style="max-width:120px;" title="{{ a.contact }}">
-                {{ a.contact or '—' }}
+                {{ a.contact or '' }}
               </span>
             </td>
-            <td class="small text-muted" style="max-width:160px;">
+            <td class="small text-secondary d-none d-lg-table-cell" style="max-width:160px;">
               <span class="text-truncate d-inline-block" style="max-width:160px;" title="{{ a.comment }}">
-                {{ a.comment or '—' }}
+                {{ a.comment or '' }}
               </span>
             </td>
-            <td>
+            <td class="d-none d-md-table-cell">
               {% if a.link %}
-              <a href="{{ a.link }}" target="_blank" rel="noopener"
-                 class="btn btn-outline-secondary btn-sm py-0">
+              <a href="{{ a.link }}" target="_blank" rel="noopener" title="Open job ad"
+                 class="btn btn-outline-info btn-sm py-0">
                 <i class="bi bi-box-arrow-up-right"></i>
               </a>
               {% endif %}
             </td>
-            <td class="text-nowrap">
+            <td class="text-nowrap text-end d-none d-sm-table-cell">
               {% if a.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
               {# Rows sit inside bulkForm and forms can't nest, so these buttons
                  submit bulkForm (and its CSRF token) to their own URL instead. #}
-              <button class="btn btn-outline-secondary btn-sm py-0 me-1" title="Archive"
+              <button class="btn btn-outline-info btn-sm py-0 me-1" title="Archive"
                       formaction="{{ url_for('applications.archive_application', app_id=a.id) }}"
                       onclick="return confirm('Archive this application?')">
                 <i class="bi bi-archive"></i>
               </button>
               {% endif %}
-              <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
-                 class="btn btn-outline-info btn-sm py-0 me-1" title="View details">
-                <i class="bi bi-eye"></i>
-              </a>
               <a href="{{ url_for('applications.edit_application', app_id=a.id) }}"
-                 class="btn btn-outline-primary btn-sm py-0 me-1">
+                 class="btn btn-outline-info btn-sm py-0 me-1" title="Edit">
                 <i class="bi bi-pencil"></i>
               </a>
               <button class="btn btn-outline-danger btn-sm py-0" title="Delete"
@@ -348,7 +293,7 @@
           <tr>
             <td colspan="15" class="text-center text-muted py-4">
               No applications found for {{ year }}
-              {% if selected_status %} with status <strong>{{ selected_status | replace('_', ' ') }}</strong>{% endif %}.
+              {% if selected_status %} with status <strong>{{ selected_status | status_label }}</strong>{% endif %}.
             </td>
           </tr>
           {% endfor %}
@@ -378,6 +323,7 @@
     var checked = getChecked().length;
     var total   = document.querySelectorAll('.row-chk').length;
     countLabel.textContent = checked + ' selected';
+    document.getElementById('bulkToolbar').classList.toggle('d-none', checked === 0);
     actionBtns.forEach(function (btn) { btn.disabled = checked === 0; });
     selectAllChk.checked       = total > 0 && checked === total;
     selectAllChk.indeterminate = checked > 0 && checked < total;
@@ -413,6 +359,11 @@
     if (!confirm('Delete ' + n + ' selected application(s)? This cannot be undone.')) {
       e.preventDefault();
     }
+  });
+
+  // Filter and sort apply as soon as they change.
+  document.querySelectorAll('.js-autosubmit').forEach(function (sel) {
+    sel.addEventListener('change', function () { document.getElementById('filterForm').submit(); });
   });
 
   updateUI();

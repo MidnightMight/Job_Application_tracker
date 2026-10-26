@@ -136,6 +136,14 @@ db.init_db()
 
 app.jinja_env.globals["enumerate"] = enumerate
 app.jinja_env.globals["how_applied_options"] = db.HOW_APPLIED_OPTIONS
+
+
+def _status_label(status) -> str:
+    """Status as words for display; the "Select_Status" placeholder reads "No status"."""
+    return "No status" if status in (None, "", "Select_Status") else str(status).replace("_", " ")
+
+
+app.jinja_env.filters["status_label"] = _status_label
 app.jinja_env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 
 # ---------------------------------------------------------------------------

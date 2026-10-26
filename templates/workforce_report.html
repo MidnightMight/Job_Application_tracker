@@ -92,9 +92,10 @@
   </table>
 </div>
 {% else %}
-<div class="alert alert-light border">
-  No applications with a date applied in this period.
-  <a href="{{ url_for('applications.add_application') }}">Add one</a>.
+<div class="ml-empty">
+  <strong>No applications in this fortnight yet.</strong>
+  <span>Applications show up here once they have a date applied in this period.</span>
+  <a href="{{ url_for('applications.add_application') }}" class="btn btn-warning btn-sm mt-1"><i class="bi bi-plus-lg me-1"></i>Add application</a>
 </div>
 {% endif %}
 

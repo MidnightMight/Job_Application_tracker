@@ -58,7 +58,7 @@ Job_Application_tracker/
 │   └── roadmap.md            Feasibility notes and future ideas
 │
 ├── templates/                Jinja2 HTML templates (Bootstrap 5)
-│   ├── base.html             Layout, navbar (search + theme toggle), footer
+│   ├── base.html             Layout, top bar (search, inbox, add, menu with theme toggle), footer
 │   ├── dashboard.html        Charts (Chart.js), summary cards, pending table
 │   ├── year_view.html        Per-year table, bulk-action toolbar, filter bar
 │   ├── application_form.html Add / edit form — AI fill+fit panel, industry,
@@ -76,10 +76,10 @@ Job_Application_tracker/
 │   └── login.html            Login page
 │
 └── static/
-    ├── style.css             Custom styles, status badges, dark-mode overrides
+    ├── style.css             Midnight Lite theme over Bootstrap: brand tokens, light/dark, status colours
     ├── manifest.json         PWA Web App Manifest
     ├── sw.js                 PWA service worker
-    └── icons/                PWA app icons
+    └── icons/                logo.svg (honeycomb), app icons, favicon
 ```
 
 ---

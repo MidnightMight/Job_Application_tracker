@@ -33,22 +33,21 @@ summary for the current year and charts for all tracked years.
 
 | Card / chart | What it shows |
 |---|---|
-| **Total** | All applications in the current year |
-| **Submitted** | Applications past Drafting_CV / Select_Status / Not_Applying |
+| **Applications** | All applications in the current year |
+| **Sent to employers** | Applications past Drafting_CV / Select_Status / Not_Applying |
 | **Offers** | Applications with status Offer_Received |
-| **Success Rate** | Offers ÷ Submitted × 100 |
-| **Status breakdown** | Bar chart of all applications by status |
+| **Offer rate** | Offers ÷ sent × 100 |
+| **Where they are now** | A honeycomb with one cell per status and its count this year, in your status order. Click a cell to open that year's list filtered to the status |
 | **Applications per year** | Bar chart comparing annual totals |
-| **Success rate trend** | Line chart of yearly offer rates |
+| **Offer rate per year** | Line chart of yearly offer rates |
 | **Top keywords** | Most common company notes / sectors |
-| **Pending** | Table of applications still awaiting a response |
+| **In progress** | Table of applications still being drafted, submitted or interviewing |
 
 ---
 
 ## 2. Adding a job application
 
-1. Click the **+ New Application** button in the navigation bar (or
-   **Add** on a year-view page).
+1. Click **Add application** in the top bar (the amber **+** button on a phone).
 2. Fill in the form:
 
 | Field | Required | Description |
@@ -235,8 +234,8 @@ Go to **Settings → Statuses** to manage your status list.
 
 ## 10. Reminder inbox
 
-The **bell icon** in the navbar shows a red badge when there are unread
-reminders. Click **Inbox** to view them.
+The **bell icon** in the top bar shows an amber badge with the number of unread
+reminders. Click it to open the inbox.
 
 A reminder is automatically created when an application has been in a pending
 status (e.g. `Submitted`, `Awaiting_Response`) for longer than the configured
@@ -258,7 +257,7 @@ threshold (default: **3 days**).
 
 ## 11. Importing from CSV or Excel
 
-1. Click **Import CSV** in the navigation bar.
+1. Open the menu (the person or **⋯** button at the top right) and click **Import CSV**.
 2. **Step 1 — Upload:** Select a `.csv` or `.xlsx` file. The first row must be
    column headers (any header names are fine).
 3. **Step 2 — Map Columns:** Assign each detected column to an application
@@ -341,12 +340,10 @@ Enable **Smart Job Fit Analysis** in Settings → AI Assistant. Once enabled:
 
 ## 14. Dark / light theme
 
-Click the **moon 🌙 / sun ☀️ icon** in the navigation bar to toggle between
-dark and light themes. Your preference is saved in your browser and persists
-across sessions and page reloads.
-
-- **Moon icon** = currently light → click to switch to dark
-- **Sun icon** = currently dark → click to switch to light
+The app follows your device's light or dark setting until you choose one
+yourself. To switch, open the menu (the person or **⋯** button at the top right)
+and click **Dark theme** or **Light theme**. Your choice is saved in your
+browser.
 
 ---
 
@@ -355,9 +352,9 @@ across sessions and page reloads.
 | Tip | How |
 |---|---|
 | **Today button** | On any date field, click the **Today** button to fill today's date without opening the calendar |
-| **Quick search** | Press **/** or click the search box in the navbar to jump straight to global search |
+| **Quick search** | Press **/** or click the search box in the top bar to jump straight to global search |
 | **Bulk reject** | Year view → filter by `Awaiting_Response` → select all → set status to `Rejected` → Set |
-| **Jump to year** | Click a year badge on the dashboard quick-nav or use By Year in the navbar |
+| **Jump to year** | Use **Applications** in the top bar, or the year buttons at the top of a year view |
 | **Offline access (PWA)** | On a server / Docker deployment, add the app to your home screen for fast access and cached offline pages |
 
 ---

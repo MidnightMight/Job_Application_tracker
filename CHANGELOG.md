@@ -38,6 +38,29 @@ All notable changes are documented here.  Format loosely follows
   Per-row **Copy**, **Copy all** (tab-separated) and **Download CSV**; copying
   also works over plain `http://`.
 
+### New look (Midnight Lite)
+
+- **New logo:** the Midnight Lite honeycomb (three amber hexagons around a blue
+  one) with a briefcase in the middle.  Used in the top bar, the browser tab,
+  the sign-in page and the home-screen app icon.
+- **Midnight Lite colours and type:** amber and royal blue, League Spartan headings
+  and Inter text, matching midnight-lite.com.  Dark mode uses the same midnight
+  navy and now follows your device setting until you pick a theme.
+- **Tidier top bar:** Dashboard, Applications, Companies and Report, with search,
+  the inbox bell and **Add application** on the right.  Import, Export, Settings,
+  the theme switch and Log out are in the menu at the top right.
+- **Dashboard:** a honeycomb with one cell per status and its count this year
+  (click a cell to open that list), four headline numbers, the applications in
+  progress, and smaller charts in the theme colours.  The keyword chart shows a
+  hint instead of an empty box when there is nothing to show.
+- **Year view:** filter and sort sit on the table and apply straight away; the
+  bulk-edit bar only appears once you tick a row and stays in view while you
+  scroll; phones show company, role, status and days only.
+- **Status names read as words** everywhere ("No status" instead of
+  `Select_Status`), with one colour family per stage.  Colours set in Settings →
+  Statuses still win.
+- **Press /** anywhere to jump to the search box.
+
 ### Fixes
 
 - **Search no longer crashes** when a matching application has no date applied.

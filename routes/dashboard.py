@@ -23,10 +23,15 @@ def dashboard():
     apps_per_year = db.get_apps_per_year(user_id=user_id)
     success_per_year = db.get_success_rate_per_year(user_id=user_id)
     keyword_freq = db.get_company_note_frequency(user_id=user_id)
+    # Status counts in the user's status order (unknown statuses last) for the honeycomb.
+    order = db.get_status_options(user_id=user_id)
+    pipeline = [(s, status_counts[s]) for s in order if s in status_counts]
+    pipeline += [(s, n) for s, n in status_counts.items() if s not in order]
     return render_template(
         "dashboard.html",
         stats=stats,
         status_counts=status_counts,
+        pipeline=pipeline,
         apps_per_year=apps_per_year,
         success_per_year=success_per_year,
         keyword_freq=keyword_freq,

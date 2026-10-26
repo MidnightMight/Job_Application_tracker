@@ -53,7 +53,7 @@
           <dt class="col-sm-4 text-muted">Status</dt>
           <dd class="col-sm-8">
             <span class="badge status-badge status-{{ app.status | replace(' ', '_') }}">
-              {{ app.status | replace('_', ' ') }}
+              {{ app.status | status_label }}
             </span>
             {% if app.status_changed_at %}
             <span class="text-muted small ms-2">
@@ -272,7 +272,7 @@
             <div class="timeline-content">
               <div class="fw-semibold">
                 <span class="badge status-badge status-{{ entry.status | replace(' ', '_') }}">
-                  {{ entry.status | replace('_', ' ') }}
+                  {{ entry.status | status_label }}
                 </span>
               </div>
               <div class="text-muted small mt-1">{{ entry.changed_at[:16] | replace('T', ' ') }}</div>

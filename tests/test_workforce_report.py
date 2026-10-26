@@ -165,5 +165,5 @@ def test_report_csv(client):
 
 def test_empty_report(client):
     page = client.get("/report/workforce").get_data(as_text=True)
-    assert "No applications with a date applied in this period" in page
+    assert "No applications in this fortnight yet." in page
     assert "js/workforce_report.js" in page
