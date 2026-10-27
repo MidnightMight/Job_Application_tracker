@@ -64,7 +64,8 @@
       var form = document.createElement('form');
       form.method = 'post';
       form.action = window.SETTINGS_CONFIG.urls.statusesSection;
-      [['action', 'update_status_colors'], ['name', name], ['bg_color', ''], ['text_color', '']].forEach(function (pair) {
+      [['csrf_token', document.querySelector('meta[name="csrf-token"]').content],
+       ['action', 'update_status_colors'], ['name', name], ['bg_color', ''], ['text_color', '']].forEach(function (pair) {
         var inp = document.createElement('input');
         inp.type = 'hidden'; inp.name = pair[0]; inp.value = pair[1];
         form.appendChild(inp);
@@ -135,7 +136,7 @@
     var names = getRows().map(function (r) { return r.getAttribute('data-name'); });
     fetch(window.SETTINGS_CONFIG.urls.reorderStatuses, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
       body: JSON.stringify({names: names}),
     }).then(function (resp) {
       return resp.json();

@@ -29,7 +29,7 @@
             <select name="status" class="form-select form-select-sm">
               <option value="">All statuses</option>
               {% for s in status_options %}
-              <option value="{{ s }}">{{ s | replace('_', ' ') }}</option>
+              <option value="{{ s }}">{{ s | status_label }}</option>
               {% endfor %}
             </select>
           </div>
@@ -97,6 +97,7 @@
         </p>
         <form action="{{ url_for('export.restore_db') }}" method="post" enctype="multipart/form-data" class="mt-auto"
               onsubmit="return confirm('Are you sure you want to restore from this backup? All current data will be replaced.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <div class="mb-2">
             <input type="file" name="db_file" accept=".db" class="form-control form-control-sm" required>
           </div>

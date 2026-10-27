@@ -5,6 +5,103 @@ All notable changes are documented here.  Format loosely follows
 
 ---
 
+## Unreleased
+
+### Security and Deployment
+
+- **CSRF protection** on every form and AJAX request (Flask-WTF).  Tokens last
+  for the whole session; an expired form shows "The form had expired" instead
+  of an error page.
+- **Gunicorn** replaces the Flask development server in the Docker image (one
+  worker, 4 threads, so the reminder jobs still run once).
+- **Generated secret key** — `SECRET_KEY` is now optional.  If it isn't set, a
+  random key is created once and saved as `secret_key` next to the database
+  (`/data/secret_key` in Docker).  An existing `SECRET_KEY` still wins.
+  Local installs that relied on the old built-in default get a new key, so
+  log in once more.
+- **Non-root container** — the app runs as `PUID:PGID` (default `1000:1000`).
+  On start the container takes ownership of the data folder, so databases
+  written by older (root) images stay writable.
+- **Health check** — `GET /healthz` (no login) returns `{"status": "ok"}` or
+  HTTP 503 if the database can't be read; the image's `HEALTHCHECK` uses it.
+- **Tests on every pull request** — new *Tests* workflow runs the suite and a
+  Docker smoke test (non-root user, data ownership, health check).
+
+### Workforce Australia Report
+
+- **How Applied** and **Employer Contact** fields on applications (form,
+  detail page, CSV export and import).  Added automatically on start-up; the
+  existing *Known Contact / Connection* field is unchanged.
+- **Report** page (`/report/workforce`): applications applied for in one
+  fortnight, lined up with the reporting period start date you save (per
+  user).  Rows missing how-applied or employer-contact details are flagged.
+  Per-row **Copy**, **Copy all** (tab-separated) and **Download CSV**; copying
+  also works over plain `http://`.
+
+### Next steps, insights and attachments
+
+- **Next steps** — give an application a next step and date (follow up,
+  interview, assessment due).  The dashboard's new **Coming up** list shows
+  those due in the next two weeks and any overdue; the inbox gets a reminder
+  on the due date.
+- **Calendar feed** — Settings → General makes a private `.ics` link to
+  subscribe to in any calendar app; each next step is an all-day event.
+- **Share from your phone** — on Android, an installed tracker appears in the
+  share menu; sharing a job ad opens the Add form with the link filled in, and
+  warns if that link is already saved.
+- **Saved job ad** — keep the ad text with the application (AI fill saves the
+  pasted ad automatically).
+- **Attachments** — attach the CV and cover letter you sent (PDF, Word, ODT,
+  RTF, text; up to 10 MB) on the detail page.  Stored in `/data/attachments`.
+- **Smarter duplicate warning** — also catches the same company and role
+  within 60 days and the same job ad link (archived applications included),
+  and says why.
+- **Insights** page — heard-back and interview rates, and typical reply time,
+  by how you applied and by industry.
+- **Auto-archive** — optionally archive Rejected / Not Applying / Job Expired
+  applications a set number of days after their last status change.
+- CSV export and import include the next step, next step date and saved job ad.
+- Fix: deleting an application with no date applied no longer gives an error page.
+
+### New look (Midnight Lite)
+
+- **New logo:** the Midnight Lite honeycomb (three amber hexagons around a blue
+  one) with a briefcase in the middle.  Used in the top bar, the browser tab,
+  the sign-in page and the home-screen app icon.
+- **Midnight Lite colours and type:** amber and royal blue, League Spartan headings
+  and Inter text, matching midnight-lite.com.  Dark mode uses the same midnight
+  navy and now follows your device setting until you pick a theme.
+- **Tidier top bar:** Dashboard, Applications, Companies and Report, with search,
+  the inbox bell and **Add application** on the right.  Import, Export, Settings,
+  the theme switch and Log out are in the menu at the top right.
+- **Dashboard:** a honeycomb with one cell per status and its count this year
+  (click a cell to open that list), four headline numbers, the applications in
+  progress, and smaller charts in the theme colours.  The keyword chart shows a
+  hint instead of an empty box when there is nothing to show.
+- **Year view:** filter and sort sit on the table and apply straight away; the
+  bulk-edit bar only appears once you tick a row and stays in view while you
+  scroll; phones show company, role, status and days only.
+- **Status names read as words** everywhere ("No status" instead of
+  `Select_Status`), with one colour family per stage.  Colours set in Settings →
+  Statuses still win.
+- **Press /** anywhere to jump to the search box.
+
+### Fixes
+
+- **Search no longer crashes** when a matching application has no date applied.
+- **Year view Archive and Delete buttons work again.** They sat inside the bulk-action form, so clicking one did nothing.
+- **Missing pages return "404 Not Found"** instead of "500 Internal Server Error" (and no longer fill the log with stack traces).
+- **No more service-worker error** in the browser console on every page (Docker mode).
+- **Logout is now a button that posts a form**, so another site can't log you out with a link.
+
+### After updating (Docker / NAS)
+
+- Set `PUID` / `PGID` to your NAS user's IDs (optional, default `1000`).
+- Keep `SECRET_KEY` if you already set one, or remove it to use a generated key
+  (everyone logs in again once).
+
+---
+
 ## v1.3.0 — Import Upgrades and Code Tidy-up
 
 ### New Features

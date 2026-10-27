@@ -167,7 +167,7 @@ docker pull ghcr.io/midnightmight/job_application_tracker:latest
 docker run -d \
   -p 5000:5000 \
   -v job_tracker_data:/data \
-  -e SECRET_KEY="your-secret-key-here" \
+  -e PUID=1000 -e PGID=1000 \
   --name job-tracker \
   ghcr.io/midnightmight/job_application_tracker:latest
 
@@ -217,7 +217,7 @@ docker build -t job-application-tracker:new .
 docker run -d \
   -p 5000:5000 \
   -v job_tracker_data:/data \
-  -e SECRET_KEY="your-secret-key-here" \
+  -e PUID=1000 -e PGID=1000 \
   --name job-tracker \
   job-application-tracker:new
 
@@ -229,6 +229,22 @@ docker logs job-tracker
 > to match the new image tag and run `docker compose up -d`.
 
 ---
+
+## Upgrading from v1.3.0 or earlier (Docker)
+
+The next release changes how the container runs.  Nothing has to be done for
+existing data, but check these:
+
+- **The app no longer runs as root.**  On start it hands the data folder to
+  `PUID:PGID` (default `1000:1000`) and runs as that user.  Set them to your
+  own user's IDs (`id` over SSH; on Synology the first admin is usually
+  `1026` / group `users` = `100`) so you can still open the files in File
+  Station.  Rolling back to an older image still works (root can read them).
+- **`SECRET_KEY` is optional.**  Keep your existing value set so everyone
+  stays logged in.  If you remove it, a key is generated in `/data/secret_key`
+  and everyone has to log in once more.
+- **Health check.**  Container Manager now shows the container as *healthy*
+  or *unhealthy* (from `/healthz`).
 
 ## Synology Container Manager
 
@@ -249,6 +265,8 @@ button only helps when a newer image has actually been published.
    again, and rebuild the project (or stop it, *Clean*, then *Build*) so the
    container is recreated from the new image.  Your data lives in the mounted
    `/data` folder and is kept.
+   In the container's environment variables, set `PUID` and `PGID` to your
+   DSM user's IDs (see *Upgrading from v1.3.0 or earlier* above).
 4. **Fully automatic updates** need an extra tool such as Watchtower, which
    watches running containers and recreates them when a new image appears.
    It is optional and not required by this app.
@@ -300,7 +318,7 @@ docker run --rm \
 docker run -d \
   -p 5000:5000 \
   -v job_tracker_data:/data \
-  -e SECRET_KEY="your-secret-key-here" \
+  -e PUID=1000 -e PGID=1000 \
   --name job-tracker \
   job-application-tracker:previous-tag
 ```

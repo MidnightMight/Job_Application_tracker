@@ -82,14 +82,16 @@
               {% endif %}
             </td>
             <td class="small">
+              {% if a.date_applied %}
               <a href="{{ url_for('dashboard.year_view', year=yr) }}" class="text-decoration-none">
                 {{ yr }}
               </a>
+              {% else %}—{% endif %}
             </td>
             <td class="small">{{ a.date_applied }}</td>
             <td>
               <span class="badge status-badge status-{{ a.status | replace(' ', '_') }}">
-                {{ a.status | replace('_', ' ') }}
+                {{ a.status | status_label }}
               </span>
             </td>
             <td class="small text-muted" style="max-width:260px;">

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Workforce Australia Report — Job Tracker{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <h4 class="mb-0"><i class="bi bi-clipboard-check text-primary me-2"></i>Workforce Australia Report</h4>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="copyAllBtn" {% if not rows %}disabled{% endif %}>
+      <i class="bi bi-clipboard me-1"></i>Copy all
+    </button>
+    <a class="btn btn-primary btn-sm {% if not rows %}disabled{% endif %}"
+       href="{{ url_for('report.workforce_report_csv', start=start.isoformat()) }}">
+      <i class="bi bi-download me-1"></i>Download CSV
+    </a>
+  </div>
+</div>
+
+<!-- Period navigation -->
+<div class="card shadow-sm mb-3">
+  <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-2">
+      <a class="btn btn-outline-secondary btn-sm" title="Previous fortnight"
+         href="{{ url_for('report.workforce_report', start=prev_start.isoformat()) }}">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+      <div class="text-center px-2">
+        <div class="fw-semibold">{{ start.strftime('%a %d %b') }} – {{ end.strftime('%a %d %b %Y') }}</div>
+        <div class="small text-muted">
+          {% if is_current %}Current reporting period{% else %}<a href="{{ url_for('report.workforce_report') }}">Back to current period</a>{% endif %}
+        </div>
+      </div>
+      <a class="btn btn-outline-secondary btn-sm" title="Next fortnight"
+         href="{{ url_for('report.workforce_report', start=next_start.isoformat()) }}">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </div>
+
+    <form method="post" class="d-flex flex-wrap align-items-center gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <label class="small fw-semibold mb-0" for="period_start">My reporting period starts on</label>
+      <input type="date" name="period_start" id="period_start" class="form-control form-control-sm w-auto"
+             value="{{ saved_start or start.isoformat() }}" required>
+      <button class="btn btn-outline-primary btn-sm">Save</button>
+    </form>
+  </div>
+  {% if not period_set %}
+  <div class="card-footer small text-muted">
+    <i class="bi bi-info-circle me-1"></i>Showing fortnights from this Monday. Enter any start date of one of your
+    Workforce Australia reporting periods and every fortnight lines up with yours.
+  </div>
+  {% endif %}
+</div>
+
+<p class="text-muted small mb-2">
+  <strong>{{ rows | length }}</strong> application{{ '' if rows | length == 1 else 's' }} with a date applied in this period.
+  {% if missing_count %}
+  <span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ missing_count }} missing details.</span>
+  {% endif %}
+</p>
+
+{% if rows %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle" id="reportTable">
+    <thead class="table-light">
+      <tr>
+        <th scope="col">Copy</th>
+        {% for col in columns %}<th scope="col">{{ col }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="{{ 'table-warning' if row.missing else '' }}">
+        <td class="text-nowrap">
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 copy-row-btn"
+                  title="Copy this application">
+            <i class="bi bi-clipboard"></i> Copy
+          </button>
+          {% if row.missing %}
+          <a class="btn btn-sm btn-outline-warning py-0 ms-1"
+             href="{{ url_for('applications.edit_application', app_id=row.id) }}"
+             title="Missing {{ row.missing | join(' and ') }}">
+            <i class="bi bi-pencil"></i> Add details
+          </a>
+          {% endif %}
+        </td>
+        {% for value in row['values'] %}
+        <td {% if loop.index0 == 6 %}class="text-break small"{% endif %}>{{ value }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="ml-empty">
+  <strong>No applications in this fortnight yet.</strong>
+  <span>Applications show up here once they have a date applied in this period.</span>
+  <a href="{{ url_for('applications.add_application') }}" class="btn btn-warning btn-sm mt-1"><i class="bi bi-plus-lg me-1"></i>Add application</a>
+</div>
+{% endif %}
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div class="toast align-items-center text-bg-success border-0" id="copyToast" role="status" aria-live="polite">
+    <div class="d-flex">
+      <div class="toast-body" id="copyToastBody">Copied.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/workforce_report.js') }}?v={{ app_version }}"></script>
+{% endblock %}

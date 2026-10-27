@@ -119,7 +119,7 @@ def login():
     return render_template("login.html")
 
 
-@bp.route("/logout")
+@bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
     flash("You have been logged out.", "info")

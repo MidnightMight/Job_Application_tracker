@@ -96,7 +96,7 @@
     try {
       const resp = await fetch(window.APP_FORM_CONFIG.urls.aiFill, {
         method:  'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
         body:    JSON.stringify({job_description: jd}),
       });
       const data = await resp.json();
@@ -108,6 +108,10 @@
 
       const f = data.fields;
       const filled = [];
+
+      // Keep the pasted ad with the application, unless one is already saved.
+      const adField = document.getElementById('job_ad_text');
+      if (adField && !adField.value.trim()) adField.value = jd;
 
       // Map returned fields to form inputs.
       if (f.job_desc)  { setField('job_desc',  f.job_desc);  filled.push('Role');    }

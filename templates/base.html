@@ -5,17 +5,21 @@
   <script>
     (function () {
       try {
-        var t = localStorage.getItem('jt-theme') || 'light';
+        var t = localStorage.getItem('jt-theme') ||
+          (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         document.documentElement.setAttribute('data-bs-theme', t);
       } catch (e) {}
     })();
   </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}" />
   <title>{% block title %}Job Tracker{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="icon" href="{{ url_for('static', filename='icons/icon.svg') }}" type="image/svg+xml" />
+  <link rel="icon" href="{{ url_for('static', filename='icons/favicon-32.png') }}" sizes="32x32" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ app_version }}" />
   {% if status_styles %}
   <style>
     {% for name, style in status_styles.items() %}
@@ -29,115 +33,103 @@
   {% if deployment_mode != 'local' %}
   <!-- PWA -->
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
-  <meta name="theme-color" content="#212529" />
-  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
+  <meta name="theme-color" content="#0B1730" />
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}" />
   {% endif %}
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm">
+<nav class="navbar navbar-expand-lg navbar-dark ml-navbar sticky-top">
   <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="{{ url_for('dashboard.dashboard') }}">
-      <i class="bi bi-briefcase-fill me-2 text-warning"></i>Job Tracker
+    <a class="navbar-brand ml-brand" href="{{ url_for('dashboard.dashboard') }}">
+      <img src="{{ url_for('static', filename='icons/logo.svg') }}" alt="" width="36" height="34" />Job Tracker
     </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
+    <div class="d-flex align-items-center gap-2 order-lg-last">
+      <a href="{{ url_for('inbox.inbox') }}" class="ml-icon-btn"
+         title="Reminder inbox" aria-label="Reminder inbox{% if unread_reminder_count %}, {{ unread_reminder_count }} unread{% endif %}">
+        <i class="bi bi-bell"></i>
+        {% if unread_reminder_count > 0 %}<span class="badge rounded-pill">{{ unread_reminder_count }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('applications.add_application') }}" class="btn btn-warning btn-sm px-3 d-none d-sm-inline-block">
+        <i class="bi bi-plus-lg me-1"></i>Add application
+      </a>
+      <a href="{{ url_for('applications.add_application') }}" class="ml-icon-btn d-sm-none" style="background:var(--ml-amber);color:#111;border-color:var(--ml-amber)"
+         title="Add application" aria-label="Add application"><i class="bi bi-plus-lg"></i></a>
+      <div class="dropdown">
+        <button class="ml-icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                title="{{ current_user or 'Menu' }}" aria-label="Menu">
+          <i class="bi bi-{{ 'person' if current_user else 'three-dots' }}"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end ml-menu shadow">
+          {% if login_enabled and current_user %}
+          <li><h6 class="dropdown-header">Signed in as {{ current_user }}</h6></li>
+          {% endif %}
+          <li><a class="dropdown-item" href="{{ url_for('import_.import_csv') }}"><i class="bi bi-upload"></i>Import CSV</a></li>
+          <li><a class="dropdown-item" href="{{ url_for('export.export_page') }}"><i class="bi bi-download"></i>Export</a></li>
+          <li><a class="dropdown-item" href="{{ url_for('settings_routes.settings') }}"><i class="bi bi-gear"></i>Settings</a></li>
+          <li><button type="button" class="dropdown-item" id="themeToggleBtn" aria-label="Toggle colour theme">
+            <i id="themeIcon" class="bi bi-moon-stars-fill"></i><span id="themeLabel">Dark theme</span></button></li>
+          {% if login_enabled %}
+          <li><hr class="dropdown-divider"></li>
+            {% if current_user %}
+          <li>
+            <form method="post" action="{{ url_for('auth.logout') }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <button class="dropdown-item"><i class="bi bi-box-arrow-right"></i>Log out</button>
+            </form>
+          </li>
+            {% else %}
+          <li><a class="dropdown-item" href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-in-right"></i>Log in</a></li>
+            {% endif %}
+          {% endif %}
+        </ul>
+      </div>
+      <button class="navbar-toggler ml-icon-btn border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+              aria-controls="navbarNav" aria-expanded="false" aria-label="Show navigation">
+        <i class="bi bi-list fs-4"></i>
+      </button>
+    </div>
     <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav me-auto">
+      {% set ep = request.endpoint or '' %}
+      <ul class="navbar-nav me-auto ms-lg-3">
         <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
-             href="{{ url_for('dashboard.dashboard') }}">
-            <i class="bi bi-speedometer2 me-1"></i>Dashboard
-          </a>
+          <a class="nav-link {% if ep == 'dashboard.dashboard' %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
         </li>
         <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle {% if request.endpoint == 'year_view' %}active{% endif %}"
-             href="#" role="button" data-bs-toggle="dropdown">
-            <i class="bi bi-calendar3 me-1"></i>By Year
-          </a>
-          <ul class="dropdown-menu dropdown-menu-dark">
+          <a class="nav-link dropdown-toggle {% if ep == 'dashboard.year_view' %}active{% endif %}"
+             href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Applications</a>
+          <ul class="dropdown-menu">
             {% for y in years %}
             <li><a class="dropdown-item" href="{{ url_for('dashboard.year_view', year=y) }}">{{ y }}</a></li>
             {% endfor %}
           </ul>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'companies' %}active{% endif %}"
-             href="{{ url_for('companies.companies') }}">
-            <i class="bi bi-building me-1"></i>Companies
-          </a>
+          <a class="nav-link {% if ep.startswith('companies.') %}active{% endif %}" href="{{ url_for('companies.companies') }}">Companies</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'export_page' %}active{% endif %}"
-             href="{{ url_for('export.export_page') }}">
-            <i class="bi bi-box-arrow-up me-1"></i>Export
-          </a>
+          <a class="nav-link {% if ep.startswith('report.') %}active{% endif %}" href="{{ url_for('report.workforce_report') }}">Report</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}"
-             href="{{ url_for('settings_routes.settings') }}">
-            <i class="bi bi-gear me-1"></i>Settings
-          </a>
+          <a class="nav-link {% if ep.startswith('insights.') %}active{% endif %}" href="{{ url_for('insights.insights') }}">Insights</a>
         </li>
       </ul>
-
-      <!-- Global search -->
-      <form class="d-flex me-2 my-1 my-lg-0" action="{{ url_for('dashboard.search') }}" method="get" role="search">
+      {% if update_available %}
+      <a href="{{ url_for('settings_routes.settings', section='updates') }}"
+         class="btn btn-outline-warning btn-sm me-2 my-2 my-lg-0" id="updateAvailableBadge"
+         title="A newer version is available. See Settings, Updates.">
+        <i class="bi bi-arrow-up-circle me-1"></i>Update v{{ latest_version }}
+      </a>
+      {% endif %}
+      <form class="d-flex me-lg-2 my-2 my-lg-0" action="{{ url_for('dashboard.search') }}" method="get" role="search">
         <div class="input-group input-group-sm">
-          <input type="search" name="q" class="form-control form-control-sm navbar-search-input"
-                 placeholder="Search…" aria-label="Search applications"
-                 value="{{ request.args.get('q', '') if request.endpoint == 'search' else '' }}"
-                 style="min-width:130px;max-width:200px;"
-                 autocomplete="off">
-          <button type="submit" class="btn btn-outline-secondary btn-sm" title="Search applications">
-            <i class="bi bi-search"></i>
-          </button>
+          <input type="search" name="q" class="form-control navbar-search-input"
+                 placeholder="Search applications" aria-label="Search applications"
+                 value="{{ request.args.get('q', '') if ep == 'dashboard.search' else '' }}"
+                 style="min-width:180px;" autocomplete="off">
+          <button type="submit" class="btn btn-sm" title="Search"><i class="bi bi-search"></i></button>
         </div>
       </form>
-
-      <div class="d-flex gap-2 align-items-center">
-        {% if update_available %}
-        <a href="{{ url_for('settings_routes.settings', section='updates') }}"
-           class="btn btn-success btn-sm" id="updateAvailableBadge"
-           title="A newer version is available — see Settings → Updates">
-          <i class="bi bi-arrow-up-circle me-1"></i>Update v{{ latest_version }}
-        </a>
-        {% endif %}
-        <!-- Theme toggle -->
-        <button type="button" id="themeToggleBtn"
-                class="btn btn-outline-light btn-sm" title="Toggle dark / light theme"
-                aria-label="Toggle colour theme">
-          <i id="themeIcon" class="bi bi-moon-stars-fill"></i>
-        </button>
-
-        <a href="{{ url_for('inbox.inbox') }}" class="btn btn-outline-light btn-sm position-relative" title="Reminder Inbox">
-          <i class="bi bi-bell me-1"></i>Inbox
-          {% if unread_reminder_count > 0 %}
-          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-            {{ unread_reminder_count }}
-          </span>
-          {% endif %}
-        </a>
-        <a href="{{ url_for('import_.import_csv') }}" class="btn btn-outline-light btn-sm">
-          <i class="bi bi-upload me-1"></i>Import CSV
-        </a>
-        <a href="{{ url_for('applications.add_application') }}" class="btn btn-warning btn-sm fw-semibold">
-          <i class="bi bi-plus-circle me-1"></i>New Application
-        </a>
-        {% if login_enabled %}
-          {% if current_user %}
-          <span class="text-light small ms-1"><i class="bi bi-person-circle me-1"></i>{{ current_user }}</span>
-          <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm">
-            <i class="bi bi-box-arrow-right me-1"></i>Logout
-          </a>
-          {% else %}
-          <a href="{{ url_for('auth.login') }}" class="btn btn-outline-success btn-sm">
-            <i class="bi bi-box-arrow-in-right me-1"></i>Login
-          </a>
-          {% endif %}
-        {% endif %}
-      </div>
     </div>
   </div>
 </nav>
@@ -157,7 +149,7 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer class="text-center text-muted py-3 border-top small">
+<footer class="text-center py-3 border-top small">
   Job Tracker &copy; {{ current_year_for_footer }} &mdash;
   Built by <a href="https://github.com/MidnightMight" target="_blank" rel="noopener" class="text-muted">MidnightMight</a>
   &amp; GitHub Copilot &nbsp;|&nbsp;
@@ -168,6 +160,15 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 {% block scripts %}{% endblock %}
 <script>
+  // Press / anywhere outside a text field to jump to the search box.
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey ||
+        t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) { return; }
+    var box = document.querySelector('.navbar-search-input');
+    if (box && box.offsetParent !== null) { e.preventDefault(); box.focus(); }
+  });
+
   // ── Theme toggle ──────────────────────────────────────────────────────────
   (function () {
     var btn  = document.getElementById('themeToggleBtn');
@@ -177,6 +178,8 @@
       document.documentElement.setAttribute('data-bs-theme', theme);
       try { localStorage.setItem('jt-theme', theme); } catch (e) {}
       icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+      document.getElementById('themeLabel').textContent = theme === 'dark' ? 'Light theme' : 'Dark theme';
+      document.dispatchEvent(new CustomEvent('jt-theme', { detail: theme }));
     }
 
     // Sync icon with whatever theme was applied during page load.

@@ -33,15 +33,16 @@
             <tr>
               <td class="ps-3 text-muted small">{{ loop.index }}</td>
               <td class="fw-semibold small">{{ s }}</td>
-              <td class="text-muted small">{{ s | replace('_', ' ') }}</td>
+              <td class="text-muted small">{{ s | status_label }}</td>
               <td>
                 <span class="badge status-badge status-{{ s | replace(' ', '_') }}">
-                  {{ s | replace('_', ' ') }}
+                  {{ s | status_label }}
                 </span>
               </td>
               <td class="text-end pe-3">
                 <form method="post" class="d-inline"
                       onsubmit="return confirm('Delete status \'{{ s }}\'? This will fail if any applications currently use it.')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                   <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="name" value="{{ s }}">
                   <button class="btn btn-outline-danger btn-sm py-0">
@@ -65,6 +66,7 @@
       </div>
       <div class="card-body">
         <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="action" value="add">
           <div class="mb-3">
             <label class="form-label fw-semibold">Status Name</label>

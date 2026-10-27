@@ -38,6 +38,18 @@ def clean_db():
 
 @pytest.fixture
 def client():
+    """Test client with CSRF checks off, so tests can post forms directly."""
     flask_app.config["TESTING"] = True
+    flask_app.config["WTF_CSRF_ENABLED"] = False
     with flask_app.test_client() as test_client:
         yield test_client
+
+
+@pytest.fixture
+def csrf_client():
+    """Test client with CSRF checks on, as in production."""
+    flask_app.config["TESTING"] = True
+    flask_app.config["WTF_CSRF_ENABLED"] = True
+    with flask_app.test_client() as test_client:
+        yield test_client
+    flask_app.config["WTF_CSRF_ENABLED"] = False

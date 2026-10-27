@@ -13,7 +13,8 @@ a Synology NAS (Container Manager) from
   a version is ready.
 - Publishing a GitHub release (tag like `v1.4.0`) triggers
   `.github/workflows/docker-publish.yml`, which runs the tests and pushes the
-  image (amd64 + arm64). Never merge PRs, push to `main`, or publish releases
+  image (amd64 + arm64).  `.github/workflows/tests.yml` runs the tests and a
+  Docker smoke test on every PR and on pushes to `dev`/`main`. Never merge PRs, push to `main`, or publish releases
   yourself unless explicitly asked.
 
 ## Layout
@@ -58,6 +59,14 @@ python app.py               # run locally on http://localhost:5000
   CSV export columns in `routes/export.py` so export → edit → re-import works.
 - Release tags may look like `v1.3.0`, `V1.2.4` or `V1.2.4A`;
   `update_check.parse_version` handles all of these.
+- CSRF (Flask-WTF) is on for every POST.  New `<form method="post">` needs
+  `<input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />`
+  (`test_every_post_form_has_a_csrf_token` checks this); `fetch` POSTs send
+  the `X-CSRFToken` header from `<meta name="csrf-token">` in `base.html`.
+  The `client` fixture turns CSRF off; use `csrf_client` to test it.
+- Docker runs Gunicorn with **one** worker (`gunicorn.conf.py`) because the
+  APScheduler jobs run in-process.  `docker-entrypoint.sh` chowns the data
+  folder and drops to `PUID:PGID`; `/healthz` backs the image's HEALTHCHECK.
 - Keep behaviour unchanged unless the task says otherwise. Australian English
   in user-facing text.
 
