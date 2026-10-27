@@ -12,14 +12,16 @@ from flask import (
 import openpyxl
 
 import db
+from db.connection import DB_PATH
 from .auth import login_required, current_user_id
 
 bp = Blueprint("import_", __name__)
 
 _EXCEL_EXTENSIONS = {".xlsx", ".xlsm"}
 
-# Use a project-local directory instead of /tmp to avoid path restrictions.
-_UPLOAD_TMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "_upload_tmp")
+# Kept next to the database instead of /tmp to avoid path restrictions.  Not
+# under /app: in Docker the app runs as PUID, which can only write to /data.
+_UPLOAD_TMP_DIR = os.path.join(os.path.dirname(DB_PATH), "_upload_tmp")
 os.makedirs(_UPLOAD_TMP_DIR, exist_ok=True)
 
 CSV_IMPORT_FIELDS = [
