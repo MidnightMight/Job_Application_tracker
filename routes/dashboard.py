@@ -35,6 +35,7 @@ def dashboard():
         apps_per_year=apps_per_year,
         success_per_year=success_per_year,
         keyword_freq=keyword_freq,
+        upcoming=db.get_upcoming_actions(user_id=user_id),
         current_year=current_year,
         years=db.get_dynamic_years(user_id=user_id),
     )

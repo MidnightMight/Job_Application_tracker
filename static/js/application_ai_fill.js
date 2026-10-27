@@ -109,6 +109,10 @@
       const f = data.fields;
       const filled = [];
 
+      // Keep the pasted ad with the application, unless one is already saved.
+      const adField = document.getElementById('job_ad_text');
+      if (adField && !adField.value.trim()) adField.value = jd;
+
       // Map returned fields to form inputs.
       if (f.job_desc)  { setField('job_desc',  f.job_desc);  filled.push('Role');    }
       if (f.company)   { setField('company',   f.company);   filled.push('Company'); }

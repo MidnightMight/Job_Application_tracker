@@ -153,6 +153,27 @@
           <hr class="my-3">
 
           <div class="mb-4">
+            <label for="auto_archive_days" class="form-label fw-semibold">
+              <i class="bi bi-archive me-1"></i>Auto-archive finished applications
+            </label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="number" class="form-control" id="auto_archive_days"
+                     name="auto_archive_days" min="0" max="3650"
+                     value="{{ settings.get('auto_archive_days', '0') }}"
+                     style="max-width:100px;">
+              <span class="text-secondary">days after the last status change</span>
+            </div>
+            <div class="form-text">
+              Rejected, Not Applying and Job Expired applications are moved to the archive
+              after this many days, once a day. <strong>0</strong> (the default) never archives
+              automatically. Archived applications still count in Insights and the Workforce report,
+              and can be brought back from the company page.
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <div class="mb-4">
             <label for="check_interval" class="form-label fw-semibold">
               <i class="bi bi-clock me-1"></i>Check schedule
             </label>
@@ -176,6 +197,56 @@
             <i class="bi bi-save me-1"></i>Save
           </button>
         </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-4" id="calendar">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-calendar-event me-1"></i>Calendar feed
+      </div>
+      <div class="card-body">
+        <p class="small text-secondary">
+          Puts each application's <strong>next step</strong> (follow-up, interview, assessment due…)
+          in your phone or computer calendar as an all-day event. Add the link below to your
+          calendar app as a subscription; it updates on its own. Anyone with the link can see
+          those events, so keep it private.
+        </p>
+        {% if calendar_url %}
+        <div class="input-group mb-2">
+          <input type="text" class="form-control font-monospace small" id="calendarUrl"
+                 value="{{ calendar_url }}" readonly aria-label="Calendar link">
+          <button type="button" class="btn btn-outline-secondary" id="copyCalendarUrl">
+            <i class="bi bi-clipboard me-1"></i>Copy
+          </button>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-sm btn-outline-primary"
+             href="{{ calendar_url | replace('https://', 'webcal://') | replace('http://', 'webcal://') }}">
+            <i class="bi bi-calendar-plus me-1"></i>Subscribe on this device
+          </a>
+          <form method="post" action="{{ url_for('settings_routes.settings', section='general') }}" class="m-0"
+                onsubmit="return confirm('Make a new link? Calendars using the old one stop updating.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="action" value="calendar_create">
+            <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-repeat me-1"></i>New link</button>
+          </form>
+          <form method="post" action="{{ url_for('settings_routes.settings', section='general') }}" class="m-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="action" value="calendar_remove">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Turn off</button>
+          </form>
+        </div>
+        <div class="form-text mt-2">
+          Your calendar app fetches this address itself, so it only updates where it can reach the
+          tracker: on your home network, or anywhere if you already reach the tracker from outside.
+        </div>
+        {% else %}
+        <form method="post" action="{{ url_for('settings_routes.settings', section='general') }}" class="m-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="action" value="calendar_create">
+          <button class="btn btn-primary btn-sm"><i class="bi bi-link-45deg me-1"></i>Make a calendar link</button>
+        </form>
+        {% endif %}
       </div>
     </div>
 

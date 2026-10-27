@@ -39,6 +39,43 @@
   </div>
 </div>
 
+<!-- Coming up: next steps due in the next fortnight, and overdue ones -->
+{% if upcoming %}
+<div class="card mb-4 ml-upcoming">
+  <div class="card-header d-flex align-items-center gap-2">
+    Coming up <span class="text-secondary small fw-normal">next steps for the next 2 weeks</span>
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for a in upcoming %}
+    <li class="list-group-item d-flex align-items-center gap-3">
+      <div class="ml-when {% if a.days_until < 0 %}is-overdue{% elif a.days_until == 0 %}is-today{% endif %}">
+        {% if a.days_until < 0 %}
+          <strong>{{ -a.days_until }}d</strong><span>overdue</span>
+        {% elif a.days_until == 0 %}
+          <strong class="is-word">Today</strong>
+        {% elif a.days_until == 1 %}
+          <strong class="is-word">Tmrw</strong>
+        {% else %}
+          <strong>{{ a.next_action_date[8:10] | int }}</strong><span>{{ a.next_action_date | month_short }}</span>
+        {% endif %}
+      </div>
+      <div class="flex-grow-1 min-w-0">
+        <div class="fw-semibold text-truncate">{{ a.next_action or 'Next step' }}</div>
+        <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
+           class="small text-secondary text-decoration-none text-truncate d-block">
+          {{ a.company }}{% if a.job_desc %} · {{ a.job_desc }}{% endif %}
+        </a>
+      </div>
+      <a href="{{ url_for('applications.edit_application', app_id=a.id) }}"
+         class="btn btn-outline-info btn-sm py-0" title="Edit" aria-label="Edit {{ a.company }}">
+        <i class="bi bi-pencil"></i>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 <!-- Honeycomb: one cell per status, in the order set in Settings -->
 <div class="mb-4">
     <div class="card ml-hive-card">

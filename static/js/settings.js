@@ -265,3 +265,26 @@ if (checkBtn) {
     }
   });
 }
+
+// ── Calendar feed: copy the private link ──────────────────────────────────
+// navigator.clipboard needs https:// or localhost; plain http:// falls back to execCommand.
+(function () {
+  const btn = document.getElementById('copyCalendarUrl');
+  const input = document.getElementById('calendarUrl');
+  if (!btn || !input) return;
+  btn.addEventListener('click', async () => {
+    let ok = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(input.value);
+        ok = true;
+      } else {
+        input.select();
+        ok = document.execCommand('copy');
+      }
+    } catch (e) { ok = false; }
+    btn.innerHTML = ok ? '<i class="bi bi-check2 me-1"></i>Copied'
+                       : '<i class="bi bi-clipboard me-1"></i>Select and copy';
+    if (!ok) { input.select(); }
+  });
+})();

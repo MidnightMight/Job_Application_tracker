@@ -50,6 +50,7 @@ def export_applications():
         "cover_letter", "resume", "duration", "success_chance",
         "link", "contact", "comment", "additional_notes",
         "job_expiry_date", "industry", "how_applied", "employer_contact",
+        "next_action", "next_action_date", "job_ad_text",
         "last_modified_at",
     ]
     output = io.StringIO()

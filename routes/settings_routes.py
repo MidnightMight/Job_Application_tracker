@@ -12,6 +12,7 @@ from werkzeug.security import generate_password_hash
 
 import db
 from .auth import login_required, admin_required, current_user_id, is_current_user_admin
+from .calendar_feed import calendar_feed_url, new_calendar_token, remove_calendar_token
 
 bp = Blueprint("settings_routes", __name__)
 
@@ -67,6 +68,13 @@ def settings():
             if rejected_unit in ("days", "weeks"):
                 db.set_setting("rejected_threshold_unit", rejected_unit)
 
+            archive_days = request.form.get("auto_archive_days", "0").strip() or "0"
+            if archive_days.isdigit() and int(archive_days) <= 3650:
+                db.set_setting("auto_archive_days", str(int(archive_days)))
+            else:
+                flash("Auto-archive days must be a whole number (0 turns it off).", "danger")
+                return redirect(url_for("settings_routes.settings", section="general"))
+
             # Check schedule interval
             _valid_intervals = {"1h", "6h", "12h", "1d", "2d", "3d", "7d"}
             check_interval = request.form.get("check_interval", "1h").strip()
@@ -79,6 +87,15 @@ def settings():
 
             flash("General settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="general"))
+
+        elif action in ("calendar_create", "calendar_remove"):
+            if action == "calendar_create":
+                new_calendar_token(user_id)
+                flash("New calendar link made. Any calendar using the old link stops updating.", "success")
+            else:
+                remove_calendar_token(user_id)
+                flash("Calendar link turned off.", "warning")
+            return redirect(url_for("settings_routes.settings", section="general") + "#calendar")
 
         elif action == "save_security":
             if not is_admin:
@@ -273,6 +290,7 @@ def settings():
         current_is_admin=is_admin,
         user_ai_settings=user_ai_cfg,
         profile_ai_enabled=(admin_ai_on or user_ai_on),
+        calendar_url=calendar_feed_url(user_id),
     )
 
 

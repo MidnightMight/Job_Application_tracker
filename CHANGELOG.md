@@ -38,6 +38,31 @@ All notable changes are documented here.  Format loosely follows
   Per-row **Copy**, **Copy all** (tab-separated) and **Download CSV**; copying
   also works over plain `http://`.
 
+### Next steps, insights and attachments
+
+- **Next steps** — give an application a next step and date (follow up,
+  interview, assessment due).  The dashboard's new **Coming up** list shows
+  those due in the next two weeks and any overdue; the inbox gets a reminder
+  on the due date.
+- **Calendar feed** — Settings → General makes a private `.ics` link to
+  subscribe to in any calendar app; each next step is an all-day event.
+- **Share from your phone** — on Android, an installed tracker appears in the
+  share menu; sharing a job ad opens the Add form with the link filled in, and
+  warns if that link is already saved.
+- **Saved job ad** — keep the ad text with the application (AI fill saves the
+  pasted ad automatically).
+- **Attachments** — attach the CV and cover letter you sent (PDF, Word, ODT,
+  RTF, text; up to 10 MB) on the detail page.  Stored in `/data/attachments`.
+- **Smarter duplicate warning** — also catches the same company and role
+  within 60 days and the same job ad link (archived applications included),
+  and says why.
+- **Insights** page — heard-back and interview rates, and typical reply time,
+  by how you applied and by industry.
+- **Auto-archive** — optionally archive Rejected / Not Applying / Job Expired
+  applications a set number of days after their last status change.
+- CSV export and import include the next step, next step date and saved job ad.
+- Fix: deleting an application with no date applied no longer gives an error page.
+
 ### New look (Midnight Lite)
 
 - **New logo:** the Midnight Lite honeycomb (three amber hexagons around a blue

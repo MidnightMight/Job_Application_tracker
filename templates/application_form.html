@@ -288,6 +288,32 @@
               <div class="form-text">0 = none · 0.1 = EOI · 1 = offer · 1.5 = multiple</div>
             </div>
 
+            <!-- Next step (dashboard "Coming up", inbox reminder, calendar feed) -->
+            <div class="col-md-8">
+              <label class="form-label fw-semibold" for="next_action">
+                <i class="bi bi-flag text-warning me-1"></i>Next step
+              </label>
+              <input type="text" name="next_action" id="next_action" class="form-control"
+                     list="next-action-list" maxlength="200"
+                     value="{{ app.next_action if app and app.next_action else '' }}"
+                     placeholder="e.g. Follow up with recruiter, Phone interview 10am">
+              <datalist id="next-action-list">
+                <option value="Follow up">
+                <option value="Phone interview">
+                <option value="Video interview">
+                <option value="Interview">
+                <option value="Online assessment due">
+                <option value="Send thank-you email">
+                <option value="Submit application">
+              </datalist>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="next_action_date">Next step date</label>
+              <input type="date" name="next_action_date" id="next_action_date" class="form-control"
+                     value="{{ app.next_action_date if app and app.next_action_date else '' }}">
+              <div class="form-text">Shows on the dashboard, in the inbox when due, and in your calendar feed.</div>
+            </div>
+
             <!-- Link -->
             <div class="col-12">
               <label class="form-label fw-semibold">Application Link</label>
@@ -329,6 +355,17 @@
               <label class="form-label fw-semibold">Additional Notes</label>
               <textarea name="additional_notes" id="additional_notes" class="form-control" rows="4"
                         placeholder="Preparation notes, salary expectations, questions to ask, impressions…">{{ app.additional_notes if app else '' }}</textarea>
+            </div>
+
+            <!-- Saved copy of the job ad -->
+            <div class="col-12">
+              <label class="form-label fw-semibold" for="job_ad_text">
+                <i class="bi bi-file-earmark-text text-info me-1"></i>Job ad (saved copy)
+              </label>
+              <textarea name="job_ad_text" id="job_ad_text" class="form-control" rows="4"
+                        placeholder="Paste the job ad here so you still have it after the listing comes down.">{{ app.job_ad_text if app and app.job_ad_text else '' }}</textarea>
+              <div class="form-text">Ads usually disappear before the interview. AI fill saves the pasted ad here for you.
+                Attach the CV and cover letter you sent from the application's page after saving.</div>
             </div>
 
             <!-- Industry / Sector -->
@@ -415,26 +452,29 @@
     <div class="modal-content border-danger">
       <div class="modal-header bg-danger text-white">
         <h5 class="modal-title">
-          <i class="bi bi-exclamation-octagon-fill me-2"></i>Duplicate Application Detected
+          <i class="bi bi-exclamation-octagon-fill me-2"></i>You may have applied for this already
         </h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p class="mb-2">An application with the same company, role, and date already exists:</p>
+        <p class="mb-2">You already have:</p>
         <ul class="mb-3">
           {% for d in duplicates %}
-          <li>
+          <li class="mb-1">
             <strong>{{ d.company }}</strong> — {{ d.job_desc or '(no role)' }}
-            on {{ d.date_applied }}
-            <span class="badge bg-secondary ms-1">{{ d.status | status_label }}</span>
+            {% if d.date_applied %}applied {{ d.date_applied }}{% else %}(not applied yet){% endif %}
+            <span class="badge status-badge status-{{ d.status | replace(' ', '_') }} ms-1">{{ d.status | status_label }}</span>
+            {% if d.archived %}<span class="badge bg-light text-dark border ms-1">Archived</span>{% endif %}
             <a href="{{ url_for('applications.application_detail', app_id=d.id) }}" target="_blank"
                class="ms-1 small text-primary">View</a>
+            <div class="small text-muted">
+              {% if d.reason == 'link' %}Same job ad link.{% else %}Same company and role within {{ duplicate_window_days }} days.{% endif %}
+            </div>
           </li>
           {% endfor %}
         </ul>
         <p class="mb-0 text-muted small">
-          This may be a duplicate caused by accidentally submitting the form twice.
-          Click <strong>Add Anyway</strong> only if this is genuinely a new application.
+          Click <strong>Add Anyway</strong> if this is a new application, for example a re-advertised role.
         </p>
       </div>
       <div class="modal-footer">

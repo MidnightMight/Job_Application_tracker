@@ -144,6 +144,18 @@ def _status_label(status) -> str:
 
 
 app.jinja_env.filters["status_label"] = _status_label
+
+
+def _month_short(value) -> str:
+    """"2026-11-03" -> "Nov" (blank when it isn't a date)."""
+    from datetime import date as _date
+    try:
+        return _date.fromisoformat(str(value)[:10]).strftime("%b")
+    except ValueError:
+        return ""
+
+
+app.jinja_env.filters["month_short"] = _month_short
 app.jinja_env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 
 # ---------------------------------------------------------------------------
@@ -162,6 +174,8 @@ from routes.api             import bp as api_bp
 from routes.export          import bp as export_bp
 from routes.admin_db        import bp as admin_db_bp
 from routes.report          import bp as report_bp
+from routes.insights        import bp as insights_bp
+from routes.calendar_feed   import bp as calendar_feed_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(onboarding_bp)
@@ -175,13 +189,15 @@ app.register_blueprint(api_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(admin_db_bp)
 app.register_blueprint(report_bp)
+app.register_blueprint(insights_bp)
+app.register_blueprint(calendar_feed_bp)
 
 # ---------------------------------------------------------------------------
 # Onboarding gate
 # ---------------------------------------------------------------------------
 
 _ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "auth.setup_password", "static",
-                      "healthz"}
+                      "healthz", "calendar_feed.feed"}
 
 
 @app.before_request
@@ -303,8 +319,35 @@ def _check_and_create_reminders():
                 f"for {app_record['duration']} days."
             )
             db.create_reminder(app_record["id"], msg)
+        _create_next_step_reminders()
     except Exception:
         logger.exception("Reminder check failed")
+
+
+def _create_next_step_reminders():
+    """Inbox reminder when an application's next step is due (once per due date)."""
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    for app_record in db.get_due_next_steps_without_reminder():
+        what = (app_record.get("next_action") or "").strip() or "Next step"
+        when = "today" if app_record["next_action_date"][:10] == today else (
+            f"overdue since {app_record['next_action_date'][:10]}")
+        msg = (f"{what} for '{app_record['job_desc'] or 'Application'}' at "
+               f"{app_record['company']} is due {when}.")
+        db.create_reminder(app_record["id"], msg, reminder_type="next_step")
+
+
+def _auto_archive_finished_applications():
+    """Scheduled task: archive Rejected / Not Applying / Job Expired applications
+    after the number of days set in Settings (0 = off)."""
+    try:
+        days = int(db.get_setting("auto_archive_days", "0") or 0)
+        if days > 0:
+            count = db.auto_archive_finished(days)
+            if count:
+                logger.info("Auto-archived %s finished application(s)", count)
+    except Exception:
+        logger.exception("Auto-archive failed")
 
 
 def _check_stale_submitted_applications():
@@ -414,6 +457,7 @@ if _scheduler_enabled():
     _init_kwargs = _interval_kwargs()
     _scheduler.add_job(_check_and_create_reminders, "interval", id="reminders", **_init_kwargs)
     _scheduler.add_job(_check_stale_submitted_applications, "interval", id="stale_check", **_init_kwargs)
+    _scheduler.add_job(_auto_archive_finished_applications, "interval", id="auto_archive", hours=24)
     # Daily update check; first run straight away in the background.
     from datetime import datetime as _datetime
     _scheduler.add_job(_check_for_update, "interval", id="update_check", hours=24,
@@ -421,6 +465,7 @@ if _scheduler_enabled():
     _scheduler.start()
     _check_and_create_reminders()
     _check_stale_submitted_applications()
+    _auto_archive_finished_applications()
 
 
 # ---------------------------------------------------------------------------

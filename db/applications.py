@@ -226,8 +226,9 @@ def add_application(data, user_id=None) -> int:
             cover_letter, resume, comment, success_chance, link,
             contact, additional_notes, status_changed_at, last_contact_date,
             last_modified_at, job_expiry_date, industry, user_id,
-            how_applied, employer_contact)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            how_applied, employer_contact, next_action, next_action_date,
+            job_ad_text)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
@@ -249,6 +250,9 @@ def add_application(data, user_id=None) -> int:
             user_id,
             (data.get("how_applied") or "").strip(),
             (data.get("employer_contact") or "").strip(),
+            (data.get("next_action") or "").strip(),
+            data.get("next_action_date") or None,
+            (data.get("job_ad_text") or "").strip(),
         ),
     )
     app_id = cur.lastrowid
@@ -311,6 +315,9 @@ def update_application(app_id: int, data):
         or existing.get("industry")              != (data.get("industry")           or None)
         or (existing.get("how_applied")      or "") != (data.get("how_applied")      or "").strip()
         or (existing.get("employer_contact") or "") != (data.get("employer_contact") or "").strip()
+        or (existing.get("next_action")      or "") != (data.get("next_action")      or "").strip()
+        or existing.get("next_action_date")      != (data.get("next_action_date")  or None)
+        or (existing.get("job_ad_text")      or "") != (data.get("job_ad_text")      or "").strip()
     )
 
     live_cols: list = []
@@ -326,6 +333,7 @@ def update_application(app_id: int, data):
                cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
                contact=?, additional_notes=?, last_contact_date=?,
                job_expiry_date=?, industry=?, how_applied=?, employer_contact=?,
+               next_action=?, next_action_date=?, job_ad_text=?,
                status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END,
                last_modified_at=CASE WHEN ? THEN ? ELSE last_modified_at END
                WHERE id=?""",
@@ -347,6 +355,9 @@ def update_application(app_id: int, data):
                 data.get("industry")          or None,
                 (data.get("how_applied")      or "").strip(),
                 (data.get("employer_contact") or "").strip(),
+                (data.get("next_action")      or "").strip(),
+                data.get("next_action_date")  or None,
+                (data.get("job_ad_text")      or "").strip(),
                 new_status,
                 now,
                 1 if _changed else 0,
@@ -380,6 +391,9 @@ def update_application(app_id: int, data):
 
 
 def delete_application(app_id: int, user_id=None):
+    from .attachments import remove_files_for_applications
+
+    remove_files_for_applications([app_id], user_id=user_id)
     conn = get_connection()
     if user_id is not None:
         conn.execute("DELETE FROM applications WHERE id=? AND user_id=?", (app_id, user_id))
@@ -394,6 +408,9 @@ def bulk_delete_applications(ids: list, user_id=None) -> int:
     When user_id is given, only deletes applications owned by that user."""
     if not ids:
         return 0
+    from .attachments import remove_files_for_applications
+
+    remove_files_for_applications(ids, user_id=user_id)
     placeholders = ",".join("?" for _ in ids)
     conn = get_connection()
     if user_id is not None:
@@ -639,29 +656,122 @@ def _dup_key(company: str, job_desc: str, team: str, date_applied: str) -> tuple
     )
 
 
-def find_duplicate_applications(
-    company: str, job_desc: str, date_applied: str, team: str = "", user_id=None
-) -> list[dict]:
-    """Return existing applications that match company, job_desc, team, and date_applied.
+# Applying for the same company and role again within this many days is
+# flagged as a possible duplicate when adding an application.
+DUPLICATE_WINDOW_DAYS = 60
 
-    Comparison is case-insensitive and ignores leading/trailing whitespace.
-    Different teams at the same company on the same date are NOT duplicates.
-    When user_id is given, only searches within that user's applications.
+
+def find_duplicate_applications(
+    company: str, job_desc: str, date_applied: str, team: str = "", user_id=None,
+    link: str = "", window_days: int = DUPLICATE_WINDOW_DAYS,
+) -> list[dict]:
+    """Return existing applications that look like the one being added.
+
+    A match is either the same job ad link, or the same company, role and team
+    (case-insensitive, whitespace ignored) with a date applied within
+    *window_days* of *date_applied*.  Undated applications only match other
+    undated ones.  Different teams at the same company are NOT duplicates.
+    Archived applications count: applying again after a rejection is worth
+    knowing about.  When user_id is given, only that user's applications are
+    searched.  Each result has a "reason" of "link" or "role".
     """
+    company_key, role_key, team_key, date_key = _dup_key(company, job_desc, team, date_applied)
+    link = (link or "").strip()
     conn = get_connection()
-    sql = """SELECT id, company, job_desc, team, date_applied, status
+    sql = """SELECT id, company, job_desc, team, date_applied, status, archived,
+                  CASE WHEN ? != '' AND TRIM(COALESCE(link, '')) = ? THEN 'link'
+                       ELSE 'role' END AS reason
            FROM applications
-           WHERE LOWER(TRIM(company))  = ?
-             AND LOWER(TRIM(job_desc)) = ?
-             AND LOWER(TRIM(COALESCE(team, ''))) = ?
-             AND date_applied          = ?"""
-    params = list(_dup_key(company, job_desc, team, date_applied))
+           WHERE ((? != '' AND TRIM(COALESCE(link, '')) = ?)
+              OR (LOWER(TRIM(company))  = ?
+                  AND LOWER(TRIM(job_desc)) = ?
+                  AND LOWER(TRIM(COALESCE(team, ''))) = ?
+                  AND (COALESCE(date_applied, '') = ?
+                       OR ABS(julianday(date_applied) - julianday(?)) <= ?)))"""
+    params: list = [link, link, link, link, company_key, role_key, team_key,
+                    date_key or "", date_key or None, window_days]
     if user_id is not None:
         sql += " AND user_id = ?"
         params.append(user_id)
+    sql += " ORDER BY date_applied DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_upcoming_actions(user_id=None, days: int = 14) -> list[dict]:
+    """Applications with a next step due within *days* days, or already overdue.
+
+    Soonest first.  Each gets "days_until" (negative when overdue).
+    """
+    conn = get_connection()
+    sql = """SELECT * FROM applications
+           WHERE COALESCE(archived, 0) = 0
+             AND COALESCE(next_action_date, '') != ''
+             AND julianday(next_action_date) <= julianday('now', 'localtime', 'start of day') + ?"""
+    params: list = [days]
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    sql += " ORDER BY next_action_date, company"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    today = date.today()
+    result = []
+    for r in rows:
+        a = dict(r)
+        try:
+            a["days_until"] = (date.fromisoformat(a["next_action_date"][:10]) - today).days
+        except ValueError:
+            continue
+        result.append(a)
+    return result
+
+
+def get_calendar_actions(user_id=None) -> list[dict]:
+    """Every non-archived application with a next-step date, for the calendar feed."""
+    conn = get_connection()
+    sql = """SELECT id, company, job_desc, team, status, link, next_action,
+                  next_action_date, last_modified_at
+           FROM applications
+           WHERE COALESCE(archived, 0) = 0 AND COALESCE(next_action_date, '') != ''"""
+    params: list = []
+    if user_id is not None:
+        sql += " AND user_id = ?"
+        params.append(user_id)
+    sql += " ORDER BY next_action_date"
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# Statuses that may be archived, by hand or automatically.
+ARCHIVABLE_STATUSES = ("Rejected", "Not_Applying", "Job_Expired")
+
+
+def auto_archive_finished(days: int) -> int:
+    """Archive applications that have sat in an archivable status for *days* days.
+
+    The age is taken from the last status change (or the date applied when
+    that is missing).  Returns the number archived.
+    """
+    if days < 1:
+        return 0
+    now = datetime.now().isoformat(timespec="seconds")
+    placeholders = ",".join("?" for _ in ARCHIVABLE_STATUSES)
+    conn = get_connection()
+    cur = conn.execute(
+        f"""UPDATE applications SET archived=1, archived_at=?, last_modified_at=?
+            WHERE COALESCE(archived, 0) = 0
+              AND status IN ({placeholders})
+              AND julianday('now', 'localtime')
+                  - julianday(substr(COALESCE(NULLIF(status_changed_at, ''), date_applied), 1, 10)) >= ?""",
+        (now, now, *ARCHIVABLE_STATUSES, days),
+    )
+    count = cur.rowcount
+    conn.commit()
+    conn.close()
+    return count
 
 
 # ── Bulk import ──────────────────────────────────────────────────────────────
@@ -672,7 +782,8 @@ IMPORTABLE_FIELDS = (
     "company", "job_desc", "team", "date_applied", "status",
     "cover_letter", "resume", "success_chance", "link", "contact",
     "comment", "additional_notes", "industry", "job_expiry_date",
-    "how_applied", "employer_contact",
+    "how_applied", "employer_contact", "next_action", "next_action_date",
+    "job_ad_text",
 )
 
 _DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d")
@@ -725,7 +836,7 @@ def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
         raw = row.get(key)
         value = raw.strip() if isinstance(raw, str) else raw
 
-        if key in ("date_applied", "job_expiry_date"):
+        if key in ("date_applied", "job_expiry_date", "next_action_date"):
             parsed = _parse_date(value or "")
             if parsed is None:
                 warnings.append(f"{label}: could not read {key} '{value}' — left blank.")

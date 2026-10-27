@@ -9,7 +9,7 @@
  * automatically invalidates the previous cache on activate.
  */
 
-const CACHE_NAME = 'job-tracker-v2';
+const CACHE_NAME = 'job-tracker-v3';
 
 const PRECACHE_URLS = [
   '/static/manifest.json',
@@ -61,6 +61,10 @@ self.addEventListener('fetch', event => {
   // Skip API calls — always go to the network for live data
   const url = new URL(request.url);
   if (url.pathname.startsWith('/api/')) return;
+
+  // Never keep copies of attached CVs, calendar feeds or one-off share hand-offs.
+  if (url.pathname.startsWith('/attachments/') || url.pathname.startsWith('/calendar/')
+      || url.pathname === '/share') return;
 
   // --- Navigation requests (HTML pages) — Network-first ---
   if (request.mode === 'navigate') {

@@ -23,6 +23,11 @@ bulk operations, searching, and exporting your data.
 14. [Dark / light theme](#14-dark--light-theme)
 15. [Keyboard shortcuts and tips](#15-keyboard-shortcuts-and-tips)
 16. [Workforce Australia report](#16-workforce-australia-report)
+17. [Next steps and the calendar feed](#17-next-steps-and-the-calendar-feed)
+18. [Adding a job from your phone's share menu](#18-adding-a-job-from-your-phones-share-menu)
+19. [Saved job ads and attachments](#19-saved-job-ads-and-attachments)
+20. [Insights](#20-insights)
+21. [Auto-archive](#21-auto-archive)
 
 ---
 
@@ -37,6 +42,7 @@ summary for the current year and charts for all tracked years.
 | **Sent to employers** | Applications past Drafting_CV / Select_Status / Not_Applying |
 | **Offers** | Applications with status Offer_Received |
 | **Offer rate** | Offers ÷ sent × 100 |
+| **Coming up** | Next steps due in the next two weeks, and any overdue ones (see [section 17](#17-next-steps-and-the-calendar-feed)). Hidden when there are none |
 | **Where they are now** | A honeycomb with one cell per status and its count this year, in your status order. Click a cell to open that year's list filtered to the status |
 | **Applications per year** | Bar chart comparing annual totals |
 | **Offer rate per year** | Line chart of yearly offer rates |
@@ -66,12 +72,20 @@ summary for the current year and charts for all tracked years.
 | **Success Chance** | — | Your personal estimate (0–1 or percentage) |
 | **Comment** | — | Short note about the application |
 | **Additional Notes** | — | Longer free-text notes |
+| **Next step** / **Next step date** | — | What happens next and when (follow up, interview, assessment due) — see [section 17](#17-next-steps-and-the-calendar-feed) |
+| **Job ad (saved copy)** | — | The ad text, kept after the listing comes down. AI fill saves the pasted ad here |
 
 3. Click **Save Application**. The application is added to the year matching
    **Date Applied**.
 
 > **Tip:** If you leave a required field blank, a validation modal highlights
 > the missing field rather than silently failing.
+
+**Possible duplicates.** Before saving, the tracker checks whether you already
+have the same company and role (and team) with a date applied within 60 days,
+or any application with the same job ad link — including archived ones. If so
+it lists them with their status; click **Add Anyway** to save regardless (for
+example, a re-advertised role).
 
 ---
 
@@ -388,4 +402,80 @@ block the newer clipboard API.
 > The report helps you keep and copy your records; it does not send anything
 > to Workforce Australia.  Check their site or your provider for what you must
 > report and by when.
+
+---
+
+## 17. Next steps and the calendar feed
+
+Give an application a **Next step** and **Next step date** on its form — for
+example "Phone interview" on the 5th, or "Follow up" in a week. Then:
+
+- the dashboard's **Coming up** list shows it for the two weeks before it's
+  due, and marks it **Today** or **overdue**;
+- the inbox gets a reminder on the day it's due (once per date; change the
+  date and you'll get a new one when the new date arrives). This follows the
+  **Enable reminder notifications** switch in Settings;
+- it appears in your calendar if you've set up the feed.
+
+**Calendar feed.** In **Settings → General → Calendar feed**, click **Make a
+calendar link**, then add the link to your calendar app as a subscription
+(**Subscribe on this device** does this on iPhone, iPad and Mac; in Google
+Calendar use *Other calendars → From URL*). Every next step shows as an
+all-day event and updates on its own. Calendar apps can't log in, so the link
+holds a private code: anyone with it can see those events. **New link**
+replaces it (the old one stops working) and **Turn off** removes it. The
+calendar app has to be able to reach the tracker, so it updates only on your
+home network unless the tracker is reachable from outside.
+
+## 18. Adding a job from your phone's share menu
+
+Install the tracker on your phone's home screen (Chrome menu → *Add to Home
+screen* / *Install app*). Then, on a job ad in SEEK, LinkedIn or a browser,
+tap **Share → Job Tracker**: the Add form opens with the link filled in (and
+the role, when the sharing app sends a title). Paste the ad into **AI fill**
+or fill in the rest. If that link is already saved, you're told which
+application has it.
+
+This uses the Web Share Target feature, which works on Android (Chrome, Edge,
+Samsung Internet). iPhones don't offer installed web apps in the share menu —
+copy the link and use **Add application** instead. Installing the app needs
+the tracker to be opened over `https://` (or on the device itself).
+
+## 19. Saved job ads and attachments
+
+- **Job ad (saved copy)** on the form keeps the ad text with the application,
+  so you can reread it before an interview after the listing has gone. When
+  you use AI fill, the pasted ad is saved here automatically. The detail page
+  shows it under **Job ad (saved copy)** — click **Show**.
+- **What you sent** on the detail page holds the exact CV, cover letter or
+  other files you sent (PDF, Word, ODT, RTF or text, up to 10 MB each). Click a
+  file to download it, × to remove it. Files are stored in an `attachments`
+  folder next to the database (`/data/attachments` in Docker) and are deleted
+  with their application. The **Full database** download does not include
+  them — back up the whole data folder to keep them.
+
+## 20. Insights
+
+**Insights** in the top bar compares how your applications did, for all years
+or one year. It only looks at applications sent to employers (Submitted or
+later), including archived ones.
+
+| Measure | Meaning |
+|---|---|
+| **Heard back** | Reached an assessment, interview, offer or rejection at any point |
+| **Assessment or interview** | Reached an online assessment, interview or offer at any point |
+| **Typical reply** | Median days from applying to the first reply, counted from when you changed the status in the tracker. Applications added already at interview or rejected are left out of this one |
+
+Results are broken down **by how you applied** and **by industry** (each tag
+counts separately). Groups with fewer than 5 applications are marked *few* —
+treat those percentages with care. Statuses you've added yourself count as
+sent, not as a reply.
+
+## 21. Auto-archive
+
+In **Settings → General**, set **Auto-archive finished applications** to a
+number of days to have Rejected, Not Applying and Job Expired applications
+archived automatically that many days after their last status change (checked
+once a day). **0**, the default, turns it off. Archived applications leave the
+year view but still count in Insights and the Workforce Australia report.
 

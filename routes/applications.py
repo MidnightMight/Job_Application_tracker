@@ -1,12 +1,14 @@
 """Application CRUD and bulk-action routes."""
 
 import logging
+import os
+import re
 from datetime import date
 from types import SimpleNamespace
 
 from flask import (
-    Blueprint, flash, redirect, render_template,
-    request, url_for,
+    Blueprint, abort, flash, redirect, render_template,
+    request, send_file, session, url_for,
 )
 
 import db
@@ -30,7 +32,66 @@ def application_detail(app_id):
         "application_detail.html",
         app=application,
         timeline=timeline,
+        attachments=db.get_attachments(app_id),
+        attachment_kinds=db.ATTACHMENT_KINDS,
+        attachment_types=", ".join(sorted(db.ALLOWED_EXTENSIONS)),
     )
+
+
+def _form_values(source) -> SimpleNamespace:
+    """Values to show in the add form, from a submitted form or a shared link."""
+    return SimpleNamespace(
+        job_desc=source.get("job_desc", ""),
+        company=source.get("company", ""),
+        team=source.get("team", ""),
+        contact=source.get("contact", ""),
+        how_applied=source.get("how_applied", ""),
+        employer_contact=source.get("employer_contact", ""),
+        date_applied=source.get("date_applied", ""),
+        status=source.get("status", "Select_Status"),
+        success_chance=source.get("success_chance", "0"),
+        link=source.get("link", ""),
+        cover_letter=1 if source.get("cover_letter") else 0,
+        resume=1 if source.get("resume") else 0,
+        comment=source.get("comment", ""),
+        additional_notes=source.get("additional_notes", ""),
+        job_expiry_date=source.get("job_expiry_date", ""),
+        industry=source.get("industry", ""),
+        next_action=source.get("next_action", ""),
+        next_action_date=source.get("next_action_date", ""),
+        job_ad_text=source.get("job_ad_text", ""),
+        ai_fit_score=None,
+        ai_fit_verdict=None,
+        ai_matching_skills=None,
+        ai_skill_gaps=None,
+        ai_recommendation=None,
+        last_modified_at=None,
+        last_contact_date=source.get("last_contact_date", ""),
+    )
+
+
+_URL_RE = re.compile(r"https?://\S+")
+
+
+@bp.route("/share")
+def share():
+    """PWA share target: a job ad shared from the phone opens the add form.
+
+    Not behind login_required on purpose: it only stashes the shared link and
+    title in the session, so the add form (which is) can pick them up even
+    when the user has to log in first.
+    """
+    title = request.args.get("title", "").strip()
+    text = request.args.get("text", "").strip()
+    link = request.args.get("url", "").strip()
+    if not link.startswith(("http://", "https://")):
+        # Many apps put the link in the text instead of the url field.
+        found = _URL_RE.search(text) or _URL_RE.search(title)
+        link = found.group(0) if found else ""
+    if link:
+        title = title.replace(link, "").strip()
+    session["share_prefill"] = {"link": link[:2000], "job_desc": title[:200]}
+    return redirect(url_for("applications.add_application"))
 
 
 @bp.route("/application/add", methods=["GET", "POST"])
@@ -45,42 +106,19 @@ def add_application():
 
         if request.form.get("force_add") != "1":
             duplicates = db.find_duplicate_applications(
-                company, job_desc, date_applied, team=team, user_id=user_id
+                company, job_desc, date_applied, team=team, user_id=user_id,
+                link=request.form.get("link", ""),
             )
             if duplicates:
-                form_data = SimpleNamespace(
-                    job_desc=job_desc,
-                    company=company,
-                    team=team,
-                    contact=request.form.get("contact", ""),
-                    how_applied=request.form.get("how_applied", ""),
-                    employer_contact=request.form.get("employer_contact", ""),
-                    date_applied=date_applied,
-                    status=request.form.get("status", "Select_Status"),
-                    success_chance=request.form.get("success_chance", "0"),
-                    link=request.form.get("link", ""),
-                    cover_letter=1 if request.form.get("cover_letter") else 0,
-                    resume=1 if request.form.get("resume") else 0,
-                    comment=request.form.get("comment", ""),
-                    additional_notes=request.form.get("additional_notes", ""),
-                    job_expiry_date=request.form.get("job_expiry_date", ""),
-                    industry=request.form.get("industry", ""),
-                    ai_fit_score=None,
-                    ai_fit_verdict=None,
-                    ai_matching_skills=None,
-                    ai_skill_gaps=None,
-                    ai_recommendation=None,
-                    last_modified_at=None,
-                    last_contact_date=request.form.get("last_contact_date", ""),
-                )
                 return render_template(
                     "application_form.html",
-                    app=form_data,
+                    app=_form_values(request.form),
                     companies=db.get_companies(),
                     status_options=db.get_status_options(user_id=user_id),
                     action="Add",
                     duplicate_warning=True,
                     duplicates=duplicates,
+                    duplicate_window_days=db.DUPLICATE_WINDOW_DAYS,
                     stale_days=_STALE_DAYS,
                 )
 
@@ -88,10 +126,21 @@ def add_application():
         flash("Application added.", "success")
         year = request.form.get("date_applied", "")[:4] or str(date.today().year)
         return redirect(url_for("dashboard.year_view", year=year))
+    prefill = None
+    shared = session.pop("share_prefill", None)
+    if shared:
+        prefill = _form_values({**shared, "resume": 1})
+        same_link = [d for d in db.find_duplicate_applications(
+            "", "", "", user_id=user_id, link=shared.get("link", "")) if d["reason"] == "link"]
+        if same_link:
+            flash(f"You already have this job saved: {same_link[0]['company']} "
+                  f"({same_link[0]['status'].replace('_', ' ')}).", "warning")
+        else:
+            flash("Job link added from your share. Fill in the rest, or paste the ad into AI fill.", "info")
     companies_list = db.get_companies()
     return render_template(
         "application_form.html",
-        app=None,
+        app=prefill,
         companies=companies_list,
         status_options=db.get_status_options(user_id=user_id),
         action="Add",
@@ -139,7 +188,7 @@ def delete_application(app_id):
     if not application:
         flash("Application not found.", "danger")
         return redirect(url_for("dashboard.dashboard"))
-    year = application["date_applied"][:4] if application else str(date.today().year)
+    year = (application.get("date_applied") or "")[:4] or str(date.today().year)
     db.delete_application(app_id, user_id=user_id)
     flash("Application deleted.", "warning")
     return redirect(url_for("dashboard.year_view", year=year))
@@ -240,3 +289,59 @@ def bulk_action():
         flash("Unknown bulk action.", "warning")
 
     return redirect(url_for("dashboard.year_view", **redirect_kwargs))
+
+
+# ── Attachments ──────────────────────────────────────────────────────────────
+
+@bp.route("/application/<int:app_id>/attachments", methods=["POST"])
+@login_required
+def upload_attachment(app_id):
+    user_id = current_user_id()
+    if not db.get_application(app_id, user_id=user_id):
+        flash("Application not found.", "danger")
+        return redirect(url_for("dashboard.dashboard"))
+    back = redirect(url_for("applications.application_detail", app_id=app_id) + "#attachments")
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        flash("Choose a file to attach.", "warning")
+        return back
+    filename = os.path.basename(upload.filename.replace("\\", "/")).strip() or "file"
+    if os.path.splitext(filename)[1].lower() not in db.ALLOWED_EXTENSIONS:
+        flash("That type of file can't be attached. Use "
+              + ", ".join(sorted(db.ALLOWED_EXTENSIONS)) + ".", "danger")
+        return back
+    data = upload.read(db.MAX_ATTACHMENT_BYTES + 1)
+    if len(data) > db.MAX_ATTACHMENT_BYTES:
+        flash("That file is too big. Attachments can be up to 10 MB.", "danger")
+        return back
+    if not data:
+        flash("That file is empty.", "warning")
+        return back
+    db.add_attachment(app_id, filename, data, kind=request.form.get("kind", ""))
+    flash(f"Attached {filename}.", "success")
+    return back
+
+
+@bp.route("/attachments/<int:attachment_id>")
+@login_required
+def download_attachment(attachment_id):
+    attachment = db.get_attachment(attachment_id, user_id=current_user_id())
+    if not attachment:
+        abort(404)
+    path = db.attachment_path(attachment["stored_name"])
+    if not os.path.exists(path):
+        flash("That file is missing from the server (it may predate a database restore).", "warning")
+        return redirect(url_for("applications.application_detail", app_id=attachment["application_id"]))
+    return send_file(path, download_name=attachment["filename"], as_attachment=True)
+
+
+@bp.route("/attachments/<int:attachment_id>/delete", methods=["POST"])
+@login_required
+def delete_attachment(attachment_id):
+    attachment = db.get_attachment(attachment_id, user_id=current_user_id())
+    if not attachment:
+        abort(404)
+    db.delete_attachment(attachment_id, user_id=current_user_id())
+    flash(f"Removed {attachment['filename']}.", "warning")
+    return redirect(url_for("applications.application_detail",
+                            app_id=attachment["application_id"]) + "#attachments")

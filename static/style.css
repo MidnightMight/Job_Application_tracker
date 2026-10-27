@@ -320,6 +320,27 @@ footer a { color: var(--ml-muted) !important; }
 [data-bs-theme="dark"] .ml-empty { border-color: var(--ml-line); }
 .ml-empty strong { color: var(--ml-text); }
 
+.min-w-0 { min-width: 0; }
+
+/* Coming up: a small date tile per next step */
+.ml-when {
+  flex: 0 0 3.6rem; width: 3.6rem; height: 3.4rem; border-radius: .7rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--ml-blue-soft); color: var(--ml-blue); line-height: 1.05;
+}
+.ml-when strong { font-family: var(--ml-font-head); font-size: 1.15rem; font-weight: 800; }
+.ml-when span { font-size: .62rem; text-transform: uppercase; }
+.ml-when strong.is-word { font-size: .95rem; }
+.ml-when.is-today { background: var(--ml-amber); color: var(--ml-ink); }
+.ml-when.is-overdue { background: #F6DCD5; color: #8E2F1E; }
+[data-bs-theme="dark"] .ml-when.is-overdue { background: #4A2219; color: #F3B7A8; }
+
+/* Insights: a rate with a thin meter under it */
+.ml-meter { height: 6px; border-radius: 3px; background: var(--ml-line); overflow: hidden; margin-top: .3rem; }
+.ml-meter > span { display: block; height: 100%; border-radius: 3px; background: var(--ml-blue); }
+.ml-meter.is-amber > span { background: var(--ml-amber-strong); }
+.ml-rate { min-width: 7.5rem; }
+
 /* ── Status colours ────────────────────────────────────────────────────────
    Grouped by stage: grey = not started, blues = applied / waiting,
    violet = assessment, amber = interview, green = offer, brick = closed.

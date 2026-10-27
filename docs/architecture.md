@@ -31,7 +31,8 @@ Job_Application_tracker/
 │   │                         add_status(), delete_status()
 │   ├── users.py              User management (add, delete, authenticate)
 │   ├── settings.py           get_setting(), set_setting(), get_all_settings()
-│   ├── stats.py              Stats aggregation, get_dynamic_years()
+│   ├── stats.py              Stats aggregation, get_dynamic_years(), get_insights()
+│   ├── attachments.py        Files sent with an application (stored in <data>/attachments)
 │   └── reminders.py          Inbox / reminder helpers
 │
 ├── routes/                   Flask Blueprints — one per area of the app
@@ -47,6 +48,8 @@ Job_Application_tracker/
 │   │                         /api/ollama-status, /api/upload-profile-pdf
 │   ├── export.py             /export, /export/applications|companies|db
 │   ├── report.py             /report/workforce (+ .csv) — fortnightly Workforce Australia report
+│   ├── insights.py           /insights — reply rates by channel and industry
+│   ├── calendar_feed.py      /calendar/<token>.ics — next steps as a private calendar feed (no login)
 │   └── onboarding.py         /onboarding (first-run wizard)
 │
 ├── docs/                     Detailed documentation
@@ -119,6 +122,20 @@ existing installs automatically by `init_db()`.
 `_dup_key(company, job_desc, team, date_applied)` is the canonical deduplication
 key.  Including `team` means that the same role advertised for two different
 teams on the same date is treated as two distinct applications — not a duplicate.
+CSV import skips exact key matches.  The add form is wider
+(`find_duplicate_applications`): same company/role/team within
+`DUPLICATE_WINDOW_DAYS` (60) of the date applied, or the same job ad link, and
+the user can still choose **Add Anyway**.
+
+### Share target and calendar feed
+`/share` (the manifest's `share_target`) is not behind `login_required`: it
+only stores the shared link and title in the session and redirects to the add
+form, which pops them.  That way the share survives a login redirect, which
+keeps only `request.path`.  `/calendar/<token>.ics` is also open, because
+calendar apps can't log in; the per-user token is the setting
+`calendar_token_<user id>` (`0` in single-user mode) and is compared with
+`secrets.compare_digest`.  Both are exempt from the service worker cache, as
+are `/attachments/` downloads.
 
 ### Auto-add company
 `db/applications.py:add_application()` runs a case-insensitive lookup after

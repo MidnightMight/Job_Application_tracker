@@ -64,6 +64,7 @@ from .reminders import (
     get_unread_reminder_count,
     get_stalled_submitted_applications,
     get_likely_rejected_applications,
+    get_due_next_steps_without_reminder,
 )
 
 from .stats import (
@@ -72,6 +73,7 @@ from .stats import (
     get_apps_per_year,
     get_success_rate_per_year,
     get_company_note_frequency,
+    get_insights,
 )
 
 from .companies import (
@@ -102,6 +104,22 @@ from .applications import (
     unarchive_application,
     HOW_APPLIED_OPTIONS,
     get_applications_applied_between,
+    get_upcoming_actions,
+    get_calendar_actions,
+    auto_archive_finished,
+    ARCHIVABLE_STATUSES,
+    DUPLICATE_WINDOW_DAYS,
+)
+
+from .attachments import (
+    ATTACHMENT_KINDS,
+    ALLOWED_EXTENSIONS,
+    MAX_ATTACHMENT_BYTES,
+    add_attachment,
+    get_attachments,
+    get_attachment,
+    delete_attachment,
+    attachment_path,
 )
 
 __all__ = [
@@ -126,9 +144,10 @@ __all__ = [
     "get_pending_for_reminders", "create_reminder", "get_reminders",
     "dismiss_reminder", "dismiss_all_reminders", "get_unread_reminder_count",
     "get_stalled_submitted_applications", "get_likely_rejected_applications",
+    "get_due_next_steps_without_reminder",
     # stats
     "get_stats", "get_status_counts", "get_apps_per_year",
-    "get_success_rate_per_year", "get_company_note_frequency",
+    "get_success_rate_per_year", "get_company_note_frequency", "get_insights",
     # companies
     "get_companies", "get_company", "add_company", "update_company",
     "delete_company", "bulk_delete_companies",
@@ -141,4 +160,10 @@ __all__ = [
     "lower_success_chance_for_stale",
     "archive_application", "unarchive_application",
     "HOW_APPLIED_OPTIONS", "get_applications_applied_between",
+    "get_upcoming_actions", "get_calendar_actions", "auto_archive_finished",
+    "ARCHIVABLE_STATUSES", "DUPLICATE_WINDOW_DAYS",
+    # attachments
+    "ATTACHMENT_KINDS", "ALLOWED_EXTENSIONS", "MAX_ATTACHMENT_BYTES",
+    "add_attachment", "get_attachments", "get_attachment", "delete_attachment",
+    "attachment_path",
 ]

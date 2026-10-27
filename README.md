@@ -32,6 +32,14 @@ the repository owner.
 - **Dashboard** — a honeycomb of this year's applications by status (click a
   cell to filter), headline counts, the applications in progress, and charts
   for applications per year, offer rate and industry keywords
+- **Next steps** — a next step and date per application, a **Coming up** list
+  on the dashboard, inbox reminders when due, and a private calendar feed
+- **Insights** — heard-back and interview rates and typical reply time by how
+  you applied and by industry
+- **Share from your phone** — share a job ad to the installed app (Android) to
+  start a new application with the link filled in
+- **Saved job ads and attachments** — keep the ad text and the CV / cover
+  letter you sent with each application
 - **Midnight Lite look** — honeycomb logo, amber and royal-blue theme with a
   matching dark mode that follows your device setting
 - **Year views** — filterable per-year table with pipeline progress bar and bulk
@@ -43,7 +51,8 @@ the repository owner.
 - **Optional Date Applied** — the Date Applied field is no longer required;
   undated applications are shown in year views and flagged stale after 3 days
 - **Application archival** — applications in Rejected, Not Applying, or Job
-  Expired status can be archived in one click; archived records are hidden from
+  Expired status can be archived in one click (or automatically after a set
+  number of days); archived records are hidden from
   normal views but visible on the company detail page
 - **Application detail** — full details, status timeline, AI fit analysis card,
   `last_modified_at`, `job_expiry_date`, and additional notes

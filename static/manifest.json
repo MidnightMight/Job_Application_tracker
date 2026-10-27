@@ -8,6 +8,15 @@
   "theme_color": "#0B1730",
   "scope": "/",
   "lang": "en-AU",
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "icons": [
     {
       "src": "/static/icons/icon-192.png",

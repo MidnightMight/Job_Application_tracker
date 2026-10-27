@@ -110,6 +110,9 @@
         <li class="nav-item">
           <a class="nav-link {% if ep.startswith('report.') %}active{% endif %}" href="{{ url_for('report.workforce_report') }}">Report</a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link {% if ep.startswith('insights.') %}active{% endif %}" href="{{ url_for('insights.insights') }}">Insights</a>
+        </li>
       </ul>
       {% if update_available %}
       <a href="{{ url_for('settings_routes.settings', section='updates') }}"

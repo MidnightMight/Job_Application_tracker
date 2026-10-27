@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Insights — Job Tracker{% endblock %}
+
+{% macro days(value) -%}
+  {%- if value is none %}—{% elif value == 1 %}1 day{% else %}{{ value | round | int }} days{% endif -%}
+{%- endmacro %}
+
+{% macro rate_table(rows, first_heading) %}
+<div class="table-responsive">
+  <table class="table mb-0 align-middle">
+    <thead>
+      <tr>
+        <th>{{ first_heading }}</th>
+        <th class="text-end">Sent</th>
+        <th>Heard back</th>
+        <th>Assessment or interview</th>
+        <th class="d-none d-md-table-cell text-end">Typical reply</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="fw-semibold">
+          {{ r.name }}
+          {% if r.sent < 5 %}<span class="badge bg-light text-dark border fw-normal ms-1" title="Fewer than 5 applications, so the rates can swing a lot">few</span>{% endif %}
+        </td>
+        <td class="text-end">{{ r.sent }}</td>
+        <td class="ml-rate">
+          {{ r.heard_back_pct }}% <span class="text-secondary small">({{ r.heard_back }})</span>
+          <div class="ml-meter" aria-hidden="true"><span style="width: {{ r.heard_back_pct }}%"></span></div>
+        </td>
+        <td class="ml-rate">
+          {{ r.progressed_pct }}% <span class="text-secondary small">({{ r.progressed }})</span>
+          <div class="ml-meter is-amber" aria-hidden="true"><span style="width: {{ r.progressed_pct }}%"></span></div>
+        </td>
+        <td class="d-none d-md-table-cell text-end">{{ days(r.median_reply_days) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+  <div>
+    <h1 class="mb-1">Insights</h1>
+    <div class="text-secondary">What gets replies, from applications sent to employers{% if year %} in {{ year }}{% endif %}</div>
+  </div>
+  <div class="btn-group flex-wrap" role="group" aria-label="Year">
+    <a href="{{ url_for('insights.insights') }}"
+       class="btn btn-sm {% if not year %}btn-primary{% else %}btn-outline-secondary{% endif %}">All years</a>
+    {% for y in years | reverse %}
+    <a href="{{ url_for('insights.insights', year=y) }}"
+       class="btn btn-sm {% if year == y %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ y }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{% set o = insights.overall %}
+{% if o.sent == 0 %}
+<div class="ml-empty">
+  <strong>Nothing to compare yet.</strong>
+  <span>Insights look at applications you've sent (status Submitted or later). Record how you applied
+    and the industry on each one and this page shows which work best.</span>
+  <a href="{{ url_for('applications.add_application') }}" class="btn btn-warning btn-sm mt-1">
+    <i class="bi bi-plus-lg me-1"></i>Add application
+  </a>
+</div>
+{% else %}
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card stat-card h-100"><div class="card-body">
+      <div class="stat-value">{{ o.sent }}</div>
+      <div class="stat-label">Sent to employers</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card h-100"><div class="card-body">
+      <div class="stat-value">{{ o.heard_back_pct }}%</div>
+      <div class="stat-label">Heard back ({{ o.heard_back }})</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card h-100"><div class="card-body">
+      <div class="stat-value">{{ o.progressed_pct }}%</div>
+      <div class="stat-label">Assessment or interview ({{ o.progressed }})</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card stat-card h-100"><div class="card-body">
+      <div class="stat-value">{{ days(o.median_reply_days) }}</div>
+      <div class="stat-label">Typical wait for a reply</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">By how you applied</div>
+  {{ rate_table(insights.by_channel, "How applied") }}
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">By industry</div>
+  {{ rate_table(insights.by_industry, "Industry") }}
+</div>
+
+<p class="small text-secondary">
+  <strong>Heard back</strong> means the application reached an assessment, interview, offer or
+  rejection at any point. <strong>Typical reply</strong> is the median number of days from applying to
+  the first of those, counted from when you changed the status here, so update statuses promptly
+  for it to be accurate. Archived applications are included. An application with several industry
+  tags counts once under each tag. Statuses you've added yourself count as sent but not as a reply.
+</p>
+{% endif %}
+{% endblock %}
