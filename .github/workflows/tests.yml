@@ -36,7 +36,7 @@ jobs:
 
       - name: Start with root-owned data (like an install from an older image)
         run: |
-          mkdir data
+          mkdir -p data
           sudo touch data/jobs.db data/app.log
           sudo chown -R root:root data
           docker run -d --name jt -p 5000:5000 -e PUID=1234 -e PGID=1234 \
