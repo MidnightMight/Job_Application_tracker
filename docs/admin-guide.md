@@ -105,17 +105,17 @@ Open <http://localhost:5000> in your browser.
 docker run -d \
   -p 5000:5000 \
   -v job_tracker_data:/data \
-  -e SECRET_KEY="change-me-in-production" \
+  -e PUID=1000 -e PGID=1000 \
   --name job-tracker \
   ghcr.io/midnightmight/job_application_tracker:latest
 ```
 
+No secret key is needed: one is generated on first start and saved as
+`/data/secret_key`.  Set `SECRET_KEY` only if you want to manage it yourself.
+
 ### Docker Compose
 
 ```bash
-# Set your secret key first
-export SECRET_KEY="something-long-and-random"
-
 # Build and start
 docker compose up --build -d
 
@@ -136,9 +136,28 @@ docker build -t job-application-tracker .
 docker run -d \
   -p 5000:5000 \
   -v job_tracker_data:/data \
-  -e SECRET_KEY="change-me-in-production" \
+  -e PUID=1000 -e PGID=1000 \
   job-application-tracker
 ```
+
+### How the container runs
+
+- **Gunicorn** serves the app (one worker process with 4 threads; see
+  `gunicorn.conf.py`).  One process keeps the background reminder jobs from
+  running twice.
+- **Not as root.**  The container starts as root only long enough to give
+  `PUID:PGID` ownership of the data folder (including files written by older
+  images, which ran as root), then drops to that user.  Set `PUID`/`PGID` to
+  your own user's IDs (`id` on the host or over SSH on a NAS) so you can still
+  open the files.  Running the container with `--user` / `user:` also works;
+  then the data folder must already be writable by that user.
+- **Health check.**  `GET /healthz` returns `{"status": "ok"}` (HTTP 200) when
+  the app and database respond, or HTTP 503 otherwise.  No login is needed.
+  The image's `HEALTHCHECK` uses it, so `docker ps` and Container Manager show
+  the container as *healthy*.  Uptime monitors (e.g. Uptime Kuma) can use it too.
+- **CSRF protection.**  Every form and AJAX request carries a token tied to the
+  session.  A form opened before a restart that changed the secret key, or in
+  a logged-out tab, shows "The form had expired" — reload the page and retry.
 
 ---
 
@@ -146,17 +165,18 @@ docker run -d \
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | `job-tracker-secret-key-change-me` | Flask session signing key. **Change this in production.** |
+| `SECRET_KEY` | generated | Session signing key.  If unset, a random key is generated once and saved as `secret_key` next to the database (`/data/secret_key` in Docker). |
 | `DB_PATH` | `jobs.db` in project folder (or `/data/jobs.db` in Docker) | Path to the SQLite database |
 | `PORT` | `5000` | Port the server listens on |
-| `FLASK_DEBUG` | `0` | Set to `1` for debug mode (never use in production) |
+| `FLASK_DEBUG` | `0` | Set to `1` for debug mode with `python app.py` (never use in production; no effect in Docker) |
+| `PUID` / `PGID` | `1000` / `1000` | Docker only: user and group the app runs as; the data folder is given to them on start |
+| `GUNICORN_THREADS` | `4` | Docker only: request threads in the Gunicorn worker |
 | `DEPLOYMENT_MODE` | Auto-detected | Force `docker` or `local` mode |
 | `JOB_TRACKER_DISABLE_SCHEDULER` | unset | Set to `1` to turn off the background reminder scheduler (used by the test suite) |
 
 Set variables before running:
 
 ```bash
-export SECRET_KEY="something-long-and-random"
 export PORT=8080
 python app.py
 ```
@@ -413,6 +433,8 @@ python -m pytest
 | Blank page / redirect loop | `onboarding_complete` stuck at `0` | Set it to `1` via SQLite CLI |
 | "Cannot enable login — no users exist" | Tried to enable login before adding a user | Add a user first via Settings → Users |
 | Port already in use | Another process on port 5000 | Set `PORT=8081` (or any free port) |
-| `SECRET_KEY` warning in logs | Default key in use | Set a strong `SECRET_KEY` env var |
+| "The form had expired" | Page opened before the session or secret key changed | Reload the page and submit again |
+| `Permission denied` on `/data` (Docker) | Data folder not writable by `PUID:PGID` (e.g. a Synology ACL blocks `chown`) | Set `PUID`/`PGID` to the folder's owner, or fix the folder permissions |
+| Container shows *unhealthy* | `/healthz` failing — usually the database can't be opened | Check `docker logs` and the data folder permissions |
 | Database file locked | Multiple server instances running | Kill extra processes with `pkill -f app.py` |
 | Ollama connection failed | Ollama server not running or wrong URL | Run `ollama serve`, check URL in Settings → AI |

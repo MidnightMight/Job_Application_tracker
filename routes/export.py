@@ -49,7 +49,9 @@ def export_applications():
         "id", "company", "job_desc", "team", "date_applied", "status",
         "cover_letter", "resume", "duration", "success_chance",
         "link", "contact", "comment", "additional_notes",
-        "job_expiry_date", "industry", "last_modified_at",
+        "job_expiry_date", "industry", "how_applied", "employer_contact",
+        "next_action", "next_action_date", "job_ad_text",
+        "last_modified_at",
     ]
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")

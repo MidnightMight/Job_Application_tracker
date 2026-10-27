@@ -7,8 +7,11 @@ Job_Application_tracker/
 ├── app.py                    Thin Flask entry point — creates app, registers blueprints,
 │                             context processor, APScheduler background tasks
 ├── run_script.py             CLI stats viewer and CSV exporter
-├── requirements.txt          Python dependencies (Flask, APScheduler, openpyxl, pypdf)
-├── Dockerfile                Container image definition
+├── requirements.txt          Python dependencies (Flask, Flask-WTF, APScheduler, openpyxl,
+│                             pypdf, Gunicorn)
+├── Dockerfile                Container image definition (Gunicorn, HEALTHCHECK on /healthz)
+├── docker-entrypoint.sh      Takes ownership of /data, then drops to PUID:PGID
+├── gunicorn.conf.py          Gunicorn settings (one worker, threads)
 ├── docker-compose.yml        Compose file for one-command Docker launch
 ├── .dockerignore             Files excluded from the Docker build context
 ├── launch.sh                 One-command launcher — Linux / macOS / Unix
@@ -28,7 +31,8 @@ Job_Application_tracker/
 │   │                         add_status(), delete_status()
 │   ├── users.py              User management (add, delete, authenticate)
 │   ├── settings.py           get_setting(), set_setting(), get_all_settings()
-│   ├── stats.py              Stats aggregation, get_dynamic_years()
+│   ├── stats.py              Stats aggregation, get_dynamic_years(), get_insights()
+│   ├── attachments.py        Files sent with an application (stored in <data>/attachments)
 │   └── reminders.py          Inbox / reminder helpers
 │
 ├── routes/                   Flask Blueprints — one per area of the app
@@ -43,6 +47,9 @@ Job_Application_tracker/
 │   ├── api.py                /api/ai-fill, /api/ai-fit, /api/ai-fit-save,
 │   │                         /api/ollama-status, /api/upload-profile-pdf
 │   ├── export.py             /export, /export/applications|companies|db
+│   ├── report.py             /report/workforce (+ .csv) — fortnightly Workforce Australia report
+│   ├── insights.py           /insights — reply rates by channel and industry
+│   ├── calendar_feed.py      /calendar/<token>.ics — next steps as a private calendar feed (no login)
 │   └── onboarding.py         /onboarding (first-run wizard)
 │
 ├── docs/                     Detailed documentation
@@ -54,7 +61,7 @@ Job_Application_tracker/
 │   └── roadmap.md            Feasibility notes and future ideas
 │
 ├── templates/                Jinja2 HTML templates (Bootstrap 5)
-│   ├── base.html             Layout, navbar (search + theme toggle), footer
+│   ├── base.html             Layout, top bar (search, inbox, add, menu with theme toggle), footer
 │   ├── dashboard.html        Charts (Chart.js), summary cards, pending table
 │   ├── year_view.html        Per-year table, bulk-action toolbar, filter bar
 │   ├── application_form.html Add / edit form — AI fill+fit panel, industry,
@@ -68,13 +75,14 @@ Job_Application_tracker/
 │   ├── onboarding.html       First-run setup wizard
 │   ├── settings.html         Settings — general, statuses (with 🔒 lock), users, AI
 │   ├── export.html           Export and backup
+│   ├── workforce_report.html Workforce Australia fortnightly report
 │   └── login.html            Login page
 │
 └── static/
-    ├── style.css             Custom styles, status badges, dark-mode overrides
+    ├── style.css             Midnight Lite theme over Bootstrap: brand tokens, light/dark, status colours
     ├── manifest.json         PWA Web App Manifest
     ├── sw.js                 PWA service worker
-    └── icons/                PWA app icons
+    └── icons/                logo.svg (honeycomb), app icons, favicon
 ```
 
 ---
@@ -114,6 +122,20 @@ existing installs automatically by `init_db()`.
 `_dup_key(company, job_desc, team, date_applied)` is the canonical deduplication
 key.  Including `team` means that the same role advertised for two different
 teams on the same date is treated as two distinct applications — not a duplicate.
+CSV import skips exact key matches.  The add form is wider
+(`find_duplicate_applications`): same company/role/team within
+`DUPLICATE_WINDOW_DAYS` (60) of the date applied, or the same job ad link, and
+the user can still choose **Add Anyway**.
+
+### Share target and calendar feed
+`/share` (the manifest's `share_target`) is not behind `login_required`: it
+only stores the shared link and title in the session and redirects to the add
+form, which pops them.  That way the share survives a login redirect, which
+keeps only `request.path`.  `/calendar/<token>.ics` is also open, because
+calendar apps can't log in; the per-user token is the setting
+`calendar_token_<user id>` (`0` in single-user mode) and is compared with
+`secrets.compare_digest`.  Both are exempt from the service worker cache, as
+are `/attachments/` downloads.
 
 ### Auto-add company
 `db/applications.py:add_application()` runs a case-insensitive lookup after

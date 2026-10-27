@@ -12,7 +12,7 @@ import db
     "/", "/year/2026", "/search?q=acme", "/application/add", "/companies",
     "/inbox", "/export", "/application/import",
     "/settings", "/settings?section=statuses", "/settings?section=ai",
-    "/settings?section=updates",
+    "/settings?section=updates", "/report/workforce",
 ])
 def test_pages_render(client, path):
     response = client.get(path)
@@ -29,7 +29,7 @@ def test_edit_page_uses_external_scripts(client):
 
 def test_static_scripts_are_served(client):
     for name in ("application_form.js", "application_ai_fill.js", "application_ai_fit.js",
-                 "settings.js", "settings_statuses.js"):
+                 "settings.js", "settings_statuses.js", "workforce_report.js", "dashboard.js"):
         response = client.get(f"/static/js/{name}")
         assert response.status_code == 200, name
         assert "{{" not in response.get_data(as_text=True), name

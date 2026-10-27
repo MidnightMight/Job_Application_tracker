@@ -67,7 +67,12 @@ def init_db():
             industry          TEXT,
             user_id           INTEGER,
             archived          INTEGER DEFAULT 0,
-            archived_at       TEXT
+            archived_at       TEXT,
+            how_applied       TEXT,
+            employer_contact  TEXT,
+            next_action       TEXT,
+            next_action_date  TEXT,
+            job_ad_text       TEXT
         )
     """)
 
@@ -87,6 +92,11 @@ def init_db():
     _add_column_if_missing(c, "applications", "user_id",             "INTEGER")
     _add_column_if_missing(c, "applications", "archived",            "INTEGER DEFAULT 0")
     _add_column_if_missing(c, "applications", "archived_at",         "TEXT")
+    _add_column_if_missing(c, "applications", "how_applied",         "TEXT")
+    _add_column_if_missing(c, "applications", "employer_contact",    "TEXT")
+    _add_column_if_missing(c, "applications", "next_action",         "TEXT")
+    _add_column_if_missing(c, "applications", "next_action_date",    "TEXT")
+    _add_column_if_missing(c, "applications", "job_ad_text",         "TEXT")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""
@@ -157,6 +167,21 @@ def init_db():
         )
     """)
     _add_column_if_missing(c, "reminders", "reminder_type", "TEXT")
+
+    # ── Attachments (the CV / cover letter sent with an application) ─────────
+    # The files themselves live in the "attachments" folder next to the database.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS attachments (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            application_id INTEGER NOT NULL,
+            kind           TEXT,
+            filename       TEXT NOT NULL,
+            stored_name    TEXT NOT NULL,
+            size           INTEGER,
+            uploaded_at    TEXT NOT NULL,
+            FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+        )
+    """)
 
     # ── Users ─────────────────────────────────────────────────────────────────
     c.execute("""

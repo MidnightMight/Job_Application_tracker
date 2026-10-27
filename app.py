@@ -8,8 +8,12 @@ All database logic lives in db/.
 import logging
 import os
 import platform as _platform_module
+import secrets
+from urllib.parse import urlparse
 
-from flask import Flask, redirect, request, url_for
+from flask import Flask, flash, jsonify, redirect, request, url_for
+from flask_wtf.csrf import CSRFError, CSRFProtect
+from werkzeug.exceptions import HTTPException
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
@@ -41,13 +45,42 @@ def _detect_deployment_mode() -> str:
     return "docker"
 
 
+def _load_secret_key() -> str:
+    """Return the session signing key.
+
+    SECRET_KEY from the environment wins.  Otherwise a random key is generated
+    once and kept in a `secret_key` file next to the database (/data in
+    Docker), so sessions survive restarts and image updates.
+    """
+    env_key = os.environ.get("SECRET_KEY", "").strip()
+    if env_key:
+        return env_key
+    key_path = os.path.join(os.path.dirname(db.DB_PATH) or ".", "secret_key")
+    try:
+        fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        with open(key_path, encoding="utf-8") as f:
+            key = f.read().strip()
+        if key:
+            return key
+        # An empty file (e.g. a crash mid-write) is replaced below.
+        fd = os.open(key_path, os.O_WRONLY | os.O_TRUNC)
+    key = secrets.token_hex(32)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(key)
+    return key
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "job-tracker-secret-key-change-me")
+app.secret_key = _load_secret_key()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
+# Tokens last as long as the session, so a form left open for hours still saves.
+app.config["WTF_CSRF_TIME_LIMIT"] = None
+csrf = CSRFProtect(app)
 
 DEPLOYMENT_MODE: str = _detect_deployment_mode()
 app.config["DEPLOYMENT_MODE"] = DEPLOYMENT_MODE
@@ -102,6 +135,27 @@ import json as _json
 db.init_db()
 
 app.jinja_env.globals["enumerate"] = enumerate
+app.jinja_env.globals["how_applied_options"] = db.HOW_APPLIED_OPTIONS
+
+
+def _status_label(status) -> str:
+    """Status as words for display; the "Select_Status" placeholder reads "No status"."""
+    return "No status" if status in (None, "", "Select_Status") else str(status).replace("_", " ")
+
+
+app.jinja_env.filters["status_label"] = _status_label
+
+
+def _month_short(value) -> str:
+    """"2026-11-03" -> "Nov" (blank when it isn't a date)."""
+    from datetime import date as _date
+    try:
+        return _date.fromisoformat(str(value)[:10]).strftime("%b")
+    except ValueError:
+        return ""
+
+
+app.jinja_env.filters["month_short"] = _month_short
 app.jinja_env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 
 # ---------------------------------------------------------------------------
@@ -119,6 +173,9 @@ from routes.settings_routes import bp as settings_bp
 from routes.api             import bp as api_bp
 from routes.export          import bp as export_bp
 from routes.admin_db        import bp as admin_db_bp
+from routes.report          import bp as report_bp
+from routes.insights        import bp as insights_bp
+from routes.calendar_feed   import bp as calendar_feed_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(onboarding_bp)
@@ -131,12 +188,16 @@ app.register_blueprint(settings_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(admin_db_bp)
+app.register_blueprint(report_bp)
+app.register_blueprint(insights_bp)
+app.register_blueprint(calendar_feed_bp)
 
 # ---------------------------------------------------------------------------
 # Onboarding gate
 # ---------------------------------------------------------------------------
 
-_ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "auth.setup_password", "static"}
+_ONBOARDING_EXEMPT = {"onboarding.onboarding", "auth.login", "auth.logout", "auth.setup_password", "static",
+                      "healthz", "calendar_feed.feed"}
 
 
 @app.before_request
@@ -146,6 +207,49 @@ def _check_onboarding():
         return
     if db.get_setting("onboarding_complete", "0") == "0":
         return redirect(url_for("onboarding.onboarding"))
+
+
+# ---------------------------------------------------------------------------
+# Health check (Docker HEALTHCHECK, uptime monitors) — no login needed
+# ---------------------------------------------------------------------------
+
+@app.route("/healthz")
+def healthz():
+    try:
+        conn = db.get_connection()
+        try:
+            conn.execute("SELECT 1 FROM settings LIMIT 1").fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("Health check failed")
+        return jsonify(status="error"), 503
+    return jsonify(status="ok")
+
+
+@app.after_request
+def _allow_root_service_worker(response):
+    """The service worker lives in /static but controls the whole site."""
+    if request.path == "/static/sw.js":
+        response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+
+# ---------------------------------------------------------------------------
+# CSRF failures — usually an old tab or an expired session
+# ---------------------------------------------------------------------------
+
+@app.errorhandler(CSRFError)
+def _handle_csrf_error(exc):
+    logger.warning("CSRF check failed on %s %s: %s", request.method, request.path, exc.description)
+    message = "The form had expired. Please try again."
+    is_form = request.mimetype in ("application/x-www-form-urlencoded", "multipart/form-data")
+    if not is_form or request.path.startswith("/api/"):
+        return jsonify(ok=False, error=message), 400
+    flash(message, "warning")
+    from routes.auth import _safe_path
+    back = _safe_path(urlparse(request.referrer or "").path) if request.referrer else None
+    return redirect(back or url_for("dashboard.dashboard"))
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +319,35 @@ def _check_and_create_reminders():
                 f"for {app_record['duration']} days."
             )
             db.create_reminder(app_record["id"], msg)
+        _create_next_step_reminders()
     except Exception:
         logger.exception("Reminder check failed")
+
+
+def _create_next_step_reminders():
+    """Inbox reminder when an application's next step is due (once per due date)."""
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    for app_record in db.get_due_next_steps_without_reminder():
+        what = (app_record.get("next_action") or "").strip() or "Next step"
+        when = "today" if app_record["next_action_date"][:10] == today else (
+            f"overdue since {app_record['next_action_date'][:10]}")
+        msg = (f"{what} for '{app_record['job_desc'] or 'Application'}' at "
+               f"{app_record['company']} is due {when}.")
+        db.create_reminder(app_record["id"], msg, reminder_type="next_step")
+
+
+def _auto_archive_finished_applications():
+    """Scheduled task: archive Rejected / Not Applying / Job Expired applications
+    after the number of days set in Settings (0 = off)."""
+    try:
+        days = int(db.get_setting("auto_archive_days", "0") or 0)
+        if days > 0:
+            count = db.auto_archive_finished(days)
+            if count:
+                logger.info("Auto-archived %s finished application(s)", count)
+    except Exception:
+        logger.exception("Auto-archive failed")
 
 
 def _check_stale_submitted_applications():
@@ -326,6 +457,7 @@ if _scheduler_enabled():
     _init_kwargs = _interval_kwargs()
     _scheduler.add_job(_check_and_create_reminders, "interval", id="reminders", **_init_kwargs)
     _scheduler.add_job(_check_stale_submitted_applications, "interval", id="stale_check", **_init_kwargs)
+    _scheduler.add_job(_auto_archive_finished_applications, "interval", id="auto_archive", hours=24)
     # Daily update check; first run straight away in the background.
     from datetime import datetime as _datetime
     _scheduler.add_job(_check_for_update, "interval", id="update_check", hours=24,
@@ -333,6 +465,7 @@ if _scheduler_enabled():
     _scheduler.start()
     _check_and_create_reminders()
     _check_stale_submitted_applications()
+    _auto_archive_finished_applications()
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +474,8 @@ if _scheduler_enabled():
 
 @app.errorhandler(Exception)
 def _handle_unhandled_exception(exc):
+    if isinstance(exc, HTTPException):
+        return exc  # 404, 405 and friends are normal responses, not crashes
     logger.exception(
         "Unhandled exception on %s %s", request.method, request.path
     )

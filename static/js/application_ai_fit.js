@@ -21,7 +21,7 @@ async function runFitAnalysis(jobDescription) {
   try {
     const resp = await fetch(window.APP_FORM_CONFIG.urls.aiFit, {
       method:  'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
       body:    JSON.stringify({job_description: jobDescription}),
     });
     const data = await resp.json();
@@ -118,7 +118,7 @@ async function runFitAnalysis(jobDescription) {
     if (_FIT_APP_ID) {
       fetch(window.APP_FORM_CONFIG.urls.aiFitSave, {
         method:  'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content},
         body: JSON.stringify({
           app_id:          _FIT_APP_ID,
           fit_score:       data.fit_score,

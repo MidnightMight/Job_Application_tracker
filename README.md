@@ -29,9 +29,19 @@ the repository owner.
 
 ## Features
 
-- **Dashboard** — Chart.js charts: status breakdown, applications per year,
-  success rate trend, industry/sector keyword frequency; **Quick Navigation**
-  card with one-click year, Company Tracker, and Import CSV links
+- **Dashboard** — a honeycomb of this year's applications by status (click a
+  cell to filter), headline counts, the applications in progress, and charts
+  for applications per year, offer rate and industry keywords
+- **Next steps** — a next step and date per application, a **Coming up** list
+  on the dashboard, inbox reminders when due, and a private calendar feed
+- **Insights** — heard-back and interview rates and typical reply time by how
+  you applied and by industry
+- **Share from your phone** — share a job ad to the installed app (Android) to
+  start a new application with the link filled in
+- **Saved job ads and attachments** — keep the ad text and the CV / cover
+  letter you sent with each application
+- **Midnight Lite look** — honeycomb logo, amber and royal-blue theme with a
+  matching dark mode that follows your device setting
 - **Year views** — filterable per-year table with pipeline progress bar and bulk
   operations (set status, date, cover letter, resume, delete); **sort by status
   order** matching your Settings → Statuses sequence
@@ -41,7 +51,8 @@ the repository owner.
 - **Optional Date Applied** — the Date Applied field is no longer required;
   undated applications are shown in year views and flagged stale after 3 days
 - **Application archival** — applications in Rejected, Not Applying, or Job
-  Expired status can be archived in one click; archived records are hidden from
+  Expired status can be archived in one click (or automatically after a set
+  number of days); archived records are hidden from
   normal views but visible on the company detail page
 - **Application detail** — full details, status timeline, AI fit analysis card,
   `last_modified_at`, `job_expiry_date`, and additional notes
@@ -83,6 +94,8 @@ the repository owner.
 - **Reminder inbox** — background scheduler flags pending applications that
   exceed a configurable threshold; inbox prompts link to company tracker when
   industry data is incomplete
+- **Workforce Australia report** — "How applied" and "Employer contact" fields
+  plus a fortnightly report page with per-row copy buttons and CSV download
 - **Export** — CSV (applications, companies) or full SQLite database backup
 - **Dark / light theme** — toggle persisted to `localStorage`
 - **Multi-user login** — optional, Docker mode only; werkzeug password hashing;
@@ -103,7 +116,7 @@ cd Job_Application_tracker
 |---|---|
 | 🐧 Linux / 🍎 macOS | `bash launch.sh` |
 | 🪟 Windows | Double-click `launch.bat` |
-| 🐳 Docker | `export SECRET_KEY="…" && docker compose up --build -d` |
+| 🐳 Docker | `docker compose up --build -d` |
 
 Then open **http://localhost:5000** in your browser.
 

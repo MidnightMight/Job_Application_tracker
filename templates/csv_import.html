@@ -41,6 +41,7 @@
       </div>
       <div class="card-body">
         <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <div class="mb-3">
             <label class="form-label fw-semibold">CSV or Excel File</label>
             <input type="file" name="csv_file" class="form-control" accept=".csv,.txt,.xlsx,.xlsm" required>
@@ -101,6 +102,7 @@
           Choose the sheet whose first row is a header row with the data you want to import.
         </p>
         <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="stage" value="sheet">
           <input type="hidden" name="filename" value="{{ filename }}">
           <div class="mb-3">
@@ -137,6 +139,7 @@
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 {% if stage == 'map' %}
 <form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <input type="hidden" name="stage" value="import">
   <input type="hidden" name="csv_content" value="{{ csv_content | e }}">
 

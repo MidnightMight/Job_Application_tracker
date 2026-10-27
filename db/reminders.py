@@ -221,3 +221,29 @@ def get_unread_reminder_count(user_id=None) -> int:
         ).fetchone()[0]
     conn.close()
     return count
+
+
+def get_due_next_steps_without_reminder(user_id=None) -> list:
+    """Applications whose next step is due today or overdue and has no reminder yet.
+
+    A reminder counts when it was made on or after the due date, so moving the
+    date later gives a fresh reminder when the new date arrives.
+    """
+    conn = get_connection()
+    sql = """SELECT a.* FROM applications a
+            WHERE COALESCE(a.archived, 0) = 0
+              AND COALESCE(a.next_action_date, '') != ''
+              AND a.next_action_date <= date('now', 'localtime')
+              AND NOT EXISTS (
+                  SELECT 1 FROM reminders r
+                  WHERE r.application_id = a.id
+                    AND r.reminder_type = 'next_step'
+                    AND substr(r.created_at, 1, 10) >= a.next_action_date
+              )"""
+    params: list = []
+    if user_id is not None:
+        sql += " AND a.user_id = ?"
+        params.append(user_id)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

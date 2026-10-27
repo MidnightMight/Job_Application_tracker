@@ -64,6 +64,7 @@
 
 <!-- Company Table with Bulk Delete -->
 <form method="post" action="{{ url_for('companies.bulk_delete_companies') }}" id="bulkForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span class="fw-semibold">
@@ -165,6 +166,7 @@
 
 <!-- Hidden single-delete helper form -->
 <form method="post" id="singleDeleteForm" style="display:none;">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
   <input type="hidden" name="selected_ids" id="singleDeleteId">
 </form>
 
@@ -176,17 +178,16 @@
   // ── Sector chart ───────────────────────────────────────────────────────
   const labels = {{ sector_freq.keys() | list | tojson }};
   const data   = {{ sector_freq.values() | list | tojson }};
-  const colors = [
-    '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
-    '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
-    '#54a0ff','#5f27cd','#00d2d3','#1dd1a1','#ffeaa7',
-  ];
+  // One series, so one colour: the brand amber with an ink outline.
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   new Chart(document.getElementById('sectorChart'), {
     type: 'bar',
     data: { labels, datasets: [{ label: 'Companies', data,
-      backgroundColor: colors.slice(0, labels.length), borderRadius: 4 }] },
+      backgroundColor: css('--ml-amber'), borderColor: css('--ml-ink'), borderWidth: 1.5,
+      borderRadius: 6, maxBarThickness: 22 }] },
     options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: css('--ml-line') }, border: { display: false } },
+                y: { grid: { display: false }, border: { display: false } } } }
   });
 
   // ── Bulk-select logic ──────────────────────────────────────────────────
