@@ -59,11 +59,15 @@ def year_view(year):
     status_filter = request.args.get("status", "")
     sort_mode = request.args.get("sort", "date").strip().lower()
     status_options = db.get_status_options(user_id=user_id)
-    apps = db.get_applications(
+    show_archived = request.args.get("show", "") == "archived"
+    everything = db.get_applications(
         year=year,
         status=status_filter if status_filter else None,
         user_id=user_id,
+        include_archived=True,
     )
+    archived_count = sum(1 for a in everything if a.get("archived"))
+    apps = [a for a in everything if bool(a.get("archived")) == show_archived]
     if sort_mode == "status":
         order = {name: i for i, name in enumerate(status_options)}
         apps.sort(
@@ -87,4 +91,6 @@ def year_view(year):
         selected_status=status_filter,
         sort_mode=sort_mode,
         stale_days=_STALE_DAYS,
+        show_archived=show_archived,
+        archived_count=archived_count,
     )

@@ -12,7 +12,7 @@ from flask import (
 )
 
 import db
-from .auth import login_required, current_user_id
+from .auth import _safe_path, login_required, current_user_id
 from db.applications import _STALE_DAYS
 
 bp = Blueprint("applications", __name__)
@@ -213,6 +213,18 @@ def archive_application(app_id):
     flash("Application archived.", "success")
     year = application["date_applied"][:4] if application.get("date_applied") else str(date.today().year)
     return redirect(url_for("dashboard.year_view", year=year))
+
+
+@bp.route("/application/unarchive/<int:app_id>", methods=["POST"])
+@login_required
+def unarchive_application(app_id):
+    user_id = current_user_id()
+    if not db.unarchive_application(app_id, user_id=user_id):
+        flash("Application not found.", "danger")
+        return redirect(url_for("dashboard.dashboard"))
+    flash("Application restored from the archive.", "success")
+    back = _safe_path(request.form.get("next", ""))
+    return redirect(back or url_for("applications.application_detail", app_id=app_id))
 
 
 @bp.route("/applications/bulk-action", methods=["POST"])

@@ -195,7 +195,15 @@
             </td>
             <td class="text-muted small">{{ a.date_applied or '—' }}</td>
             <td class="text-muted small">{{ a.archived_at[:10] if a.archived_at else '—' }}</td>
-            <td class="text-end pe-3">
+            <td class="text-end pe-3 text-nowrap">
+              <form method="post" class="d-inline"
+                    action="{{ url_for('applications.unarchive_application', app_id=a.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="next" value="{{ request.path }}" />
+                <button class="btn btn-outline-secondary btn-sm py-0" title="Restore from archive">
+                  <i class="bi bi-arrow-counterclockwise"></i><span class="visually-hidden">Restore</span>
+                </button>
+              </form>
               <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                  class="btn btn-outline-secondary btn-sm py-0" title="View">
                 <i class="bi bi-eye"></i>

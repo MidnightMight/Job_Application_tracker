@@ -3,7 +3,9 @@
 Flask + SQLite job application tracker (Python 3.12). Self-hosted in Docker on
 a Synology NAS (Container Manager) from
 `ghcr.io/midnightmight/job_application_tracker:latest`. Version is
-`APP_VERSION` in `app.py`.
+`APP_VERSION` in `app.py`: release images get it from the release tag (the
+`APP_VERSION` build arg); the fallback in `app.py` is for running from source,
+so bump it to the new version when releasing.
 
 ## Branches and releases
 

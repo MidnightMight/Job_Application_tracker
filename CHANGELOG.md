@@ -7,6 +7,22 @@ All notable changes are documented here.  Format loosely follows
 
 ## Unreleased
 
+### Fixes
+
+- **Version number**: release images now take their version from the release
+  tag, so Settings shows the right version and stops offering an update to
+  the version you're already on.  (v1.3.5 still reports itself as 1.3.0.)
+- **Dark mode**: the boxes in the year view's bulk-edit bar showed white text
+  on a white background.
+- **Restore archived applications**: archived applications can now be brought
+  back with **Restore** on the application page, the company page, or the year
+  view's new **Archived** list (Show → Archived).  Auto-archive leaves a
+  restored application alone for the set number of days.
+
+---
+
+## v1.3.5 — Security, Workforce Report, New Look and Insights
+
 ### Security and Deployment
 
 - **CSRF protection** on every form and AJAX request (Flask-WTF).  Tokens last

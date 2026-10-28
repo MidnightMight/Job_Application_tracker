@@ -54,6 +54,7 @@
   <input type="hidden" name="year" value="{{ year }}">
   <input type="hidden" name="status_filter" value="{{ selected_status }}">
   <input type="hidden" name="sort_mode" value="{{ sort_mode }}">
+  <input type="hidden" name="next" value="{{ request.full_path }}">
 
   <!-- Bulk actions: appear once at least one row is ticked -->
   <div class="ml-bulkbar mb-3 d-none" id="bulkToolbar">
@@ -151,6 +152,11 @@
           {% for s in status_options %}
           <option value="{{ s }}" {% if s == selected_status %}selected{% endif %}>{{ s | status_label }}</option>
           {% endfor %}
+        </select>
+        <label class="visually-hidden" for="showFilter">Show</label>
+        <select id="showFilter" name="show" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
+          <option value="">Current</option>
+          <option value="archived" {% if show_archived %}selected{% endif %}>Archived ({{ archived_count }})</option>
         </select>
         <label class="visually-hidden" for="sortMode">Sort by</label>
         <select id="sortMode" name="sort" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
@@ -269,9 +275,14 @@
               {% endif %}
             </td>
             <td class="text-nowrap text-end d-none d-sm-table-cell">
-              {% if a.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
               {# Rows sit inside bulkForm and forms can't nest, so these buttons
                  submit bulkForm (and its CSRF token) to their own URL instead. #}
+              {% if a.archived %}
+              <button class="btn btn-outline-info btn-sm py-0 me-1" title="Restore from archive"
+                      formaction="{{ url_for('applications.unarchive_application', app_id=a.id) }}">
+                <i class="bi bi-arrow-counterclockwise"></i>
+              </button>
+              {% elif a.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
               <button class="btn btn-outline-info btn-sm py-0 me-1" title="Archive"
                       formaction="{{ url_for('applications.archive_application', app_id=a.id) }}"
                       onclick="return confirm('Archive this application?')">
@@ -292,7 +303,7 @@
           {% else %}
           <tr>
             <td colspan="15" class="text-center text-muted py-4">
-              No applications found for {{ year }}
+              No {% if show_archived %}archived {% endif %}applications found for {{ year }}
               {% if selected_status %} with status <strong>{{ selected_status | status_label }}</strong>{% endif %}.
             </td>
           </tr>

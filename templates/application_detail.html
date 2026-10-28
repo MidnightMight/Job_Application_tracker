@@ -13,7 +13,14 @@
     </div>
   </div>
     <div class="d-flex gap-2">
-      {% if app.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
+      {% if app.archived %}
+      <form method="post" action="{{ url_for('applications.unarchive_application', app_id=app.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Restore
+        </button>
+      </form>
+      {% elif app.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
       <form method="post" action="{{ url_for('applications.archive_application', app_id=app.id) }}"
             onsubmit="return confirm('Archive this application?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -37,6 +44,14 @@
     </a>
   </div>
 </div>
+
+{% if app.archived %}
+<div class="alert alert-secondary d-flex align-items-center gap-2 py-2" role="status">
+  <i class="bi bi-archive"></i>
+  <span>Archived{% if app.archived_at %} on {{ app.archived_at[:10] }}{% endif %}. It's hidden from the year
+    view and dashboard; <strong>Restore</strong> brings it back.</span>
+</div>
+{% endif %}
 
 <div class="row g-4">
 

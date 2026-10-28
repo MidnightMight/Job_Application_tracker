@@ -570,19 +570,23 @@ def archive_application(app_id: int, user_id=None) -> bool:
 
 
 def unarchive_application(app_id: int, user_id=None) -> bool:
-    """Remove archive flag from an application."""
+    """Remove archive flag from an application.
+
+    ``unarchived_at`` stops auto-archive from archiving it again straight away.
+    """
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
     if user_id is not None:
         cur = conn.execute(
-            "UPDATE applications SET archived=0, archived_at=NULL, last_modified_at=? "
+            "UPDATE applications SET archived=0, archived_at=NULL, unarchived_at=?, last_modified_at=? "
             "WHERE id=? AND user_id=?",
-            (now, app_id, user_id),
+            (now, now, app_id, user_id),
         )
     else:
         cur = conn.execute(
-            "UPDATE applications SET archived=0, archived_at=NULL, last_modified_at=? WHERE id=?",
-            (now, app_id),
+            "UPDATE applications SET archived=0, archived_at=NULL, unarchived_at=?, last_modified_at=? "
+            "WHERE id=?",
+            (now, now, app_id),
         )
     conn.commit()
     changed = cur.rowcount > 0
@@ -753,7 +757,8 @@ def auto_archive_finished(days: int) -> int:
     """Archive applications that have sat in an archivable status for *days* days.
 
     The age is taken from the last status change (or the date applied when
-    that is missing).  Returns the number archived.
+    that is missing), or from when it was last restored from the archive if
+    that is later.  Returns the number archived.
     """
     if days < 1:
         return 0
@@ -765,7 +770,8 @@ def auto_archive_finished(days: int) -> int:
             WHERE COALESCE(archived, 0) = 0
               AND status IN ({placeholders})
               AND julianday('now', 'localtime')
-                  - julianday(substr(COALESCE(NULLIF(status_changed_at, ''), date_applied), 1, 10)) >= ?""",
+                  - julianday(MAX(substr(COALESCE(NULLIF(status_changed_at, ''), date_applied), 1, 10),
+                                  substr(COALESCE(unarchived_at, ''), 1, 10))) >= ?""",
         (now, now, *ARCHIVABLE_STATUSES, days),
     )
     count = cur.rowcount
