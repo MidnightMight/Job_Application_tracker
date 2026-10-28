@@ -222,3 +222,124 @@ def get_insights(year=None, user_id=None) -> dict:
         "by_channel":  _grouped(apps, lambda a: [(a.get("how_applied") or "").strip() or NOT_RECORDED]),
         "by_industry": _grouped(apps, _industry_tags)[:12],
     }
+
+
+# ── Where applications went (Insights charts) ───────────────────────────────
+
+# Current status -> outcome, in the order the chart and legend show them.
+OUTCOMES = (
+    ("offer",     "Offer",                  {"Offer_Received", "Offer_Rejected"}),
+    ("progress",  "Assessment or interview", {"Online_Assessment", "Interview_Scheduled",
+                                              "Interview_In_Person"}),
+    ("waiting",   "Waiting to hear",        {"Submitted", "Awaiting_Response"}),
+    ("rejected",  "Rejected",               {"Rejected", "Likely_Rejected"}),
+    ("not_sent",  "Not sent or withdrawn",  {"Select_Status", "Drafting_Application", "Drafting_CV",
+                                              "EOI", "Not_Applying", "Job_Expired"}),
+    ("other",     "Other status",           set()),
+)
+_DRAFT_STATUSES = {"Select_Status", "Drafting_Application", "Drafting_CV", "EOI"}
+_INTERVIEW_STATUSES = OUTCOMES[1][2]
+# Having been in any of these means it went to the employer, even if it was
+# later withdrawn (Not applying) or the ad expired.
+_SENT_STATUSES = RESPONSE_STATUSES | {"Submitted", "Awaiting_Response", "Likely_Rejected"}
+
+
+def _outcome(status: str) -> str:
+    for key, _label, statuses in OUTCOMES:
+        if status in statuses:
+            return key
+    return "other"
+
+
+def get_application_flow(year=None, user_id=None) -> dict:
+    """Every application (archived ones and, with no year, every year), where it
+    is now and the path it took to get there.
+
+    ``outcomes`` feeds the doughnut.  ``nodes``/``links`` describe the flow
+    diagram, one column per step: all → sent or not → heard back or not →
+    assessment/interview or rejected → offer, rejected, still going.  Whether
+    an application reached a step comes from its status history, as in
+    get_insights().
+    """
+    from .applications import get_applications
+
+    apps = get_applications(year=year, user_id=user_id, include_archived=True)
+    if year:
+        apps = [a for a in apps if (a.get("date_applied") or "")[:4] == str(year)]
+
+    history: dict = {}
+    if apps:
+        ids = [a["id"] for a in apps]
+        conn = get_connection()
+        rows = conn.execute(
+            f"SELECT application_id, status FROM status_history"
+            f" WHERE application_id IN ({','.join('?' for _ in ids)})",
+            ids,
+        ).fetchall()
+        conn.close()
+        for r in rows:
+            history.setdefault(r["application_id"], set()).add(r["status"])
+
+    counts: dict = {}
+
+    def bump(*path):
+        for step in path:
+            counts[step] = counts.get(step, 0) + 1
+
+    for a in apps:
+        status = a["status"]
+        seen = history.get(a["id"], set()) | {status}
+        was_sent = status not in _NON_SUBMITTED_STATUSES or bool(seen & _SENT_STATUSES)
+        if not was_sent:
+            leaf = ("drafting" if status in _DRAFT_STATUSES
+                    else "not_applying" if status == "Not_Applying" else "expired")
+            bump("all", "not_sent", leaf)
+        elif not seen & RESPONSE_STATUSES:
+            bump("all", "sent", "no_reply",
+                 "waiting" if status in OUTCOMES[2][2] else "closed_no_reply")
+        elif not seen & PROGRESSED_STATUSES:
+            bump("all", "sent", "heard", "rejected_early")
+        elif seen & {"Offer_Received", "Offer_Rejected"}:
+            bump("all", "sent", "heard", "progressed", "offer")
+        elif status in _INTERVIEW_STATUSES:
+            bump("all", "sent", "heard", "progressed", "in_progress")
+        elif status in OUTCOMES[3][2]:
+            bump("all", "sent", "heard", "progressed", "rejected_late")
+        else:
+            bump("all", "sent", "heard", "progressed", "ended_other")
+
+    # (id, label, column, outcome colour, parent)
+    layout = (
+        ("all",             "Applications",            0, "total",    None),
+        ("sent",            "Sent",                    1, "waiting",  "all"),
+        ("not_sent",        "Never sent",              1, "not_sent", "all"),
+        ("heard",           "Heard back",              2, "progress", "sent"),
+        ("no_reply",        "No reply",                2, "waiting",  "sent"),
+        ("drafting",        "Still drafting",          2, "not_sent", "not_sent"),
+        ("not_applying",    "Didn't apply",            2, "not_sent", "not_sent"),
+        ("expired",         "Ad expired",              2, "not_sent", "not_sent"),
+        ("progressed",      "Interview stage",         3, "progress", "heard"),
+        ("rejected_early",  "Rejected",                3, "rejected", "heard"),
+        ("waiting",         "Still waiting",           3, "waiting",  "no_reply"),
+        ("closed_no_reply", "Closed, no reply",        3, "not_sent", "no_reply"),
+        ("offer",           "Offer",                   4, "offer",    "progressed"),
+        ("in_progress",     "Still in progress",       4, "progress", "progressed"),
+        ("rejected_late",   "Rejected after",          4, "rejected", "progressed"),
+        ("ended_other",     "Ended another way",       4, "other",    "progressed"),
+    )
+    nodes = [{"id": i, "label": label, "column": col, "kind": kind, "value": counts[i]}
+             for i, label, col, kind, _parent in layout if counts.get(i)]
+    links = [{"source": parent, "target": i, "value": counts[i]}
+             for i, _label, _col, _kind, parent in layout if parent and counts.get(i)]
+
+    outcome_counts = {key: 0 for key, _label, _statuses in OUTCOMES}
+    for a in apps:
+        outcome_counts[_outcome(a["status"])] += 1
+    return {
+        "total": len(apps),
+        "archived": sum(1 for a in apps if a.get("archived")),
+        "outcomes": [{"key": key, "label": label, "value": outcome_counts[key]}
+                     for key, label, _statuses in OUTCOMES if outcome_counts[key]],
+        "nodes": nodes,
+        "links": links,
+    }

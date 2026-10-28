@@ -27,13 +27,14 @@ _ALLOWED_COLUMNS = {
     "bg_color", "text_color", "user_id", "needs_password_setup", "use_admin_ai",
     "last_login_at", "archived", "archived_at", "reminder_type",
     "how_applied", "employer_contact",
-    "next_action", "next_action_date", "job_ad_text",
+    "next_action", "next_action_date", "job_ad_text", "unarchived_at", "priority",
 }
 _ALLOWED_DEFINITIONS = {"TEXT", "INTEGER DEFAULT 0", "INTEGER", "REAL", "TEXT DEFAULT ''"}
 
 # Fields that may be updated via the bulk-action route.
 _BULK_UPDATE_FIELDS = {
     "status", "cover_letter", "resume", "date_applied", "last_contact_date",
+    "priority",
 }
 
 

@@ -3,7 +3,16 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <div>
+  <div class="d-flex align-items-start gap-3 min-w-0">
+    {# Goes back to the page you came from; without history (a shared link or
+       a new tab) it opens the year view instead. #}
+    {%- set back_year = (app.date_applied or '')[:4] %}
+    <a href="{{ url_for('dashboard.year_view', year=back_year) if back_year.isdigit() else url_for('dashboard.dashboard') }}"
+       class="ml-back-btn" title="Back" aria-label="Back"
+       onclick="if (document.referrer.indexOf(location.origin) === 0 && history.length > 1) { history.back(); return false; }">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+  <div class="min-w-0">
     <h2 class="fw-bold mb-0">
       <i class="bi bi-file-text text-warning me-2"></i>{{ app.job_desc }}
     </h2>
@@ -12,8 +21,16 @@
       {% if app.team %} &mdash; {{ app.team }}{% endif %}
     </div>
   </div>
+  </div>
     <div class="d-flex gap-2">
-      {% if app.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
+      {% if app.archived %}
+      <form method="post" action="{{ url_for('applications.unarchive_application', app_id=app.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Restore
+        </button>
+      </form>
+      {% elif app.status in ['Rejected', 'Not_Applying', 'Job_Expired'] %}
       <form method="post" action="{{ url_for('applications.archive_application', app_id=app.id) }}"
             onsubmit="return confirm('Archive this application?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -37,6 +54,14 @@
     </a>
   </div>
 </div>
+
+{% if app.archived %}
+<div class="alert alert-secondary d-flex align-items-center gap-2 py-2" role="status">
+  <i class="bi bi-archive"></i>
+  <span>Archived{% if app.archived_at %} on {{ app.archived_at[:10] }}{% endif %}. It's hidden from the year
+    view and dashboard; <strong>Restore</strong> brings it back.</span>
+</div>
+{% endif %}
 
 <div class="row g-4">
 
@@ -71,6 +96,14 @@
             {% if app.next_action_date %}
             <span class="badge bg-light text-dark border ms-1">{{ app.next_action_date }}</span>
             {% endif %}
+          </dd>
+          {% endif %}
+
+          {% if app.priority %}
+          <dt class="col-sm-4 text-muted">Priority</dt>
+          <dd class="col-sm-8">
+            <span class="ml-prio ml-prio-{{ app.priority }}"><i class="bi bi-flag-fill"></i>
+              <span>{{ priority_levels.get(app.priority, '') }}</span></span>
           </dd>
           {% endif %}
 

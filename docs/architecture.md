@@ -31,7 +31,8 @@ Job_Application_tracker/
 │   │                         add_status(), delete_status()
 │   ├── users.py              User management (add, delete, authenticate)
 │   ├── settings.py           get_setting(), set_setting(), get_all_settings()
-│   ├── stats.py              Stats aggregation, get_dynamic_years(), get_insights()
+│   ├── stats.py              Stats aggregation, get_dynamic_years(), get_insights(),
+│   │                         get_application_flow() (Insights doughnut + flow diagram)
 │   ├── attachments.py        Files sent with an application (stored in <data>/attachments)
 │   └── reminders.py          Inbox / reminder helpers
 │
@@ -48,7 +49,8 @@ Job_Application_tracker/
 │   │                         /api/ollama-status, /api/upload-profile-pdf
 │   ├── export.py             /export, /export/applications|companies|db
 │   ├── report.py             /report/workforce (+ .csv) — fortnightly Workforce Australia report
-│   ├── insights.py           /insights — reply rates by channel and industry
+│   ├── insights.py           /insights — outcome charts (static/js/insights.js) and
+│   │                         reply rates by channel and industry
 │   ├── calendar_feed.py      /calendar/<token>.ics — next steps as a private calendar feed (no login)
 │   └── onboarding.py         /onboarding (first-run wizard)
 │

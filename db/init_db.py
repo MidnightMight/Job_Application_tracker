@@ -72,7 +72,9 @@ def init_db():
             employer_contact  TEXT,
             next_action       TEXT,
             next_action_date  TEXT,
-            job_ad_text       TEXT
+            job_ad_text       TEXT,
+            unarchived_at     TEXT,
+            priority          INTEGER DEFAULT 0
         )
     """)
 
@@ -97,6 +99,8 @@ def init_db():
     _add_column_if_missing(c, "applications", "next_action",         "TEXT")
     _add_column_if_missing(c, "applications", "next_action_date",    "TEXT")
     _add_column_if_missing(c, "applications", "job_ad_text",         "TEXT")
+    _add_column_if_missing(c, "applications", "unarchived_at",       "TEXT")
+    _add_column_if_missing(c, "applications", "priority",            "INTEGER DEFAULT 0")
 
     # ── Status history ───────────────────────────────────────────────────────
     c.execute("""

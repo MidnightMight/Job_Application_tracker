@@ -13,6 +13,10 @@ RUN python -m compileall -q /app && chmod +x /app/docker-entrypoint.sh
 RUN mkdir -p /data
 ENV DB_PATH=/data/jobs.db
 
+# Set from the release tag when the image is published.
+ARG APP_VERSION=""
+ENV APP_VERSION=$APP_VERSION
+
 # Mark this as a server/Docker deployment to enable multi-user and AI features.
 ENV DEPLOYMENT_MODE=docker
 

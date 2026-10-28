@@ -19,7 +19,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import db
 import update_check
 
-APP_VERSION = "1.3.0"
+# Release images set APP_VERSION from the release tag (see docker-publish.yml);
+# the fallback is for running from source and should match the latest release.
+APP_VERSION = os.environ.get("APP_VERSION", "").strip().lstrip("vV") or "1.3.5"
 GITHUB_REPO = "MidnightMight/Job_Application_tracker"
 
 
@@ -156,6 +158,7 @@ def _month_short(value) -> str:
 
 
 app.jinja_env.filters["month_short"] = _month_short
+app.jinja_env.globals["priority_levels"] = db.PRIORITY_LEVELS
 app.jinja_env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 
 # ---------------------------------------------------------------------------

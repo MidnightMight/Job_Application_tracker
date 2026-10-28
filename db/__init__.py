@@ -74,6 +74,7 @@ from .stats import (
     get_success_rate_per_year,
     get_company_note_frequency,
     get_insights,
+    get_application_flow,
 )
 
 from .companies import (
@@ -108,6 +109,10 @@ from .applications import (
     get_calendar_actions,
     auto_archive_finished,
     ARCHIVABLE_STATUSES,
+    PRIORITY_LEVELS,
+    parse_priority,
+    sort_by_priority,
+    set_priority,
     DUPLICATE_WINDOW_DAYS,
 )
 
@@ -148,6 +153,7 @@ __all__ = [
     # stats
     "get_stats", "get_status_counts", "get_apps_per_year",
     "get_success_rate_per_year", "get_company_note_frequency", "get_insights",
+    "get_application_flow",
     # companies
     "get_companies", "get_company", "add_company", "update_company",
     "delete_company", "bulk_delete_companies",
@@ -162,6 +168,7 @@ __all__ = [
     "HOW_APPLIED_OPTIONS", "get_applications_applied_between",
     "get_upcoming_actions", "get_calendar_actions", "auto_archive_finished",
     "ARCHIVABLE_STATUSES", "DUPLICATE_WINDOW_DAYS",
+    "PRIORITY_LEVELS", "parse_priority", "sort_by_priority", "set_priority",
     # attachments
     "ATTACHMENT_KINDS", "ALLOWED_EXTENSIONS", "MAX_ATTACHMENT_BYTES",
     "add_attachment", "get_attachments", "get_attachment", "delete_attachment",

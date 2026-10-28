@@ -431,7 +431,9 @@ footer a { color: var(--ml-muted) !important; }
   border-radius: .8rem; padding: .6rem .8rem;
   box-shadow: 0 8px 24px rgba(11, 23, 48, .25);
 }
-.ml-bulkbar .form-select, .ml-bulkbar .form-control { background-color: #fff; color: var(--ml-text); }
+/* The bar is navy in both themes, so its inputs stay light with dark text
+   (--ml-text turns near-white in dark mode, which made them unreadable). */
+.ml-bulkbar .form-select, .ml-bulkbar .form-control { background-color: #fff; color: #1B1F2A; color-scheme: light; }
 .ml-bulkbar label, .ml-bulkbar .small { color: rgba(255, 255, 255, .8) !important; }
 .ml-bulkbar .vr { background-color: rgba(255, 255, 255, .3); }
 .ml-bulkbar .btn-outline-secondary { --bs-btn-color: #fff; --bs-btn-border-color: rgba(255,255,255,.3); --bs-btn-hover-color: #fff; --bs-btn-hover-bg: rgba(255,255,255,.1); background: transparent; }
@@ -489,3 +491,67 @@ footer a { color: var(--ml-muted) !important; }
   .stat-value { font-size: 1.8rem; }
   main.container-fluid { padding-inline: 1rem !important; }
 }
+
+/* ── Priority flag (year view menu button and detail page) ─────────────── */
+.ml-prio {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .75rem; font-weight: 600; line-height: 1;
+  padding: .3rem .55rem; border-radius: 999px;
+  border: 1px solid var(--ml-line); background: transparent; color: var(--ml-text-2, var(--bs-secondary-color));
+  white-space: nowrap;
+}
+button.ml-prio { cursor: pointer; }
+button.ml-prio:hover { border-color: var(--ml-blue); }
+.ml-prio-0 { color: var(--bs-secondary-color); font-weight: 500; }
+.ml-prio-1 { color: var(--bs-secondary-color); }
+.ml-prio-2 { color: #1F5FBF; border-color: rgba(61, 127, 224, .45); background: rgba(61, 127, 224, .08); }
+.ml-prio-3 { color: #8A4B00; border-color: var(--ml-amber); background: rgba(255, 189, 89, .25); }
+[data-bs-theme="dark"] .ml-prio-2 { color: #9CC0F5; background: rgba(61, 127, 224, .15); }
+[data-bs-theme="dark"] .ml-prio-3 { color: #FFD08A; background: rgba(255, 189, 89, .14); }
+
+/* ── Insights: where applications went ─────────────────────────────────── */
+/* Outcome colours, checked for colour-blind separation in each theme; the
+   grey is deliberately neutral (never sent). Every colour also has a text label. */
+[data-bs-theme="light"] {
+  --ml-out-offer: #1F7A50; --ml-out-progress: #E08E1F; --ml-out-waiting: #2F6FD0;
+  --ml-out-rejected: #B5432F; --ml-out-not_sent: #8A8F99; --ml-out-other: #7A55D0;
+  --ml-out-total: #1B2B4A;
+}
+[data-bs-theme="dark"] {
+  --ml-out-offer: #3FA977; --ml-out-progress: #CC7F1C; --ml-out-waiting: #5B92E5;
+  --ml-out-rejected: #E0674F; --ml-out-not_sent: #7B808A; --ml-out-other: #9670E6;
+  --ml-out-total: #C9D2E3;
+}
+.ml-out-offer    { background: var(--ml-out-offer); }
+.ml-out-progress { background: var(--ml-out-progress); }
+.ml-out-waiting  { background: var(--ml-out-waiting); }
+.ml-out-rejected { background: var(--ml-out-rejected); }
+.ml-out-not_sent { background: var(--ml-out-not_sent); }
+.ml-out-other    { background: var(--ml-out-other); }
+
+.ml-donut { position: relative; height: 220px; }
+.ml-donut-centre {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none;
+}
+.ml-donut-centre strong { font-size: 2rem; line-height: 1; }
+.ml-donut-centre span { font-size: .8rem; color: var(--bs-secondary-color); }
+.ml-legend li { display: flex; align-items: center; gap: .55rem; padding: .3rem 0; border-top: 1px solid var(--ml-line); }
+.ml-legend li:first-child { border-top: 0; }
+.ml-swatch { width: .8rem; height: .8rem; border-radius: .2rem; flex: none; }
+
+.ml-flow-scroll { overflow-x: auto; }
+.ml-flow { display: block; width: 100%; min-width: 700px; height: 340px; }
+.ml-flow .ml-flow-link { fill-opacity: .28; transition: fill-opacity .15s; }
+.ml-flow .ml-flow-link:hover { fill-opacity: .55; }
+.ml-flow text { font-size: 12px; fill: var(--ml-text); }
+.ml-flow text .ml-flow-count { font-weight: 700; }
+
+/* Round back arrow at the top left of the application page. */
+.ml-back-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 2.4rem; height: 2.4rem; margin-top: .1rem; border-radius: 50%;
+  border: 1px solid var(--ml-line); background: var(--ml-surface); color: var(--ml-text);
+  text-decoration: none; font-size: 1.15rem; transition: border-color .15s, color .15s;
+}
+.ml-back-btn:hover, .ml-back-btn:focus-visible { border-color: var(--ml-blue); color: var(--ml-blue); }
