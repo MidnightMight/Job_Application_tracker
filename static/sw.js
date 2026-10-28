@@ -9,7 +9,7 @@
  * automatically invalidates the previous cache on activate.
  */
 
-const CACHE_NAME = 'job-tracker-v3';
+const CACHE_NAME = 'job-tracker-v4';
 
 const PRECACHE_URLS = [
   '/static/manifest.json',

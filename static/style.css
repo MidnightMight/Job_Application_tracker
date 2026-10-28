@@ -508,3 +508,41 @@ button.ml-prio:hover { border-color: var(--ml-blue); }
 .ml-prio-3 { color: #8A4B00; border-color: var(--ml-amber); background: rgba(255, 189, 89, .25); }
 [data-bs-theme="dark"] .ml-prio-2 { color: #9CC0F5; background: rgba(61, 127, 224, .15); }
 [data-bs-theme="dark"] .ml-prio-3 { color: #FFD08A; background: rgba(255, 189, 89, .14); }
+
+/* ── Insights: where applications went ─────────────────────────────────── */
+/* Outcome colours, checked for colour-blind separation in each theme; the
+   grey is deliberately neutral (never sent). Every colour also has a text label. */
+[data-bs-theme="light"] {
+  --ml-out-offer: #1F7A50; --ml-out-progress: #E08E1F; --ml-out-waiting: #2F6FD0;
+  --ml-out-rejected: #B5432F; --ml-out-not_sent: #8A8F99; --ml-out-other: #7A55D0;
+  --ml-out-total: #1B2B4A;
+}
+[data-bs-theme="dark"] {
+  --ml-out-offer: #3FA977; --ml-out-progress: #CC7F1C; --ml-out-waiting: #5B92E5;
+  --ml-out-rejected: #E0674F; --ml-out-not_sent: #7B808A; --ml-out-other: #9670E6;
+  --ml-out-total: #C9D2E3;
+}
+.ml-out-offer    { background: var(--ml-out-offer); }
+.ml-out-progress { background: var(--ml-out-progress); }
+.ml-out-waiting  { background: var(--ml-out-waiting); }
+.ml-out-rejected { background: var(--ml-out-rejected); }
+.ml-out-not_sent { background: var(--ml-out-not_sent); }
+.ml-out-other    { background: var(--ml-out-other); }
+
+.ml-donut { position: relative; height: 220px; }
+.ml-donut-centre {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none;
+}
+.ml-donut-centre strong { font-size: 2rem; line-height: 1; }
+.ml-donut-centre span { font-size: .8rem; color: var(--bs-secondary-color); }
+.ml-legend li { display: flex; align-items: center; gap: .55rem; padding: .3rem 0; border-top: 1px solid var(--ml-line); }
+.ml-legend li:first-child { border-top: 0; }
+.ml-swatch { width: .8rem; height: .8rem; border-radius: .2rem; flex: none; }
+
+.ml-flow-scroll { overflow-x: auto; }
+.ml-flow { display: block; width: 100%; min-width: 700px; height: 340px; }
+.ml-flow .ml-flow-link { fill-opacity: .28; transition: fill-opacity .15s; }
+.ml-flow .ml-flow-link:hover { fill-opacity: .55; }
+.ml-flow text { font-size: 12px; fill: var(--ml-text); }
+.ml-flow text .ml-flow-count { font-weight: 700; }

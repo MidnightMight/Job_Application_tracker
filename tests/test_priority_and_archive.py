@@ -143,3 +143,57 @@ def test_priority_round_trips_through_csv(client):
     assert _clean_import_row({"priority": "Medium"}, "Row 2", set(), warnings)["priority"] == 2
     assert _clean_import_row({"priority": "asap"}, "Row 3", set(), warnings)["priority"] == 0
     assert warnings == ["Row 3: could not read priority 'asap' — left unset."]
+
+
+# ── Insights: where applications went ────────────────────────────────────────
+
+def _history(app_id, *statuses):
+    for status in statuses:
+        _sql("INSERT INTO status_history (application_id, status, changed_at) VALUES (?,?,?)",
+             (app_id, status, "2026-01-01T00:00:00"))
+
+
+def test_application_flow_follows_each_application_to_its_outcome():
+    _add("Draft", status="Drafting_CV", date_applied="2025-03-01")
+    _add("Skipped", status="Not_Applying", date_applied="2025-03-01")
+    _add("Waiting", status="Submitted", date_applied="2025-03-01")
+    ghosted = _add("Ghosted", status="Job_Expired", date_applied="2025-03-01")
+    _history(ghosted, "Submitted")
+    _add("Quick no", status="Rejected", date_applied="2025-03-01")
+    offer = _add("Offer", status="Offer_Received", date_applied="2025-03-01")
+    _history(offer, "Interview_Scheduled")
+    late_no = _add("Late no", status="Rejected", date_applied="2025-03-01")
+    _history(late_no, "Online_Assessment")
+    db.archive_application(late_no)
+    withdrew = _add("Withdrew", status="Not_Applying", date_applied="2025-03-01")
+    _history(withdrew, "Interview_Scheduled")
+    _add("This year", status="Submitted", date_applied=_day(0))
+
+    flow = db.get_application_flow(year=2025)
+    value = {n["id"]: n["value"] for n in flow["nodes"]}
+    assert flow["total"] == 8 and flow["archived"] == 1
+    assert value == {"all": 8, "not_sent": 2, "drafting": 1, "not_applying": 1,
+                     "sent": 6, "no_reply": 2, "waiting": 1, "closed_no_reply": 1,
+                     "heard": 4, "rejected_early": 1, "progressed": 3,
+                     "offer": 1, "rejected_late": 1, "ended_other": 1}
+    links = {(l["source"], l["target"]): l["value"] for l in flow["links"]}
+    assert links[("all", "sent")] == 6 and links[("heard", "progressed")] == 3
+    outcomes = {o["key"]: o["value"] for o in flow["outcomes"]}
+    assert outcomes == {"offer": 1, "waiting": 1, "rejected": 2, "not_sent": 4}
+
+    # All years includes last year and this year.
+    assert db.get_application_flow()["total"] == 9
+
+
+def test_insights_page_shows_the_charts(client):
+    _add("Draft only", status="Drafting_CV", date_applied=_day(0))
+    page = client.get("/insights").get_data(as_text=True)
+    assert 'id="outcomeChart"' in page and 'id="flowChart"' in page
+    assert "INSIGHTS_CONFIG" in page and "js/insights.js" in page
+    assert "Still drafting" in page  # table view of the flow
+    db.get_connection().close()
+
+
+def test_insights_page_without_applications_shows_the_empty_state(client):
+    page = client.get("/insights").get_data(as_text=True)
+    assert "Nothing to compare yet." in page and 'id="flowChart"' not in page

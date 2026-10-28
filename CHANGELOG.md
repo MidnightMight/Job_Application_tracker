@@ -7,6 +7,27 @@ All notable changes are documented here.  Format loosely follows
 
 ## Unreleased
 
+### Priorities
+
+- **Priority** (High / Medium / Low) on every application: set it on the form,
+  from the flag in the year view's new Priority column, or in bulk.
+- The year view now **sorts by priority by default** — open applications
+  first, highest priority, then soonest next step, then newest.  *Newest
+  first* and *By status* are still available.
+- Shown on the application page; included in CSV export and import.
+
+### Insights: where applications went
+
+- **Where they are now** — a doughnut chart of every application by outcome
+  (offer, interview stage, waiting, rejected, not sent or withdrawn).
+- **How they got there** — a flow diagram following every application from
+  sent → heard back → interview → offer or rejection, with drafts, skipped and
+  expired ads split out.  Hover for counts, or open it as a table.
+- Covers every past year (All years) or a single year, archived applications
+  included.  Screenshots in the [user guide](docs/user-guide.md#20-insights).
+
+![Insights charts](docs/images/insights-charts.png)
+
 ### Fixes
 
 - **Version number**: release images now take their version from the release

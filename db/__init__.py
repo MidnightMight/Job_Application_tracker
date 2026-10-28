@@ -74,6 +74,7 @@ from .stats import (
     get_success_rate_per_year,
     get_company_note_frequency,
     get_insights,
+    get_application_flow,
 )
 
 from .companies import (
@@ -152,6 +153,7 @@ __all__ = [
     # stats
     "get_stats", "get_status_counts", "get_apps_per_year",
     "get_success_rate_per_year", "get_company_note_frequency", "get_insights",
+    "get_application_flow",
     # companies
     "get_companies", "get_company", "add_company", "update_company",
     "delete_company", "bulk_delete_companies",
