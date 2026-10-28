@@ -197,3 +197,12 @@ def test_insights_page_shows_the_charts(client):
 def test_insights_page_without_applications_shows_the_empty_state(client):
     page = client.get("/insights").get_data(as_text=True)
     assert "Nothing to compare yet." in page and 'id="flowChart"' not in page
+
+
+def test_application_page_has_a_back_arrow_top_left(client):
+    app_id = _add(date_applied="2025-05-01")
+    page = client.get(f"/application/{app_id}").get_data(as_text=True)
+    arrow = page.index('class="ml-back-btn"')
+    assert arrow < page.index("<h2") and 'href="/year/2025"' in page[arrow - 200:arrow]
+    undated = _add("Undated Co")
+    assert 'href="/"\n       class="ml-back-btn"' in client.get(f"/application/{undated}").get_data(as_text=True)

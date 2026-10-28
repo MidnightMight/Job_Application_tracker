@@ -3,7 +3,16 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <div>
+  <div class="d-flex align-items-start gap-3 min-w-0">
+    {# Goes back to the page you came from; without history (a shared link or
+       a new tab) it opens the year view instead. #}
+    {%- set back_year = (app.date_applied or '')[:4] %}
+    <a href="{{ url_for('dashboard.year_view', year=back_year) if back_year.isdigit() else url_for('dashboard.dashboard') }}"
+       class="ml-back-btn" title="Back" aria-label="Back"
+       onclick="if (document.referrer.indexOf(location.origin) === 0 && history.length > 1) { history.back(); return false; }">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+  <div class="min-w-0">
     <h2 class="fw-bold mb-0">
       <i class="bi bi-file-text text-warning me-2"></i>{{ app.job_desc }}
     </h2>
@@ -11,6 +20,7 @@
       <i class="bi bi-building me-1"></i>{{ app.company }}
       {% if app.team %} &mdash; {{ app.team }}{% endif %}
     </div>
+  </div>
   </div>
     <div class="d-flex gap-2">
       {% if app.archived %}

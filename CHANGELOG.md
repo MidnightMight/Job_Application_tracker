@@ -33,6 +33,9 @@ All notable changes are documented here.  Format loosely follows
 - **Version number**: release images now take their version from the release
   tag, so Settings shows the right version and stops offering an update to
   the version you're already on.  (v1.3.5 still reports itself as 1.3.0.)
+- **Back arrow** at the top left of an application's page, next to the title.
+  It returns to the page you came from, or the year view if you opened the
+  application directly.
 - **Dark mode**: the boxes in the year view's bulk-edit bar showed white text
   on a white background.
 - **Restore archived applications**: archived applications can now be brought

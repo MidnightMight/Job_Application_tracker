@@ -103,6 +103,9 @@ Deletion also removes the status timeline history for that application.
 
 ## 4. Viewing the application detail page
 
+The round **←** arrow at the top left (or **Back** at the top right) returns to the
+page you came from, or to that year's view if you opened the application directly.
+
 Click the **company name** or the **eye icon** on any row to open the detail page.
 
 The detail page shows:

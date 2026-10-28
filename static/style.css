@@ -546,3 +546,12 @@ button.ml-prio:hover { border-color: var(--ml-blue); }
 .ml-flow .ml-flow-link:hover { fill-opacity: .55; }
 .ml-flow text { font-size: 12px; fill: var(--ml-text); }
 .ml-flow text .ml-flow-count { font-weight: 700; }
+
+/* Round back arrow at the top left of the application page. */
+.ml-back-btn {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 2.4rem; height: 2.4rem; margin-top: .1rem; border-radius: 50%;
+  border: 1px solid var(--ml-line); background: var(--ml-surface); color: var(--ml-text);
+  text-decoration: none; font-size: 1.15rem; transition: border-color .15s, color .15s;
+}
+.ml-back-btn:hover, .ml-back-btn:focus-visible { border-color: var(--ml-blue); color: var(--ml-blue); }
