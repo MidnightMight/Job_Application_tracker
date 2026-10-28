@@ -18,6 +18,7 @@ def insights():
     return render_template(
         "insights.html",
         insights=db.get_insights(year=year, user_id=user_id),
+        flow=db.get_application_flow(year=year, user_id=user_id),
         year=year,
         years=years,
     )

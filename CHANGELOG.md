@@ -7,6 +7,47 @@ All notable changes are documented here.  Format loosely follows
 
 ## Unreleased
 
+### Priorities
+
+- **Priority** (High / Medium / Low) on every application: set it on the form,
+  from the flag in the year view's new Priority column, or in bulk.
+- The year view now **sorts by priority by default** — open applications
+  first, highest priority, then soonest next step, then newest.  *Newest
+  first* and *By status* are still available.
+- Shown on the application page; included in CSV export and import.
+
+### Insights: where applications went
+
+- **Where they are now** — a doughnut chart of every application by outcome
+  (offer, interview stage, waiting, rejected, not sent or withdrawn).
+- **How they got there** — a flow diagram following every application from
+  sent → heard back → interview → offer or rejection, with drafts, skipped and
+  expired ads split out.  Hover for counts, or open it as a table.  Shown on
+  tablet and desktop screens; phones get the doughnut only.
+- Covers every past year (All years) or a single year, archived applications
+  included.  Screenshots in the [user guide](docs/user-guide.md#20-insights).
+
+![Insights charts](docs/images/insights-charts.png)
+
+### Fixes
+
+- **Version number**: release images now take their version from the release
+  tag, so Settings shows the right version and stops offering an update to
+  the version you're already on.  (v1.3.5 still reports itself as 1.3.0.)
+- **Back arrow** at the top left of an application's page, next to the title.
+  It returns to the page you came from, or the year view if you opened the
+  application directly.
+- **Dark mode**: the boxes in the year view's bulk-edit bar showed white text
+  on a white background.
+- **Restore archived applications**: archived applications can now be brought
+  back with **Restore** on the application page, the company page, or the year
+  view's new **Archived** list (Show → Archived).  Auto-archive leaves a
+  restored application alone for the set number of days.
+
+---
+
+## v1.3.5 — Security, Workforce Report, New Look and Insights
+
 ### Security and Deployment
 
 - **CSRF protection** on every form and AJAX request (Flask-WTF).  Tokens last

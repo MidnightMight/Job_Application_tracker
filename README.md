@@ -34,8 +34,12 @@ the repository owner.
   for applications per year, offer rate and industry keywords
 - **Next steps** — a next step and date per application, a **Coming up** list
   on the dashboard, inbox reminders when due, and a private calendar feed
-- **Insights** — heard-back and interview rates and typical reply time by how
+- **Insights** — where every application went (a doughnut of outcomes and a
+  flow diagram from sent to offer or rejection, across all years, archived
+  included), plus heard-back and interview rates and typical reply time by how
   you applied and by industry
+- **Priorities** — mark jobs High / Medium / Low; the year view lists the ones
+  that need you first
 - **Share from your phone** — share a job ad to the installed app (Android) to
   start a new application with the link filled in
 - **Saved job ads and attachments** — keep the ad text and the CV / cover

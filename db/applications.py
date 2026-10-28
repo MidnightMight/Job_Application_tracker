@@ -206,6 +206,50 @@ def get_application_timeline(app_id: int) -> list:
     return history
 
 
+# Priority: 0 = not set, then Low / Medium / High.
+PRIORITY_LEVELS = {3: "High", 2: "Medium", 1: "Low"}
+_PRIORITY_WORDS = {"high": 3, "h": 3, "medium": 2, "med": 2, "m": 2, "low": 1, "l": 1,
+                   "none": 0, "": 0}
+
+
+def parse_priority(value) -> int | None:
+    """0–3 from a number or High/Medium/Low; None when it can't be read."""
+    if value is None:
+        return 0
+    text = str(value).strip().lower()
+    if text in _PRIORITY_WORDS:
+        return _PRIORITY_WORDS[text]
+    try:
+        number = int(float(text))
+    except ValueError:
+        return None
+    return number if 0 <= number <= 3 else None
+
+
+def sort_by_priority(apps: list) -> list:
+    """Work still in progress first, highest priority first, then the soonest
+    next step, then the newest application."""
+    def key(a):
+        finished = a.get("status") in ARCHIVABLE_STATUSES
+        return (finished, -(a.get("priority") or 0), a.get("next_action_date") or "9999-99-99")
+    newest_first = sorted(apps, key=lambda a: a.get("date_applied") or "", reverse=True)
+    return sorted(newest_first, key=key)
+
+
+def set_priority(app_id: int, priority: int, user_id=None) -> bool:
+    now = datetime.now().isoformat(timespec="seconds")
+    sql = "UPDATE applications SET priority=?, last_modified_at=? WHERE id=?"
+    params: list = [priority, now, app_id]
+    if user_id is not None:
+        sql += " AND user_id=?"
+        params.append(user_id)
+    conn = get_connection()
+    changed = conn.execute(sql, params).rowcount > 0
+    conn.commit()
+    conn.close()
+    return changed
+
+
 def add_application(data, user_id=None) -> int:
     """Insert a new application and return its ID.
 
@@ -227,8 +271,8 @@ def add_application(data, user_id=None) -> int:
             contact, additional_notes, status_changed_at, last_contact_date,
             last_modified_at, job_expiry_date, industry, user_id,
             how_applied, employer_contact, next_action, next_action_date,
-            job_ad_text)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            job_ad_text, priority)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             data.get("job_desc", ""),
             data.get("team", ""),
@@ -253,6 +297,7 @@ def add_application(data, user_id=None) -> int:
             (data.get("next_action") or "").strip(),
             data.get("next_action_date") or None,
             (data.get("job_ad_text") or "").strip(),
+            parse_priority(data.get("priority")) or 0,
         ),
     )
     app_id = cur.lastrowid
@@ -294,6 +339,11 @@ def update_application(app_id: int, data):
         logger.warning("update_application: application id=%s not found", app_id)
 
     new_status = data.get("status", "Select_Status")
+    # Callers that don't send a priority keep the current one.
+    if "priority" in data:
+        new_priority = parse_priority(data.get("priority")) or 0
+    else:
+        new_priority = (existing or {}).get("priority") or 0
 
     # Detect whether any user-visible field changed.
     _changed = (
@@ -318,6 +368,7 @@ def update_application(app_id: int, data):
         or (existing.get("next_action")      or "") != (data.get("next_action")      or "").strip()
         or existing.get("next_action_date")      != (data.get("next_action_date")  or None)
         or (existing.get("job_ad_text")      or "") != (data.get("job_ad_text")      or "").strip()
+        or (existing.get("priority")          or 0) != new_priority
     )
 
     live_cols: list = []
@@ -333,7 +384,7 @@ def update_application(app_id: int, data):
                cover_letter=?, resume=?, comment=?, success_chance=?, link=?,
                contact=?, additional_notes=?, last_contact_date=?,
                job_expiry_date=?, industry=?, how_applied=?, employer_contact=?,
-               next_action=?, next_action_date=?, job_ad_text=?,
+               next_action=?, next_action_date=?, job_ad_text=?, priority=?,
                status_changed_at=CASE WHEN status != ? THEN ? ELSE status_changed_at END,
                last_modified_at=CASE WHEN ? THEN ? ELSE last_modified_at END
                WHERE id=?""",
@@ -358,6 +409,7 @@ def update_application(app_id: int, data):
                 (data.get("next_action")      or "").strip(),
                 data.get("next_action_date")  or None,
                 (data.get("job_ad_text")      or "").strip(),
+                new_priority,
                 new_status,
                 now,
                 1 if _changed else 0,
@@ -570,19 +622,23 @@ def archive_application(app_id: int, user_id=None) -> bool:
 
 
 def unarchive_application(app_id: int, user_id=None) -> bool:
-    """Remove archive flag from an application."""
+    """Remove archive flag from an application.
+
+    ``unarchived_at`` stops auto-archive from archiving it again straight away.
+    """
     now = datetime.now().isoformat(timespec="seconds")
     conn = get_connection()
     if user_id is not None:
         cur = conn.execute(
-            "UPDATE applications SET archived=0, archived_at=NULL, last_modified_at=? "
+            "UPDATE applications SET archived=0, archived_at=NULL, unarchived_at=?, last_modified_at=? "
             "WHERE id=? AND user_id=?",
-            (now, app_id, user_id),
+            (now, now, app_id, user_id),
         )
     else:
         cur = conn.execute(
-            "UPDATE applications SET archived=0, archived_at=NULL, last_modified_at=? WHERE id=?",
-            (now, app_id),
+            "UPDATE applications SET archived=0, archived_at=NULL, unarchived_at=?, last_modified_at=? "
+            "WHERE id=?",
+            (now, now, app_id),
         )
     conn.commit()
     changed = cur.rowcount > 0
@@ -753,7 +809,8 @@ def auto_archive_finished(days: int) -> int:
     """Archive applications that have sat in an archivable status for *days* days.
 
     The age is taken from the last status change (or the date applied when
-    that is missing).  Returns the number archived.
+    that is missing), or from when it was last restored from the archive if
+    that is later.  Returns the number archived.
     """
     if days < 1:
         return 0
@@ -765,7 +822,8 @@ def auto_archive_finished(days: int) -> int:
             WHERE COALESCE(archived, 0) = 0
               AND status IN ({placeholders})
               AND julianday('now', 'localtime')
-                  - julianday(substr(COALESCE(NULLIF(status_changed_at, ''), date_applied), 1, 10)) >= ?""",
+                  - julianday(MAX(substr(COALESCE(NULLIF(status_changed_at, ''), date_applied), 1, 10),
+                                  substr(COALESCE(unarchived_at, ''), 1, 10))) >= ?""",
         (now, now, *ARCHIVABLE_STATUSES, days),
     )
     count = cur.rowcount
@@ -783,7 +841,7 @@ IMPORTABLE_FIELDS = (
     "cover_letter", "resume", "success_chance", "link", "contact",
     "comment", "additional_notes", "industry", "job_expiry_date",
     "how_applied", "employer_contact", "next_action", "next_action_date",
-    "job_ad_text",
+    "job_ad_text", "priority",
 )
 
 _DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d")
@@ -855,6 +913,12 @@ def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
             except (TypeError, ValueError):
                 warnings.append(f"{label}: could not read success_chance '{value}' — used 0.")
                 out[key] = 0.0
+        elif key == "priority":
+            parsed = parse_priority(value)
+            if parsed is None:
+                warnings.append(f"{label}: could not read priority '{value}' — left unset.")
+                parsed = 0
+            out[key] = parsed
         elif key == "status":
             if value and valid_statuses and value not in valid_statuses:
                 warnings.append(f"{label}: unknown status '{value}' — set to Select_Status.")

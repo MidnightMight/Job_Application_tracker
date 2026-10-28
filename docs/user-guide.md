@@ -28,6 +28,8 @@ bulk operations, searching, and exporting your data.
 19. [Saved job ads and attachments](#19-saved-job-ads-and-attachments)
 20. [Insights](#20-insights)
 21. [Auto-archive](#21-auto-archive)
+22. [Priorities](#22-priorities)
+23. [Restoring archived applications](#23-restoring-archived-applications)
 
 ---
 
@@ -101,6 +103,9 @@ Deletion also removes the status timeline history for that application.
 
 ## 4. Viewing the application detail page
 
+The round **←** arrow at the top left (or **Back** at the top right) returns to the
+page you came from, or to that year's view if you opened the application directly.
+
 Click the **company name** or the **eye icon** on any row to open the detail page.
 
 The detail page shows:
@@ -133,6 +138,7 @@ applications for that year in a table.
 | **Applied** | Date applied |
 | **Last Contact** | Last contact date (🔵 icon) or last status change (⏰ icon) |
 | **Status** | Colour-coded status badge |
+| **Priority** | High / Medium / Low flag; click it to change (see [Priorities](#22-priorities)) |
 | **CL** | Cover letter ✔ / ✘ |
 | **CV** | Resume ✔ / ✘ |
 | **Days** | Days since application date (yellow > 60 days, grey > 120 days) |
@@ -140,6 +146,12 @@ applications for that year in a table.
 | **Contact** | Recruiter / contact name |
 | **Comment** | Short note (truncated) |
 | **Link** | External job posting link |
+
+**Sort:** *Priority* (the default) puts the jobs that need you first — see
+[Priorities](#22-priorities). *Newest first* and *By status* are still there.
+
+**Show:** *Current* hides archived applications; switch to *Archived (n)* to
+see and restore them.
 
 ---
 
@@ -163,6 +175,7 @@ The **N selected** counter updates in real time.
 | Action | How to use |
 |---|---|
 | **Set Status** | Choose a status from the dropdown, click **Set** |
+| **Set Priority** | Choose High, Medium, Low or Not set, click **Set** |
 | **Set Date Applied** | Pick a date, click **Set** |
 | **Set Last Contact** | Pick a date, click **Set** |
 | **Set Cover Letter** | Choose Yes/No, click **Set** |
@@ -456,9 +469,40 @@ the tracker to be opened over `https://` (or on the device itself).
 
 ## 20. Insights
 
-**Insights** in the top bar compares how your applications did, for all years
-or one year. It only looks at applications sent to employers (Submitted or
-later), including archived ones.
+**Insights** in the top bar shows where your applications went and what gets
+replies, for **All years** (every past year together) or one year. Archived
+applications are always included.
+
+![Insights charts: where applications are now, and how they got there](images/insights-charts.png)
+
+**Where they are now** is a doughnut of every application by its current
+status, grouped into Offer, Assessment or interview, Waiting to hear, Rejected,
+and Not sent or withdrawn. The list under it gives the numbers and percentages.
+
+**How they got there** (tablet and desktop screens; it's hidden on phones, where it
+doesn't fit) follows every application step by step, left to right:
+
+1. **Applications** splits into **Sent** and **Never sent**.
+2. *Never sent* splits into **Still drafting**, **Didn't apply** and **Ad expired**.
+3. *Sent* splits into **Heard back** and **No reply**; no reply is either
+   **Still waiting** or **Closed, no reply** (the ad expired or you marked it
+   likely rejected).
+4. *Heard back* is either **Interview stage** (an online assessment or
+   interview) or **Rejected** straight away.
+5. *Interview stage* ends in **Offer**, **Still in progress**, **Rejected after**
+   or **Ended another way** (for example you withdrew).
+
+The width of each band is the number of applications. Hover over a band or
+bar for its count, or open **Show as a table** for the same numbers as a list.
+A step counts if the application ever reached it, so update statuses as things
+happen rather than jumping straight to the final one.
+
+Both charts follow the light or dark theme:
+
+![Insights charts in dark mode](images/insights-charts-dark.png)
+
+Below the charts, response rates look only at applications sent to employers
+(Submitted or later):
 
 | Measure | Meaning |
 |---|---|
@@ -478,4 +522,36 @@ number of days to have Rejected, Not Applying and Job Expired applications
 archived automatically that many days after their last status change (checked
 once a day). **0**, the default, turns it off. Archived applications leave the
 year view but still count in Insights and the Workforce Australia report.
+
+## 22. Priorities
+
+Give each application a priority — **High**, **Medium** or **Low** — to decide
+which jobs to put your time into first.
+
+![Year view sorted by priority, with the priority menu open](images/year-view-priority.png)
+
+- **Set it** on the add/edit form (next to *Next step*), by clicking the flag
+  in the **Priority** column of the year view, or for many at once with
+  **Priority → Set** in the bulk-edit bar.
+- **Priority sort** is the year view's default order: applications still in
+  progress first, then High → Medium → Low → not set, then the soonest next
+  step, then the newest. Finished ones (Rejected, Not Applying, Job Expired)
+  go to the bottom whatever their priority.
+- Priority is shown on the application page and included in CSV export and
+  import (*High/Medium/Low* or *3/2/1*, blank or *0* for not set).
+
+## 23. Restoring archived applications
+
+Archived applications are hidden from the year view and dashboard, not
+deleted. To bring one back, use **Restore**
+(<i>↺</i>) in any of these places:
+
+- the application's own page (an *Archived on …* note shows at the top),
+- the **Archived** list on its company page,
+- the year view with **Show → Archived (n)**.
+
+![Year view showing archived applications with the restore button](images/year-view-archived.png)
+
+If auto-archive is on, a restored application isn't archived again until the
+auto-archive period has passed since you restored it.
 

@@ -45,8 +45,10 @@ jobs:
             version="$(echo '${{ github.event.release.tag_name }}' | sed 's/^[vV]//' | tr '[:upper:]' '[:lower:]')"
             echo "list=${IMAGE}:latest,${IMAGE}:${version}" >> "$GITHUB_OUTPUT"
           else
+            version=""
             echo "list=${IMAGE}:latest,${IMAGE}:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -64,5 +66,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.list }}
+          # Shown in Settings and used by the update check.
+          build-args: APP_VERSION=${{ steps.tags.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

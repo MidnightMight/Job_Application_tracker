@@ -45,7 +45,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
   <div>
     <h1 class="mb-1">Insights</h1>
-    <div class="text-secondary">What gets replies, from applications sent to employers{% if year %} in {{ year }}{% endif %}</div>
+    <div class="text-secondary">Where your applications went and what gets replies{% if year %}, {{ year }}{% else %}, all years{% endif %}</div>
   </div>
   <div class="btn-group flex-wrap" role="group" aria-label="Year">
     <a href="{{ url_for('insights.insights') }}"
@@ -57,8 +57,67 @@
   </div>
 </div>
 
+{% if flow.total %}
+<div class="row g-3 mb-4">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header">Where they are now</div>
+      <div class="card-body">
+        <div class="ml-donut">
+          <canvas id="outcomeChart" role="img"
+                  aria-label="Applications by where they are now: {% for o in flow.outcomes %}{{ o.label }} {{ o.value }}{{ ', ' if not loop.last }}{% endfor %}"></canvas>
+          <div class="ml-donut-centre" aria-hidden="true">
+            <strong>{{ flow.total }}</strong><span>application{{ '' if flow.total == 1 else 's' }}</span>
+          </div>
+        </div>
+        <ul class="ml-legend list-unstyled mb-0 mt-3">
+          {% for o in flow.outcomes %}
+          <li>
+            <span class="ml-swatch ml-out-{{ o.key }}" aria-hidden="true"></span>
+            <span class="flex-grow-1">{{ o.label }}</span>
+            <strong>{{ o.value }}</strong>
+            <span class="text-secondary small ms-1">{{ (o.value * 100 / flow.total) | round | int }}%</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+  {# The flow needs about 700px to read, so phones get the doughnut only. #}
+  <div class="col-lg-7 d-none d-md-block">
+    <div class="card h-100">
+      <div class="card-header">How they got there</div>
+      <div class="card-body">
+        <div class="ml-flow-scroll">
+          <svg id="flowChart" class="ml-flow" role="img"
+               aria-label="Flow of applications from sent to outcome; the same numbers are in the table below"></svg>
+        </div>
+        <details class="mt-2 small">
+          <summary class="text-secondary">Show as a table</summary>
+          <table class="table table-sm mt-2 mb-0">
+            <thead><tr><th>From</th><th>To</th><th class="text-end">Applications</th></tr></thead>
+            <tbody>
+              {% set labels = {} %}
+              {% for n in flow.nodes %}{% set _ = labels.update({n.id: n.label}) %}{% endfor %}
+              {% for l in flow.links %}
+              <tr><td>{{ labels[l.source] }}</td><td>{{ labels[l.target] }}</td><td class="text-end">{{ l.value }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="small text-secondary mb-4">
+  Counts every application{% if not year %} from every year{% endif %}, including
+  {{ flow.archived }} archived.<span class="d-none d-md-inline"> A step counts if the application ever reached it, so one
+  interviewed and then rejected goes through <em>Interview stage</em> (an assessment or interview) to <em>Rejected after</em>.</span>
+</p>
+{% endif %}
+
 {% set o = insights.overall %}
-{% if o.sent == 0 %}
+{% if o.sent == 0 and flow.total == 0 %}
 <div class="ml-empty">
   <strong>Nothing to compare yet.</strong>
   <span>Insights look at applications you've sent (status Submitted or later). Record how you applied
@@ -67,7 +126,7 @@
     <i class="bi bi-plus-lg me-1"></i>Add application
   </a>
 </div>
-{% else %}
+{% elif o.sent %}
 
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
@@ -113,5 +172,14 @@
   for it to be accurate. Archived applications are included. An application with several industry
   tags counts once under each tag. Statuses you've added yourself count as sent but not as a reply.
 </p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if flow.total %}
+<script>
+  window.INSIGHTS_CONFIG = {{ {"outcomes": flow.outcomes, "nodes": flow.nodes, "links": flow.links} | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/insights.js') }}?v={{ app_version }}"></script>
 {% endif %}
 {% endblock %}
