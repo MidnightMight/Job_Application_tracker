@@ -89,6 +89,14 @@
           </dd>
           {% endif %}
 
+          {% if app.priority %}
+          <dt class="col-sm-4 text-muted">Priority</dt>
+          <dd class="col-sm-8">
+            <span class="ml-prio ml-prio-{{ app.priority }}"><i class="bi bi-flag-fill"></i>
+              <span>{{ priority_levels.get(app.priority, '') }}</span></span>
+          </dd>
+          {% endif %}
+
           <dt class="col-sm-4 text-muted">Date Applied</dt>
           <dd class="col-sm-8">{{ app.date_applied }}
             <span class="badge bg-light text-dark border ms-1">{{ app.duration }} days ago</span>

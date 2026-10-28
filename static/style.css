@@ -491,3 +491,20 @@ footer a { color: var(--ml-muted) !important; }
   .stat-value { font-size: 1.8rem; }
   main.container-fluid { padding-inline: 1rem !important; }
 }
+
+/* ── Priority flag (year view menu button and detail page) ─────────────── */
+.ml-prio {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .75rem; font-weight: 600; line-height: 1;
+  padding: .3rem .55rem; border-radius: 999px;
+  border: 1px solid var(--ml-line); background: transparent; color: var(--ml-text-2, var(--bs-secondary-color));
+  white-space: nowrap;
+}
+button.ml-prio { cursor: pointer; }
+button.ml-prio:hover { border-color: var(--ml-blue); }
+.ml-prio-0 { color: var(--bs-secondary-color); font-weight: 500; }
+.ml-prio-1 { color: var(--bs-secondary-color); }
+.ml-prio-2 { color: #1F5FBF; border-color: rgba(61, 127, 224, .45); background: rgba(61, 127, 224, .08); }
+.ml-prio-3 { color: #8A4B00; border-color: var(--ml-amber); background: rgba(255, 189, 89, .25); }
+[data-bs-theme="dark"] .ml-prio-2 { color: #9CC0F5; background: rgba(61, 127, 224, .15); }
+[data-bs-theme="dark"] .ml-prio-3 { color: #FFD08A; background: rgba(255, 189, 89, .14); }

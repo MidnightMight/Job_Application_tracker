@@ -77,3 +77,69 @@ def test_auto_archive_leaves_a_restored_application_alone():
         assert db.get_application(app_id)["archived"] == 1
     finally:
         db.set_setting("auto_archive_days", "0")
+
+
+# ── Priority ─────────────────────────────────────────────────────────────────
+
+def test_parse_priority_reads_words_and_numbers():
+    assert [db.parse_priority(v) for v in ("High", "medium", "L", "", None, "3", "0", 2.0)] == \
+        [3, 2, 1, 0, 0, 3, 0, 2]
+    assert db.parse_priority("urgent") is None and db.parse_priority("7") is None
+
+
+def test_priority_is_saved_from_the_form_and_kept_when_not_sent(client):
+    client.post("/application/add", data={"company": "Acme", "job_desc": "Engineer",
+                                          "status": "Submitted", "priority": "3"})
+    app = db.get_applications()[0]
+    assert app["priority"] == 3
+    client.post(f"/application/edit/{app['id']}", data={"company": "Acme", "job_desc": "Engineer",
+                                                        "status": "Submitted", "priority": "1"})
+    assert db.get_application(app["id"])["priority"] == 1
+    # Callers that don't send a priority (e.g. import updates) leave it alone.
+    db.update_application(app["id"], {"company": "Acme", "job_desc": "Engineer", "status": "Submitted"})
+    assert db.get_application(app["id"])["priority"] == 1
+
+
+def test_year_view_sorts_by_priority_by_default(client):
+    year = date.today().year
+    _add("Low Co", status="Submitted", date_applied=_day(0), priority=1)
+    _add("High Co", status="Submitted", date_applied=_day(-20), priority=3)
+    _add("Unset Co", status="Submitted", date_applied=_day(-1))
+    _add("Done Co", status="Rejected", date_applied=_day(-2), priority=3)
+    _add("Soon Co", status="Submitted", date_applied=_day(-30), priority=1, next_action_date=_day(1))
+
+    html = client.get(f"/year/{year}").get_data(as_text=True)
+    order = sorted(["Low Co", "High Co", "Unset Co", "Done Co", "Soon Co"], key=html.index)
+    assert order == ["High Co", "Soon Co", "Low Co", "Unset Co", "Done Co"]
+
+    # The other sorts are unchanged; priority only applies when chosen (the default).
+    by_date = client.get(f"/year/{year}?sort=date").get_data(as_text=True)
+    assert by_date.index("High Co") > by_date.index("Soon Co")
+    assert '<option value="date" selected>' in by_date
+
+
+def test_priority_menu_and_bulk_set(client):
+    year = date.today().year
+    a = _add("A Co", status="Submitted", date_applied=_day(0))
+    b = _add("B Co", status="Submitted", date_applied=_day(0))
+    resp = client.post(f"/application/{a}/priority", data={"priority": "2", "next": f"/year/{year}?sort=date"})
+    assert resp.location.endswith(f"/year/{year}?sort=date")
+    assert db.get_application(a)["priority"] == 2
+    assert client.post(f"/application/{a}/priority", data={"priority": "9"}).status_code == 302
+    assert db.get_application(a)["priority"] == 2
+
+    client.post("/applications/bulk-action", data={"action": "set_priority", "bulk_priority": "3",
+                                                   "selected_ids": [a, b], "year": year})
+    assert {db.get_application(i)["priority"] for i in (a, b)} == {3}
+
+
+def test_priority_round_trips_through_csv(client):
+    _add("Csv Co", priority=3)
+    exported = client.get("/export/applications").get_data(as_text=True)
+    header, row = exported.splitlines()[:2]
+    assert "priority" in header.split(",") and row.split(",")[header.split(",").index("priority")] == "3"
+    from db.applications import _clean_import_row
+    warnings: list = []
+    assert _clean_import_row({"priority": "Medium"}, "Row 2", set(), warnings)["priority"] == 2
+    assert _clean_import_row({"priority": "asap"}, "Row 3", set(), warnings)["priority"] == 0
+    assert warnings == ["Row 3: could not read priority 'asap' — left unset."]

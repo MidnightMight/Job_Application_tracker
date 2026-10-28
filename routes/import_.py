@@ -45,6 +45,7 @@ CSV_IMPORT_FIELDS = [
     ("job_expiry_date", "Job Advert Expiry Date"),
     ("next_action",     "Next step"),
     ("next_action_date", "Next step date"),
+    ("priority",        "Priority (High / Medium / Low or 3–0)"),
     ("job_ad_text",     "Job ad (saved copy)"),
 ]
 

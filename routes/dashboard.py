@@ -57,7 +57,7 @@ def search():
 def year_view(year):
     user_id = current_user_id()
     status_filter = request.args.get("status", "")
-    sort_mode = request.args.get("sort", "date").strip().lower()
+    sort_mode = request.args.get("sort", "priority").strip().lower()
     status_options = db.get_status_options(user_id=user_id)
     show_archived = request.args.get("show", "") == "archived"
     everything = db.get_applications(
@@ -77,8 +77,11 @@ def year_view(year):
                 a.get("company") or "",
             )
         )
+    elif sort_mode == "date":
+        pass  # get_applications already returns newest first
     else:
-        sort_mode = "date"
+        sort_mode = "priority"
+        apps = db.sort_by_priority(apps)
     stats = db.get_stats(year=year, user_id=user_id)
     return render_template(
         "year_view.html",

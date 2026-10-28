@@ -60,6 +60,7 @@ def _form_values(source) -> SimpleNamespace:
         next_action=source.get("next_action", ""),
         next_action_date=source.get("next_action_date", ""),
         job_ad_text=source.get("job_ad_text", ""),
+        priority=db.parse_priority(source.get("priority")) or 0,
         ai_fit_score=None,
         ai_fit_verdict=None,
         ai_matching_skills=None,
@@ -215,6 +216,16 @@ def archive_application(app_id):
     return redirect(url_for("dashboard.year_view", year=year))
 
 
+@bp.route("/application/<int:app_id>/priority", methods=["POST"])
+@login_required
+def set_priority(app_id):
+    level = db.parse_priority(request.form.get("priority", ""))
+    if level is None or not db.set_priority(app_id, level, user_id=current_user_id()):
+        flash("Couldn't change the priority.", "danger")
+    back = _safe_path(request.form.get("next", ""))
+    return redirect(back or url_for("applications.application_detail", app_id=app_id))
+
+
 @bp.route("/application/unarchive/<int:app_id>", methods=["POST"])
 @login_required
 def unarchive_application(app_id):
@@ -246,7 +257,7 @@ def bulk_action():
     redirect_kwargs: dict = {"year": year}
     if status_filter:
         redirect_kwargs["status"] = status_filter
-    if sort_mode in {"date", "status"}:
+    if sort_mode in {"priority", "date", "status"}:
         redirect_kwargs["sort"] = sort_mode
 
     if not selected_ids:
@@ -268,6 +279,15 @@ def bulk_action():
                 f"for {count} application(s).",
                 "success",
             )
+
+    elif action == "set_priority":
+        level = db.parse_priority(request.form.get("bulk_priority", ""))
+        if level is None:
+            flash("Please choose a priority.", "warning")
+        else:
+            count = db.bulk_update_applications(selected_ids, "priority", level, user_id=user_id)
+            label = db.PRIORITY_LEVELS.get(level, "Not set")
+            flash(f"Priority set to {label} for {count} application(s).", "success")
 
     elif action == "set_date_applied":
         new_date = request.form.get("bulk_date_applied", "").strip()

@@ -86,6 +86,19 @@
                   class="btn btn-sm btn-outline-primary bulk-action-btn" disabled>Set</button>
         </div>
 
+        <!-- Set Priority -->
+        <div class="d-flex gap-1 align-items-center flex-wrap">
+          <label class="small mb-0">Priority</label>
+          <select name="bulk_priority" class="form-select form-select-sm" style="width:auto;">
+            {% for level, label in priority_levels.items() %}
+            <option value="{{ level }}">{{ label }}</option>
+            {% endfor %}
+            <option value="0">Not set</option>
+          </select>
+          <button type="submit" name="action" value="set_priority"
+                  class="btn btn-sm btn-outline-primary bulk-action-btn" disabled>Set</button>
+        </div>
+
         <!-- Set Date Applied -->
         <div class="d-flex gap-1 align-items-center flex-wrap">
           <label class="small mb-0">Date applied</label>
@@ -160,6 +173,7 @@
         </select>
         <label class="visually-hidden" for="sortMode">Sort by</label>
         <select id="sortMode" name="sort" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
+          <option value="priority" {% if sort_mode == 'priority' %}selected{% endif %}>Priority</option>
           <option value="date" {% if sort_mode == 'date' %}selected{% endif %}>Newest first</option>
           <option value="status" {% if sort_mode == 'status' %}selected{% endif %}>By status</option>
         </select>
@@ -180,6 +194,7 @@
             <th class="d-none d-sm-table-cell">Applied</th>
             <th class="d-none d-xl-table-cell">Last contact</th>
             <th>Status</th>
+            <th>Priority</th>
             <th class="d-none d-lg-table-cell text-center" title="Cover letter">CL</th>
             <th class="d-none d-lg-table-cell text-center" title="Resume">CV</th>
             <th>Days</th>
@@ -235,6 +250,25 @@
               <span class="badge status-badge status-{{ a.status | replace(' ', '_') }}">
                 {{ a.status | status_label }}
               </span>
+            </td>
+            <td>
+              {%- set p = (a.priority or 0) | int %}
+              <div class="dropdown">
+                <button type="button" class="ml-prio ml-prio-{{ p }}" data-bs-toggle="dropdown"
+                        data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
+                        title="Change priority" aria-label="Priority: {{ priority_levels.get(p, 'not set') }}. Change">
+                  <i class="bi {{ 'bi-flag-fill' if p else 'bi-flag' }}"></i>
+                  <span>{{ priority_levels.get(p, '—') }}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                  {% for level, label in priority_levels.items() %}
+                  <li><button class="dropdown-item{% if p == level %} active{% endif %}" name="priority" value="{{ level }}"
+                              formaction="{{ url_for('applications.set_priority', app_id=a.id) }}">{{ label }}</button></li>
+                  {% endfor %}
+                  <li><button class="dropdown-item{% if not p %} active{% endif %}" name="priority" value="0"
+                              formaction="{{ url_for('applications.set_priority', app_id=a.id) }}">Not set</button></li>
+                </ul>
+              </div>
             </td>
             <td class="text-center d-none d-lg-table-cell">
               {% if a.cover_letter %}<i class="bi bi-check-lg text-success" title="Cover letter sent"></i>
@@ -302,7 +336,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="15" class="text-center text-muted py-4">
+            <td colspan="16" class="text-center text-muted py-4">
               No {% if show_archived %}archived {% endif %}applications found for {{ year }}
               {% if selected_status %} with status <strong>{{ selected_status | status_label }}</strong>{% endif %}.
             </td>

@@ -158,6 +158,7 @@ def _month_short(value) -> str:
 
 
 app.jinja_env.filters["month_short"] = _month_short
+app.jinja_env.globals["priority_levels"] = db.PRIORITY_LEVELS
 app.jinja_env.filters["from_json"] = lambda s: _json.loads(s) if s else []
 
 # ---------------------------------------------------------------------------

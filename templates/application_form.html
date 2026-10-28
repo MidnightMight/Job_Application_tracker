@@ -289,7 +289,7 @@
             </div>
 
             <!-- Next step (dashboard "Coming up", inbox reminder, calendar feed) -->
-            <div class="col-md-8">
+            <div class="col-md-5">
               <label class="form-label fw-semibold" for="next_action">
                 <i class="bi bi-flag text-warning me-1"></i>Next step
               </label>
@@ -312,6 +312,17 @@
               <input type="date" name="next_action_date" id="next_action_date" class="form-control"
                      value="{{ app.next_action_date if app and app.next_action_date else '' }}">
               <div class="form-text">Shows on the dashboard, in the inbox when due, and in your calendar feed.</div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold" for="priority">Priority</label>
+              {%- set current_priority = (app.priority if app and app.priority else 0) | int %}
+              <select name="priority" id="priority" class="form-select">
+                <option value="0">Not set</option>
+                {% for level, label in priority_levels.items() %}
+                <option value="{{ level }}" {% if current_priority == level %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">High priority jobs sit at the top of the year view.</div>
             </div>
 
             <!-- Link -->

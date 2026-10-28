@@ -108,6 +108,10 @@ from .applications import (
     get_calendar_actions,
     auto_archive_finished,
     ARCHIVABLE_STATUSES,
+    PRIORITY_LEVELS,
+    parse_priority,
+    sort_by_priority,
+    set_priority,
     DUPLICATE_WINDOW_DAYS,
 )
 
@@ -162,6 +166,7 @@ __all__ = [
     "HOW_APPLIED_OPTIONS", "get_applications_applied_between",
     "get_upcoming_actions", "get_calendar_actions", "auto_archive_finished",
     "ARCHIVABLE_STATUSES", "DUPLICATE_WINDOW_DAYS",
+    "PRIORITY_LEVELS", "parse_priority", "sort_by_priority", "set_priority",
     # attachments
     "ATTACHMENT_KINDS", "ALLOWED_EXTENSIONS", "MAX_ATTACHMENT_BYTES",
     "add_attachment", "get_attachments", "get_attachment", "delete_attachment",
