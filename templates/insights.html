@@ -83,7 +83,8 @@
       </div>
     </div>
   </div>
-  <div class="col-lg-7">
+  {# The flow needs about 700px to read, so phones get the doughnut only. #}
+  <div class="col-lg-7 d-none d-md-block">
     <div class="card h-100">
       <div class="card-header">How they got there</div>
       <div class="card-body">
@@ -110,8 +111,8 @@
 </div>
 <p class="small text-secondary mb-4">
   Counts every application{% if not year %} from every year{% endif %}, including
-  {{ flow.archived }} archived. A step counts if the application ever reached it, so one
-  interviewed and then rejected goes through <em>Interview stage</em> (an assessment or interview) to <em>Rejected after</em>.
+  {{ flow.archived }} archived.<span class="d-none d-md-inline"> A step counts if the application ever reached it, so one
+  interviewed and then rejected goes through <em>Interview stage</em> (an assessment or interview) to <em>Rejected after</em>.</span>
 </p>
 {% endif %}
 

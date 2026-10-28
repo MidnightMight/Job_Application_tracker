@@ -22,7 +22,8 @@ All notable changes are documented here.  Format loosely follows
   (offer, interview stage, waiting, rejected, not sent or withdrawn).
 - **How they got there** — a flow diagram following every application from
   sent → heard back → interview → offer or rejection, with drafts, skipped and
-  expired ads split out.  Hover for counts, or open it as a table.
+  expired ads split out.  Hover for counts, or open it as a table.  Shown on
+  tablet and desktop screens; phones get the doughnut only.
 - Covers every past year (All years) or a single year, archived applications
   included.  Screenshots in the [user guide](docs/user-guide.md#20-insights).
 

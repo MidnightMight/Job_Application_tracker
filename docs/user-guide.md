@@ -479,7 +479,8 @@ applications are always included.
 status, grouped into Offer, Assessment or interview, Waiting to hear, Rejected,
 and Not sent or withdrawn. The list under it gives the numbers and percentages.
 
-**How they got there** follows every application step by step, left to right:
+**How they got there** (tablet and desktop screens; it's hidden on phones, where it
+doesn't fit) follows every application step by step, left to right:
 
 1. **Applications** splits into **Sent** and **Never sent**.
 2. *Never sent* splits into **Still drafting**, **Didn't apply** and **Ad expired**.

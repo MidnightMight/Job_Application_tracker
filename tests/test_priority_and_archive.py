@@ -191,6 +191,8 @@ def test_insights_page_shows_the_charts(client):
     assert 'id="outcomeChart"' in page and 'id="flowChart"' in page
     assert "INSIGHTS_CONFIG" in page and "js/insights.js" in page
     assert "Still drafting" in page  # table view of the flow
+    # Too wide for phones: the flow card is hidden below the md breakpoint.
+    assert 'class="col-lg-7 d-none d-md-block"' in page
     db.get_connection().close()
 
 
