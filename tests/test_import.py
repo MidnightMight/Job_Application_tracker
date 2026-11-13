@@ -190,3 +190,23 @@ def test_everyday_status_words_are_recognised():
     # Only the word nobody could guess gets a warning.
     assert [w for w in result["warnings"] if "unknown status" in w] == \
         [w for w in result["warnings"] if "Ghosted-ish" in w]
+
+
+def test_csv_waits_on_the_server_between_map_and_import(client):
+    import os
+    page = client.post("/application/import", data={
+        "csv_file": (io.BytesIO(b"Company,Role,Status\nAcme,Tester,Applied\n"), "jobs.csv"),
+    }, content_type="multipart/form-data").get_data(as_text=True)
+    assert 'name="csv_content"' not in page            # the file isn't sent back to the browser
+    with client.session_transaction() as sess:
+        stashed = sess["import_csv"]
+    assert os.path.exists(stashed)
+    page = client.post("/application/import", data={
+        "stage": "import", "col_map_0": "company", "col_map_1": "job_desc", "col_map_2": "status",
+    }).get_data(as_text=True)
+    assert "1 added" in page
+    assert _only_app()["status"] == "Submitted"
+    assert not os.path.exists(stashed)                 # cleaned up after the import
+    # A second Import click (or an expired upload) asks to upload again instead of failing.
+    resp = client.post("/application/import", data={"stage": "import", "col_map_0": "company"})
+    assert resp.status_code == 302

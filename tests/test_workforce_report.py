@@ -79,10 +79,8 @@ def test_export_then_import_round_trips_the_new_fields(client):
         "csv_file": (io.BytesIO(edited.encode()), "apps.csv"), "header_row": "1",
     }, content_type="multipart/form-data")
     page = upload.get_data(as_text=True)
-    import html as _html
-    csv_content = _html.unescape(re.search(r'name="csv_content" value="([^"]*)"', page).group(1))
-    # Column mapping guessed from the export headings.
-    data = {"stage": "import", "csv_content": csv_content, "update_existing": "1"}
+    # Column mapping guessed from the export headings; the file waits on the server.
+    data = {"stage": "import", "update_existing": "1"}
     for i, name in enumerate(header):
         data[f"col_map_{i}"] = name if name in ("id", "company", "job_desc", "date_applied",
                                                 "how_applied", "employer_contact") else ""
