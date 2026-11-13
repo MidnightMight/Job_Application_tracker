@@ -37,6 +37,9 @@ from .settings import (
     get_setting,
     set_setting,
     get_all_settings,
+    get_hidden_years,
+    set_hidden_years,
+    get_menu_years,
 )
 
 from .users import (

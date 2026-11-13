@@ -190,6 +190,33 @@
       </div>
     </div>
 
+    <div class="card shadow-sm mb-4" id="menu-years">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-calendar3 me-1"></i>Years in the Applications menu
+      </div>
+      <div class="card-body">
+        <p class="small text-secondary">
+          Untick years you don't need in the menu. Their applications are kept, and search still
+          finds them. New years appear on their own. With only one year ticked, the menu becomes a
+          direct link to it.
+        </p>
+        <form method="post" action="{{ url_for('settings_routes.settings', section='general') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="action" value="save_menu_years">
+          <div class="d-flex flex-wrap gap-3 mb-3">
+            {% for y in all_years %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="show_year" value="{{ y }}"
+                     id="show_year_{{ y }}" {% if y not in hidden_years %}checked{% endif %}>
+              <label class="form-check-label" for="show_year_{{ y }}">{{ y }}</label>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-save me-1"></i>Save</button>
+        </form>
+      </div>
+    </div>
+
     <div class="card shadow-sm mb-4" id="calendar">
       <div class="card-header fw-semibold">
         <i class="bi bi-calendar-event me-1"></i>Calendar feed

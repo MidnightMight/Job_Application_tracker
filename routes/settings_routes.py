@@ -82,6 +82,16 @@ def settings():
             flash("General settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="general"))
 
+        elif action == "save_menu_years":
+            every = db.get_dynamic_years(user_id=user_id)
+            shown = {int(y) for y in request.form.getlist("show_year") if y.isdigit()}
+            if not shown & set(every):
+                flash("Keep at least one year in the menu.", "warning")
+            else:
+                db.set_hidden_years(user_id, [y for y in every if y not in shown])
+                flash("Applications menu updated.", "success")
+            return redirect(url_for("settings_routes.settings", section="general") + "#menu-years")
+
         elif action in ("calendar_create", "calendar_remove"):
             if action == "calendar_create":
                 new_calendar_token(user_id)
@@ -279,6 +289,8 @@ def settings():
         user_ai_settings=user_ai_cfg,
         profile_ai_enabled=(admin_ai_on or user_ai_on),
         calendar_url=calendar_feed_url(user_id),
+        all_years=db.get_dynamic_years(user_id=user_id),
+        hidden_years=db.get_hidden_years(user_id),
     )
 
 

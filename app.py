@@ -289,6 +289,7 @@ def inject_globals():
 
     return {
         "years":                  db.get_dynamic_years(user_id=user_id),
+        "menu_years":             db.get_menu_years(user_id=user_id),     # Applications menu
         "current_year_for_footer": _date.today().year,
         "unread_reminder_count":  db.get_unread_reminder_count(user_id=user_id),
         "login_enabled":          db.get_setting("login_enabled", "0") == "1",

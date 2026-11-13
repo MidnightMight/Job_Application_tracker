@@ -106,7 +106,7 @@ def year_view(year):
         year=year,
         stats=stats,
         status_counts=db.get_status_counts(year=year, user_id=user_id),
-        years=db.get_dynamic_years(user_id=user_id),
+        years=sorted(set(db.get_menu_years(user_id=user_id)) | {year}),
         status_options=status_options,
         selected_status=status_filter,
         sort_mode=sort_mode,
