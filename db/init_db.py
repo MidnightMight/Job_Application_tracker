@@ -295,6 +295,7 @@ def init_db():
     _migrate_legacy_status_names(c)
     _add_saved_status(c)
     _retire_pending_reminders(c)
+    _normalise_date_applied(c)
     conn.commit()
 
     # Sample data only on a brand-new install (before setup is finished), and only
@@ -312,6 +313,21 @@ def init_db():
         conn.commit()
 
     conn.close()
+
+
+def _normalise_date_applied(c):
+    """Rewrite dates applied that aren't YYYY-MM-DD (e.g. 10/03/2025 from older
+    imports): every year list and count reads the year from that format, so
+    such applications showed up nowhere.  Unreadable values are left alone."""
+    from .applications import _parse_date
+    rows = c.execute(
+        "SELECT id, date_applied FROM applications WHERE date_applied IS NOT NULL AND date_applied != '' "
+        "AND (length(date_applied) < 10 OR strftime('%Y', date_applied) IS NULL "
+        "     OR substr(date_applied, 5, 1) != '-')").fetchall()
+    for row_id, value in rows:
+        fixed = _parse_date(value)
+        if fixed and fixed != value:
+            c.execute("UPDATE applications SET date_applied=? WHERE id=?", (fixed, row_id))
 
 
 def _retire_pending_reminders(c):

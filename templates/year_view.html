@@ -54,7 +54,7 @@
   <input type="hidden" name="year" value="{{ year }}">
   <input type="hidden" name="status_filter" value="{{ selected_status }}">
   <input type="hidden" name="sort_mode" value="{{ sort_mode }}">
-  <input type="hidden" name="show_mode" value="{{ 'archived' if show_archived else ('eoi' if show_eoi else ('stale' if show_stale else '')) }}">
+  <input type="hidden" name="show_mode" value="{{ 'all' if show_all else ('archived' if show_archived else ('eoi' if show_eoi else ('stale' if show_stale else 'current'))) }}">
   <input type="hidden" name="next" value="{{ request.full_path }}">
 
   <!-- Bulk actions: appear once at least one row is ticked -->
@@ -169,7 +169,8 @@
         </select>
         <label class="visually-hidden" for="showFilter">Show</label>
         <select id="showFilter" name="show" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
-          <option value="">Current</option>
+          <option value="current" {% if not (show_all or show_stale or show_eoi or show_archived) %}selected{% endif %}>Current</option>
+          <option value="all" {% if show_all %}selected{% endif %}>All, archived too ({{ all_count }})</option>
           <option value="stale" {% if show_stale %}selected{% endif %}>Needs attention ({{ stale_count }})</option>
           <option value="eoi" {% if show_eoi %}selected{% endif %}>Expressions of interest ({{ eoi_count }})</option>
           <option value="archived" {% if show_archived %}selected{% endif %}>Archived ({{ archived_count }})</option>
@@ -210,7 +211,7 @@
         </thead>
         <tbody>
           {% for a in apps %}
-          <tr class="app-row-{{ a.status | replace(' ', '_') }}{% if a.is_stale %} stale-app{% endif %}">
+          <tr class="app-row-{{ a.status | replace(' ', '_') }}{% if a.is_stale %} stale-app{% endif %}{% if a.archived and show_all %} ml-row-archived{% endif %}">
             <td>
               <input type="checkbox" name="selected_ids" value="{{ a.id }}"
                      class="form-check-input row-chk">
@@ -357,7 +358,8 @@
           {% else %}
           <tr>
             <td colspan="16" class="text-center text-muted py-4">
-              No {% if show_archived %}archived applications{% elif show_eoi %}expressions of interest{% elif show_stale %}applications need attention{% else %}applications{% endif %} found for {{ year }}
+              No {% if show_archived %}archived applications{% elif show_eoi %}expressions of interest{% elif show_stale %}applications need attention{% else %}applications{% endif %} found for {{ year }}{% if not show_all and not show_archived and archived_count %}
+              (<a href="{{ url_for('dashboard.year_view', year=year, show='archived') }}">{{ archived_count }} archived</a>){% endif %}
               {% if selected_status %} with status <strong>{{ selected_status | status_label }}</strong>{% endif %}.
             </td>
           </tr>

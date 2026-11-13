@@ -286,7 +286,7 @@ def bulk_action():
         redirect_kwargs["status"] = status_filter
     if sort_mode in {"priority", "date", "status"}:
         redirect_kwargs["sort"] = sort_mode
-    if request.form.get("show_mode") in {"archived", "eoi"}:
+    if request.form.get("show_mode") in {"archived", "eoi", "stale", "all", "current"}:
         redirect_kwargs["show"] = request.form["show_mode"]   # stay in the view you were in
 
     if not selected_ids:

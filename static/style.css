@@ -560,3 +560,7 @@ button.ml-prio:hover { border-color: var(--ml-blue); }
   text-decoration: none; font-size: 1.15rem; transition: border-color .15s, color .15s;
 }
 .ml-back-btn:hover, .ml-back-btn:focus-visible { border-color: var(--ml-blue); color: var(--ml-blue); }
+
+/* Archived rows shown alongside current ones (Show: All) */
+.ml-row-archived > td { opacity: .6; }
+.ml-row-archived:hover > td { opacity: 1; }

@@ -382,3 +382,32 @@ def test_quick_status_contact_and_needs_attention(client):
     assert db.get_application_timeline(quiet)[-1]["status"] == "Interview_Scheduled"
     client.post(f"/application/{quiet}/status", data={"status": "Made_Up"})
     assert db.get_application(quiet)["status"] == "Interview_Scheduled"
+
+
+def test_old_style_dates_are_fixed_so_the_year_shows():
+    a = _add("Slash Co", status="Rejected")
+    b = _add("Odd Co", status="Rejected")
+    conn = db.get_connection()
+    conn.execute("UPDATE applications SET date_applied='10/03/2025' WHERE id=?", (a,))
+    conn.execute("UPDATE applications SET date_applied='sometime' WHERE id=?", (b,))
+    conn.commit(); conn.close()
+    assert 2025 not in db.get_dynamic_years()
+    db.init_db()
+    assert db.get_application(a)["date_applied"] == "2025-03-10"
+    assert db.get_application(b)["date_applied"] == "sometime"      # unreadable: left alone
+    assert 2025 in db.get_dynamic_years()
+
+
+def test_past_years_open_with_archived_applications_too(client):
+    last = date.today().year - 1
+    done = _add("Old Rejected Co", status="Rejected", date_applied=f"{last}-03-01")
+    db.archive_application(done)
+    _add("Old Open Co", status="Submitted", date_applied=f"{last}-04-01")
+    page = client.get(f"/year/{last}").get_data(as_text=True)
+    assert "Old Rejected Co" in page and "Old Open Co" in page
+    assert '<option value="all" selected>' in page and "ml-row-archived" in page
+    # The current year still opens on what's going, with All one click away.
+    this = client.get(f"/year/{date.today().year}").get_data(as_text=True)
+    assert '<option value="current" selected>' in this
+    current_only = client.get(f"/year/{last}?show=current").get_data(as_text=True)
+    assert "Old Rejected Co" not in current_only and "Old Open Co" in current_only
