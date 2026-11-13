@@ -935,6 +935,45 @@ def _parse_bool(value, default: int) -> int | None:
     return None
 
 
+# Everyday words people use for a status in a spreadsheet, mapped to the app's statuses.
+_STATUS_WORDS = {
+    "Saved": ("saved", "bookmarked", "wishlist", "to apply", "interested", "shortlisted", "new"),
+    "Drafting_Application": ("draft", "drafting", "writing", "preparing", "in progress", "started"),
+    "Submitted": ("applied", "submitted", "sent", "application sent", "application submitted"),
+    "Awaiting_Response": ("awaiting", "waiting", "pending", "in review", "under review",
+                          "reviewing", "awaiting response", "waiting to hear"),
+    "Online_Assessment": ("assessment", "online assessment", "test", "online test", "assignment",
+                          "task", "take home", "coding challenge", "psychometric"),
+    "Interview_Scheduled": ("interview", "interviewing", "interview scheduled", "phone screen",
+                            "screening", "screen", "video interview", "first interview",
+                            "second interview", "final interview"),
+    "Interview_In_Person": ("in person interview", "onsite", "on site", "face to face"),
+    "Offer_Received": ("offer", "offered", "offer received", "job offer"),
+    "Offer_Rejected": ("offer declined", "declined offer", "offer rejected", "turned down offer"),
+    "Rejected": ("rejected", "rejection", "unsuccessful", "not successful", "declined",
+                 "not selected", "no"),
+    "Likely_Rejected": ("no response", "ghosted", "no reply", "likely rejected", "silence"),
+    "Not_Applying": ("withdrawn", "withdrew", "not applying", "not interested", "skipped",
+                     "cancelled"),
+    "Job_Expired": ("expired", "closed", "job closed", "position filled", "filled"),
+    "EOI": ("eoi", "expression of interest"),
+}
+
+
+def match_status_name(text: str, valid_statuses) -> str | None:
+    """The app status a spreadsheet value means, or None.  Matches a status name in
+    any case or with spaces ("interview scheduled"), then everyday words
+    ("Applied", "Ghosted", "Phone screen").  Only returns statuses that exist."""
+    norm = " ".join(str(text).replace("_", " ").replace("-", " ").lower().split())
+    for name in valid_statuses:
+        if name.replace("_", " ").lower() == norm:
+            return name
+    for name, words in _STATUS_WORDS.items():
+        if norm in words and name in valid_statuses:
+            return name
+    return None
+
+
 def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
                       warnings: list[str]) -> dict:
     """Normalise one import row.  Only keys present in *row* are returned, so
@@ -973,6 +1012,8 @@ def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
                 parsed = 0
             out[key] = parsed
         elif key == "status":
+            if value and valid_statuses and value not in valid_statuses:
+                value = match_status_name(value, valid_statuses) or value
             if value and valid_statuses and value not in valid_statuses:
                 warnings.append(f"{label}: unknown status '{value}' — set to {NEW_APPLICATION_STATUS}.")
                 value = NEW_APPLICATION_STATUS

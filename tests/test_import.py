@@ -62,9 +62,9 @@ def test_job_expiry_date_is_imported():
 
 
 def test_unknown_status_falls_back_with_warning():
-    result = db.bulk_import_applications([_row(status="Ghosted")])
+    result = db.bulk_import_applications([_row(status="Banana")])
     assert _only_app()["status"] == "Saved"
-    assert any("Ghosted" in w and "Saved" in w for w in result["warnings"])
+    assert any("Banana" in w and "Saved" in w for w in result["warnings"])
 
 
 def test_row_without_company_or_role_is_skipped():
@@ -176,3 +176,17 @@ def test_map_page_submits_its_own_form_when_logged_in(client):
         assert "querySelector('form[method=\"post\"]')" not in page
     finally:
         db.set_setting("login_enabled", "0")
+
+
+def test_everyday_status_words_are_recognised():
+    rows = [_row(company=f"Co {i}", status=word) for i, word in enumerate(
+        ["Applied", "interview scheduled", "Phone screen", "Ghosted", "Offer", "withdrawn",
+         "ONLINE_ASSESSMENT", "Unsuccessful", "Wishlist", "Ghosted-ish"])]
+    result = db.bulk_import_applications(rows)
+    got = [a["status"] for a in sorted(db.get_applications(), key=lambda a: int(a["company"][3:]))]
+    assert got == ["Submitted", "Interview_Scheduled", "Interview_Scheduled", "Likely_Rejected",
+                   "Offer_Received", "Not_Applying", "Online_Assessment", "Rejected", "Saved",
+                   "Saved"]
+    # Only the word nobody could guess gets a warning.
+    assert [w for w in result["warnings"] if "unknown status" in w] == \
+        [w for w in result["warnings"] if "Ghosted-ish" in w]
