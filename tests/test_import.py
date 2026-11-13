@@ -210,3 +210,13 @@ def test_csv_waits_on_the_server_between_map_and_import(client):
     # A second Import click (or an expired upload) asks to upload again instead of failing.
     resp = client.post("/application/import", data={"stage": "import", "col_map_0": "company"})
     assert resp.status_code == 302
+
+
+def test_import_adds_one_reminder_for_untagged_companies_not_one_each():
+    db.bulk_import_applications([_row(company=f"New Co {i}") for i in range(12)])
+    tags = [r for r in db.get_reminders(unread_only=True) if "industry tags" in r["message"]]
+    assert len(tags) == 1 and tags[0]["message"].startswith("12 companies from your import")
+    # Adding one by hand still gets its own reminder.
+    db.add_application({"company": "Solo Co", "job_desc": "Role"})
+    tags = [r for r in db.get_reminders(unread_only=True) if "industry tags" in r["message"]]
+    assert len(tags) == 2

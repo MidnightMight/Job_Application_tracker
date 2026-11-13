@@ -70,6 +70,9 @@ def _enrich(app: dict, applied_days: int | None = None) -> dict:
     app["is_stale"] = False
     app["quiet_days"] = None
     app["stale_after"] = None
+    # Logging a contact makes sense once it has reached an employer and is still open.
+    app["can_log_contact"] = (not app.get("archived")
+                              and status_rank(app.get("status") or "") in _STALE_ACTIVE_RANKS + _STALE_APPLIED_RANKS)
     limit = stale_limit_days(app.get("status") or "",
                              applied_days if applied_days is not None else applied_stale_days())
     last = last_activity_date(app)
@@ -1025,6 +1028,28 @@ def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
 
 def bulk_import_applications(rows: list[dict], user_id=None,
                              update_existing: bool = False) -> dict:
+    """Import rows (see _bulk_import); new companies without industry tags get one
+    summary reminder instead of one reminder each."""
+    from .companies import _untagged_during_import
+    from .reminders import create_reminder
+    untagged: list = []
+    token = _untagged_during_import.set(untagged)
+    try:
+        result = _bulk_import(rows, user_id=user_id, update_existing=update_existing)
+    finally:
+        _untagged_during_import.reset(token)
+    if len(untagged) == 1:
+        name, app_id = untagged[0]
+        create_reminder(app_id, f"Company '{name}' was added without industry tags. "
+                                "Open Company Tracker to complete its industry/tags.")
+    elif untagged:
+        names = ", ".join(n for n, _ in untagged[:3]) + (" and others" if len(untagged) > 3 else "")
+        create_reminder(untagged[0][1], f"{len(untagged)} companies from your import have no industry "
+                                        f"tags ({names}). Open Company Tracker to add them.")
+    return result
+
+
+def _bulk_import(rows: list[dict], user_id=None, update_existing: bool = False) -> dict:
     """Import a list of dicts representing applications.
 
     * ``date_applied`` is optional — undated rows are imported as undated.

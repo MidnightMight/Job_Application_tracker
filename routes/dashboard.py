@@ -66,6 +66,7 @@ def year_view(year):
         show = "eoi"                     # picking EOI in the status filter opens its view
     show_archived = show == "archived"
     show_eoi = show == "eoi"
+    show_stale = show == "stale"
     everything = db.get_applications(
         year=year,
         status=status_filter if status_filter else None,
@@ -74,8 +75,11 @@ def year_view(year):
     )
     archived_count = sum(1 for a in everything if a.get("archived"))
     eoi_count = sum(1 for a in everything if not a.get("archived") and a.get("status") == db.EOI_STATUS)
+    stale_count = sum(1 for a in everything if a.get("is_stale"))
     if show_archived:
         apps = [a for a in everything if a.get("archived")]
+    elif show_stale:
+        apps = [a for a in everything if a.get("is_stale")]      # never archived, saved or EOI
     else:
         # Expressions of interest have their own view; the main list leaves them out.
         apps = [a for a in everything if not a.get("archived")
@@ -104,4 +108,6 @@ def year_view(year):
         archived_count=archived_count,
         show_eoi=show_eoi,
         eoi_count=eoi_count,
+        show_stale=show_stale,
+        stale_count=stale_count,
     )

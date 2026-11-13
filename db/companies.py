@@ -1,6 +1,13 @@
 """Company CRUD helpers."""
 
+import contextvars
+
 from .connection import get_connection
+
+# During a bulk import, new companies without industry tags are collected here
+# (one summary reminder at the end) instead of one inbox reminder each.
+_untagged_during_import: contextvars.ContextVar = contextvars.ContextVar(
+    "untagged_during_import", default=None)
 
 
 _NON_COMPANY_TRACKING_STATUSES = {
@@ -220,6 +227,10 @@ def _auto_add_or_update_company(
     conn.close()
 
     if company_added and not normalized_industry and app_id is not None:
+        collected = _untagged_during_import.get()
+        if collected is not None:
+            collected.append((company_name, app_id))
+            return
         from .reminders import create_reminder
 
         msg = (
