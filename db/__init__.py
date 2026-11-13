@@ -16,6 +16,7 @@ from .connection import (
 from .init_db import (
     DEFAULT_STATUSES,
     PENDING_STATUSES,
+    NEW_APPLICATION_STATUS,
     init_db,
     clear_demo_data,
 )
@@ -112,6 +113,9 @@ from .applications import (
     PRIORITY_LEVELS,
     parse_priority,
     sort_by_priority,
+    sort_by_status,
+    EOI_STATUS,
+    status_rank,
     set_priority,
     DUPLICATE_WINDOW_DAYS,
 )
@@ -132,7 +136,7 @@ __all__ = [
     "DB_PATH", "YEARS", "get_connection", "get_dynamic_years",
     "_add_column_if_missing", "_BULK_UPDATE_FIELDS",
     # init_db
-    "DEFAULT_STATUSES", "PENDING_STATUSES", "init_db", "clear_demo_data",
+    "DEFAULT_STATUSES", "PENDING_STATUSES", "NEW_APPLICATION_STATUS", "init_db", "clear_demo_data",
     # statuses
     "PROTECTED_STATUSES", "get_status_options", "get_status_rows", "get_status_styles",
     "add_status", "delete_status", "move_status",
@@ -168,7 +172,7 @@ __all__ = [
     "HOW_APPLIED_OPTIONS", "get_applications_applied_between",
     "get_upcoming_actions", "get_calendar_actions", "auto_archive_finished",
     "ARCHIVABLE_STATUSES", "DUPLICATE_WINDOW_DAYS",
-    "PRIORITY_LEVELS", "parse_priority", "sort_by_priority", "set_priority",
+    "PRIORITY_LEVELS", "parse_priority", "sort_by_priority", "sort_by_status", "status_rank", "EOI_STATUS", "set_priority",
     # attachments
     "ATTACHMENT_KINDS", "ALLOWED_EXTENSIONS", "MAX_ATTACHMENT_BYTES",
     "add_attachment", "get_attachments", "get_attachment", "delete_attachment",
