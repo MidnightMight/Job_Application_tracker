@@ -36,12 +36,6 @@ def settings():
 
         if action == "save_general":
             db.set_setting("reminder_enabled", "1" if request.form.get("reminder_enabled") else "0")
-            days = request.form.get("reminder_days", "3").strip()
-            if days.isdigit() and int(days) >= 1:
-                db.set_setting("reminder_days", days)
-            else:
-                flash("Reminder days must be a positive integer.", "danger")
-                return redirect(url_for("settings_routes.settings", section="general"))
             db.set_setting(
                 "company_pool_enabled",
                 "1" if request.form.get("company_pool_enabled") else "0",

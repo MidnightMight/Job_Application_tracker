@@ -4,34 +4,8 @@ import logging
 from datetime import datetime
 
 from .connection import get_connection
-from .init_db import PENDING_STATUSES
 
 logger = logging.getLogger(__name__)
-
-
-def get_pending_for_reminders(days_threshold: int, user_id=None) -> list:
-    """Return pending applications that have been waiting more than days_threshold days
-    and don't already have an undismissed reminder created within the last day."""
-    conn = get_connection()
-    placeholders = ",".join("?" for _ in PENDING_STATUSES)
-    sql = f"""SELECT a.* FROM applications a
-            WHERE a.status IN ({placeholders})
-              AND julianday('now') - julianday(a.date_applied) > ?
-              AND NOT EXISTS (
-                  SELECT 1 FROM reminders r
-                  WHERE r.application_id = a.id
-                    AND r.dismissed = 0
-                    AND julianday('now') - julianday(r.created_at) < 1
-              )
-        """
-    params: list = [*PENDING_STATUSES, days_threshold]
-    if user_id is not None:
-        sql += " AND a.user_id = ?"
-        params.append(user_id)
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
-    from .applications import _enrich
-    return [_enrich(dict(r)) for r in rows]
 
 
 def create_reminder(application_id: int, message: str, reminder_type: str = ""):

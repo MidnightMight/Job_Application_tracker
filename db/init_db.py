@@ -294,6 +294,7 @@ def init_db():
 
     _migrate_legacy_status_names(c)
     _add_saved_status(c)
+    _retire_pending_reminders(c)
     conn.commit()
 
     if c.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0:
@@ -305,6 +306,17 @@ def init_db():
         conn.commit()
 
     conn.close()
+
+
+def _retire_pending_reminders(c):
+    """The daily "has been pending for N days" reminder was removed (it added a new
+    one per application every day).  Once, mark the ones left in inboxes as read;
+    they stay in the inbox history."""
+    if c.execute("SELECT 1 FROM settings WHERE key='pending_reminders_retired'").fetchone():
+        return
+    c.execute("UPDATE reminders SET dismissed=1 WHERE dismissed=0 AND reminder_type IS NULL "
+              "AND message LIKE '%has been pending (%'")
+    c.execute("INSERT INTO settings (key, value) VALUES ('pending_reminders_retired', '1')")
 
 
 def _add_saved_status(c):

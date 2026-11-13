@@ -57,7 +57,6 @@ from .user_ai_settings import (
 )
 
 from .reminders import (
-    get_pending_for_reminders,
     create_reminder,
     get_reminders,
     dismiss_reminder,
@@ -150,7 +149,7 @@ __all__ = [
     # user_ai_settings
     "get_user_ai_settings", "save_user_ai_settings", "user_has_own_ai",
     # reminders
-    "get_pending_for_reminders", "create_reminder", "get_reminders",
+    "create_reminder", "get_reminders",
     "dismiss_reminder", "dismiss_all_reminders", "get_unread_reminder_count",
     "get_stalled_submitted_applications", "get_likely_rejected_applications",
     "get_due_next_steps_without_reminder",

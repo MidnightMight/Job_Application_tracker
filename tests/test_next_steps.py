@@ -336,3 +336,35 @@ def test_csv_export_and_import_carry_the_new_fields(client):
     assert result["imported"] == 1
     beta = [a for a in db.get_applications() if a["company"] == "Beta"][0]
     assert (beta["next_action"], beta["next_action_date"]) == ("Interview", "2026-11-07")
+
+
+def test_old_pending_reminders_are_gone_and_tidied(client):
+    import app as app_module
+    db.add_application({"company": "Waiting Co", "job_desc": "Role", "status": "Submitted",
+                        "date_applied": "2025-01-01"})
+    app_id = db.get_applications(include_archived=True)[0]["id"]
+    db.create_reminder(app_id, "'Role' at Waiting Co has been pending (Submitted) for 600 days.")
+    conn = db.get_connection()
+    conn.execute("DELETE FROM settings WHERE key='pending_reminders_retired'")
+    conn.commit(); conn.close()
+    db.init_db()                                    # the one-time tidy marks it read
+    assert not [r for r in db.get_reminders(unread_only=True) if "has been pending" in r["message"]]
+    app_module._check_and_create_reminders()        # and the daily job no longer adds them
+    assert not [r for r in db.get_reminders(unread_only=True) if "has been pending" in r["message"]]
+
+
+def test_reminder_switch_turns_off_check_ins(client):
+    import app as app_module
+    db.add_application({"company": "Quiet Co", "job_desc": "Role", "status": "Submitted",
+                        "date_applied": "2025-01-01"})
+    conn = db.get_connection()
+    conn.execute("UPDATE applications SET status_changed_at='2025-01-01'")   # quiet for months
+    conn.commit(); conn.close()
+    db.set_setting("reminder_enabled", "0")
+    try:
+        app_module._check_stale_submitted_applications()
+        assert not [r for r in db.get_reminders(unread_only=True) if r.get("reminder_type") == "stall_checkin"]
+    finally:
+        db.set_setting("reminder_enabled", "1")
+    app_module._check_stale_submitted_applications()
+    assert any(r.get("reminder_type") == "stall_checkin" for r in db.get_reminders(unread_only=True))
