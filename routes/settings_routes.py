@@ -108,6 +108,7 @@ def settings():
                 admins = [u for u in users if u["is_admin"]]
                 first_user = (admins or users)[0]
                 db.reassign_null_user_data(first_user["id"])
+                db.adopt_single_user_ai_settings(first_user["id"])
             flash("Security settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="users"))
 
@@ -207,9 +208,6 @@ def settings():
             return redirect(url_for("settings_routes.settings", section="ai"))
 
         elif action == "save_profile":
-            if DEPLOYMENT_MODE == "local":
-                flash("AI profile settings are not available in local mode.", "warning")
-                return redirect(url_for("settings_routes.settings", section="ai"))
             profile_user_id = current_user_id()
             skills     = request.form.get("user_profile_skills",     "").strip()
             experience = request.form.get("user_profile_experience", "").strip()
@@ -229,13 +227,9 @@ def settings():
             return redirect(url_for("settings_routes.settings", section="ai"))
 
         elif action == "save_user_ai":
-            if DEPLOYMENT_MODE == "local":
-                flash("AI settings are not available in local mode.", "warning")
-                return redirect(url_for("settings_routes.settings", section="ai"))
+            # Works with login off (one shared set) and in local mode (own providers
+            # don't need the Docker-only shared Ollama server).
             profile_user_id = current_user_id()
-            if profile_user_id is None:
-                flash("You must be logged in to save personal AI settings.", "warning")
-                return redirect(url_for("settings_routes.settings", section="ai"))
             # Toggle: 1 = use admin's server, 0 = use own settings.
             use_admin_ai = 1 if request.form.get("use_admin_ai") == "1" else 0
             provider = request.form.get("ai_provider", "ollama").strip()

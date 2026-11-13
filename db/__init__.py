@@ -54,6 +54,7 @@ from .user_ai_settings import (
     get_user_ai_settings,
     save_user_ai_settings,
     user_has_own_ai,
+    adopt_single_user_ai_settings,
 )
 
 from .reminders import (

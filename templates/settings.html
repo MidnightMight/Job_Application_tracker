@@ -574,10 +574,10 @@
     <div class="alert alert-secondary d-flex align-items-center gap-3" role="alert">
       <i class="bi bi-laptop fs-4 flex-shrink-0"></i>
       <div>
-        <strong>Not available in local mode.</strong><br>
-        The local AI assistant (Ollama) is disabled when running directly on Windows or macOS.
-        To enable it, deploy the app in Docker and set
-        <code>DEPLOYMENT_MODE=docker</code>.
+        <strong>Shared Ollama server not available in local mode.</strong><br>
+        The shared AI server (Ollama) is turned off when the app runs directly on Windows or macOS
+        (deploy it in Docker with <code>DEPLOYMENT_MODE=docker</code> to use it).
+        You can still use your own AI provider below, such as Claude or OpenAI.
       </div>
     </div>
     {% else %}
@@ -669,15 +669,15 @@
       </div>
     </div>
     {% endif %}
+    {% endif %}{# end local-mode guard: the shared Ollama card only #}
 
-    {# ── Per-user AI provider ── #}
-    {% if login_enabled %}
+    {# ── Per-user AI provider (with login off: the one person using the app) ── #}
     {# use_admin_ai: 1 = use admin server (default), 0 = use own settings #}
     {% set _use_admin = user_ai_settings.get('use_admin_ai', 1)|int %}
     <div class="card shadow-sm mb-4">
       <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
-          <i class="bi bi-cpu me-1 text-primary"></i>Your Personal AI Provider
+          <i class="bi bi-cpu me-1 text-primary"></i>{{ 'Your Personal AI Provider' if login_enabled else 'Your AI Provider' }}
           <span class="badge bg-info text-dark ms-2 small">Per-account</span>
         </span>
         {# ── Master toggle ── #}
@@ -807,7 +807,6 @@
         </form>
       </div>
     </div>
-    {% endif %}
 
     {# ── User Profile card — always shown when AI is available ── #}
     <div class="card shadow-sm mb-4 {% if not profile_ai_enabled %}profile-card-disabled{% endif %}" id="profileCard">
@@ -927,7 +926,6 @@
         application detail page to let you ask questions about that application.</p>
       </div>
     </div>
-    {% endif %}{# end local-mode guard for AI section #}
 
     {# ── Updates ── #}
     {% elif section == 'updates' %}

@@ -73,3 +73,30 @@ def test_settings_page_has_the_claude_guide(client, monkeypatch):
         db.set_setting("login_enabled", "0")
     assert 'id="claudeGuide"' in page and "platform.claude.com" in page
     assert "claude-3-haiku" not in page
+
+
+def test_claude_works_with_login_off_and_moves_to_the_admin_later(client, monkeypatch):
+    import db
+    from werkzeug.security import generate_password_hash
+    # Login off: the AI card is there and saving works.
+    page = client.get("/settings?section=ai").get_data(as_text=True)
+    assert 'id="claudeGuide"' in page and 'name="ai_provider"' in page
+    client.post("/settings?section=ai", data={"action": "save_user_ai", "use_admin_ai": "0",
+                                               "ai_provider": "anthropic", "api_key": "sk-ant-test"})
+    assert db.user_has_own_ai(None)
+    assert db.get_user_ai_settings(None)["ai_provider"] == "anthropic"
+    sent = _reply(monkeypatch, {"stop_reason": "end_turn", "content": [{"type": "text", "text": "ok"}]})
+    assert api._call_ai("hello", None) == "ok" and sent["url"].endswith("/v1/messages")
+    # Switching login on later hands the settings to the first admin.
+    db.add_user("boss", generate_password_hash("pw"), is_admin=True)
+    boss = db.get_user_by_username("boss")
+    db.adopt_single_user_ai_settings(boss["id"])
+    assert db.get_user_ai_settings(boss["id"])["api_key"] == "sk-ant-test"
+
+
+def test_local_mode_keeps_your_own_provider(client, monkeypatch):
+    import app as app_module
+    monkeypatch.setattr(app_module, "DEPLOYMENT_MODE", "local")
+    page = client.get("/settings?section=ai").get_data(as_text=True)
+    assert "Shared Ollama server not available in local mode" in page
+    assert 'name="ai_provider"' in page and 'id="claudeGuide"' in page
