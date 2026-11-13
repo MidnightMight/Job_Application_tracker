@@ -76,7 +76,17 @@ def test_menu_holds_import_export_settings_and_logout(client):
         sess["user_id"] = 1
         sess["username"] = "admin"
     html = client.get("/").get_data(as_text=True)
-    menu = html[html.index('class="dropdown-menu dropdown-menu-end ml-menu'):]
+    menu = html[html.index('aria-label="Menu"'):]  # the account menu, not the Add menu
+    menu = menu[menu.index('class="dropdown-menu dropdown-menu-end ml-menu'):]
     menu = menu[:menu.index("</ul>")]
     for text in ("Import CSV", "Export", "Settings", "themeToggleBtn", "Log out"):
         assert text in menu, text
+
+
+def test_add_button_offers_csv_import(client):
+    """The Add application button keeps its one-click add and also offers bulk import."""
+    page = client.get("/").get_data(as_text=True)
+    header = page.split('id="navbarNav"')[0]
+    assert "dropdown-toggle-split" in header                       # the arrow next to Add application
+    assert header.count("Import or update from CSV / Excel") == 2  # desktop menu + phone menu
+    assert header.count('href="/application/add"') >= 3           # one click still adds (+ both menus)

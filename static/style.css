@@ -175,6 +175,9 @@ main > div > .d-flex h2 > i:first-child { display: none; }
 .ml-navbar .dropdown-menu { --bs-dropdown-link-active-bg: var(--ml-blue); }
 .ml-menu .dropdown-item { display: flex; align-items: center; gap: .6rem; padding-block: .45rem; }
 .ml-menu .dropdown-item i { width: 1.1rem; color: var(--ml-muted); }
+/* Never wider than the screen; long items wrap on the smallest phones. */
+.ml-navbar .dropdown-menu { width: max-content; max-width: calc(100vw - 1rem); }
+.ml-navbar .dropdown-item { white-space: normal; }
 @media (max-width: 991.98px) {
   .ml-navbar .navbar-collapse { padding-block: .5rem; }
   .ml-navbar .nav-link.active { box-shadow: inset 3px 0 0 var(--ml-amber); }
