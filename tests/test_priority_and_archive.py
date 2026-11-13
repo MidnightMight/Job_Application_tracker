@@ -340,3 +340,19 @@ def test_dashboard_status_board_counts_archived_applications(client):
     assert "(1 archived)" in html
     # A status whose applications are all archived links to the archive view.
     assert re.search(r'href="/year/\d+\?status=Job_Expired&amp;show=archived"', html)
+
+
+def test_dashboard_counts_include_archived_and_offers_are_counted_right():
+    year = date.today().year
+    _add("Live Co", status="Submitted", date_applied=_day(0))
+    old = _add("Old Co", status="Rejected", date_applied=_day(0))
+    db.archive_application(old)
+    _add("Said No Co", status="Offer_Rejected", date_applied=_day(0))
+    _add("Interview Co", status="Interview_Scheduled", date_applied=_day(-5))
+    _add("Eoi Co", status="EOI", date_applied=_day(0))
+    stats = db.get_stats(year=year)
+    assert stats["total"] == 5                     # archived ones count
+    assert stats["rejected"] == 1                  # declining an offer isn't a rejection
+    assert stats["offers"] == 1                    # but it was an offer
+    # In progress: no archived, no EOI, most urgent first.
+    assert [a["company"] for a in stats["pending"]] == ["Interview Co", "Live Co"]
