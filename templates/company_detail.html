@@ -121,7 +121,7 @@
             <a href="{{ url_for('applications.application_detail', app_id=a.id) }}"
                class="text-decoration-none">{{ a.job_desc or '—' }}</a>
             {% if a.is_stale %}
-            <span class="badge bg-warning text-dark ms-1" title="No status change in ≥ 3 days">
+            <span class="badge bg-warning text-dark ms-1" title="No update for {{ a.quiet_days }} days (stale after {{ a.stale_after }} at this stage). Change the status, log a contact or set a next step.">
               <i class="bi bi-exclamation-triangle-fill"></i> Stale
             </span>
             {% endif %}

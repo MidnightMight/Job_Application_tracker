@@ -1,3 +1,4 @@
+import re
 """Restoring archived applications, priorities and the insights charts."""
 
 from datetime import date, timedelta
@@ -100,7 +101,7 @@ def test_priority_is_saved_from_the_form_and_kept_when_not_sent(client):
     assert db.get_application(app["id"])["priority"] == 1
 
 
-def test_year_view_sorts_by_priority_by_default(client):
+def test_year_view_priority_sort(client):
     year = date.today().year
     _add("Low Co", status="Submitted", date_applied=_day(0), priority=1)
     _add("High Co", status="Submitted", date_applied=_day(-20), priority=3)
@@ -108,13 +109,13 @@ def test_year_view_sorts_by_priority_by_default(client):
     _add("Done Co", status="Rejected", date_applied=_day(-2), priority=3)
     _add("Soon Co", status="Submitted", date_applied=_day(-30), priority=1, next_action_date=_day(1))
 
-    html = client.get(f"/year/{year}").get_data(as_text=True)
+    html = client.get(f"/year/{year}?sort=priority").get_data(as_text=True)
     order = sorted(["Low Co", "High Co", "Unset Co", "Done Co", "Soon Co"], key=html.index)
     assert order == ["High Co", "Soon Co", "Low Co", "Unset Co", "Done Co"]
 
-    # The other sorts are unchanged; priority only applies when chosen (the default).
+    # Newest first is really newest first (applied 20 days ago before 30 days ago).
     by_date = client.get(f"/year/{year}?sort=date").get_data(as_text=True)
-    assert by_date.index("High Co") > by_date.index("Soon Co")
+    assert by_date.index("Low Co") < by_date.index("Unset Co") < by_date.index("High Co") < by_date.index("Soon Co")
     assert '<option value="date" selected>' in by_date
 
 
@@ -190,7 +191,7 @@ def test_insights_page_shows_the_charts(client):
     page = client.get("/insights").get_data(as_text=True)
     assert 'id="outcomeChart"' in page and 'id="flowChart"' in page
     assert "INSIGHTS_CONFIG" in page and "js/insights.js" in page
-    assert "Still drafting" in page  # table view of the flow
+    assert "Saved or drafting" in page  # table view of the flow
     # Too wide for phones: the flow card is hidden below the md breakpoint.
     assert 'class="col-lg-7 d-none d-md-block"' in page
     db.get_connection().close()
@@ -208,3 +209,134 @@ def test_application_page_has_a_back_arrow_top_left(client):
     assert arrow < page.index("<h2") and 'href="/year/2025"' in page[arrow - 200:arrow]
     undated = _add("Undated Co")
     assert 'href="/"\n       class="ml-back-btn"' in client.get(f"/application/{undated}").get_data(as_text=True)
+
+
+# ── Saved status and the status sort ─────────────────────────────────────────
+
+def test_new_applications_start_as_saved(client):
+    form = client.get("/application/add").get_data(as_text=True)
+    assert re.search(r'<option value="Saved"\s+selected', form)
+    assert not re.search(r'<option value="Select_Status"\s+selected', form)
+    result = db.bulk_import_applications([
+        {"company": "No Status Co", "job_desc": "Role"},
+        {"company": "Odd Status Co", "job_desc": "Role", "status": "Pending_Thing"},
+    ])
+    assert result["imported"] == 2
+    statuses = {a["company"]: a["status"] for a in db.get_applications()}
+    assert statuses == {"No Status Co": "Saved", "Odd Status Co": "Saved"}
+    assert any("set to Saved" in w for w in result["warnings"])
+
+
+def test_saved_status_is_added_to_an_existing_database_after_no_status(client):
+    conn = db.get_connection()
+    conn.execute("DELETE FROM statuses WHERE name='Saved'")
+    conn.commit(); conn.close()
+    assert "Saved" not in db.get_status_options()
+    db.init_db()
+    order = db.get_status_options()
+    assert order.index("Saved") == order.index("Select_Status") + 1
+    assert len(order) == len(set(order))
+    ok, _ = db.delete_status("Saved")
+    assert not ok                                   # it is the default, so it stays
+
+
+def test_year_view_shows_interviews_first_by_default(client):
+    year = date.today().year
+    _add("Applied Co", status="Submitted", date_applied=_day(0), priority=3)
+    _add("Saved Co", status="Saved", date_applied=_day(-1))
+    _add("Draft Co", status="Drafting_Application", date_applied=_day(-2))
+    _add("Task Co", status="Online_Assessment", date_applied=_day(-3))
+    _add("Interview Co", status="Interview_Scheduled", date_applied=_day(-9))
+    _add("Rejected Co", status="Rejected", date_applied=_day(-1), priority=3)
+    _add("Offer Co", status="Offer_Received", date_applied=_day(-20))
+    _add("Waiting Co", status="Awaiting_Response", date_applied=_day(-4))
+
+    names = ["Applied Co", "Saved Co", "Draft Co", "Task Co", "Interview Co",
+             "Rejected Co", "Offer Co", "Waiting Co"]
+    expected = ["Offer Co", "Interview Co", "Task Co", "Draft Co", "Saved Co",
+                "Applied Co", "Waiting Co", "Rejected Co"]
+    for url in (f"/year/{year}", f"/year/{year}?sort=status"):
+        html = client.get(url).get_data(as_text=True)
+        assert sorted(names, key=html.index) == expected, url
+    assert '<option value="status" selected>' in client.get(f"/year/{year}").get_data(as_text=True)
+
+
+def test_status_sort_places_custom_statuses_by_name():
+    assert db.status_rank("Second_Interview") == db.status_rank("Interview_Scheduled")
+    assert db.status_rank("Take_Home_Assignment") == db.status_rank("Online_Assessment")
+    assert db.status_rank("Drafting_Cover_Letter") == db.status_rank("Drafting_CV")
+    assert db.status_rank("Submitted") < db.status_rank("Recruiter_Call") < db.status_rank("Rejected")
+
+
+def test_expressions_of_interest_have_their_own_view(client):
+    year = date.today().year
+    _add("Main Co", status="Submitted", date_applied=_day(0))
+    _add("Eoi Co", status="EOI", date_applied=_day(-1))
+    main = client.get(f"/year/{year}").get_data(as_text=True)
+    assert "Main Co" in main and "Eoi Co" not in main
+    assert "Expressions of interest (1)" in main
+    eoi = client.get(f"/year/{year}?show=eoi").get_data(as_text=True)
+    assert "Eoi Co" in eoi and "Main Co" not in eoi
+    assert '<option value="eoi" selected>' in eoi
+    # Picking EOI in the status filter lands in the same view.
+    assert "Eoi Co" in client.get(f"/year/{year}?status=EOI").get_data(as_text=True)
+    # EOI sorts last wherever statuses are ranked.
+    assert db.status_rank("EOI") > db.status_rank("Rejected")
+
+
+# ── Stale rule ───────────────────────────────────────────────────────────────
+
+def _stale(status, quiet_days, **extra):
+    app = {"status": status, "date_applied": _day(-60),
+           "status_changed_at": _day(-quiet_days), **extra}
+    return db.applications._enrich(app, 14)["is_stale"]
+
+
+def test_stale_depends_on_the_stage():
+    assert _stale("Submitted", 15) and not _stale("Submitted", 14)          # Settings: 2 weeks
+    assert _stale("Awaiting_Response", 20)
+    assert _stale("Interview_Scheduled", 8) and not _stale("Interview_Scheduled", 7)
+    assert _stale("Online_Assessment", 8)
+    assert _stale("Drafting_Application", 8) and not _stale("Drafting_Application", 3)
+    for never in ("Saved", "Select_Status", "EOI", "Rejected", "Likely_Rejected", "Job_Expired"):
+        assert not _stale(never, 200), never
+
+
+def test_contact_or_a_booked_next_step_keeps_it_fresh():
+    assert not _stale("Submitted", 30, last_contact_date=_day(-2))
+    assert not _stale("Interview_Scheduled", 30, next_action_date=_day(3))
+    assert _stale("Interview_Scheduled", 30, next_action_date=_day(-3))     # overdue step
+    assert not _stale("Submitted", 30, archived=1)
+
+
+def test_newest_first_is_not_reordered_by_stale(client):
+    year = date.today().year
+    _add("Old Draft Co", status="Drafting_Application", date_applied=_day(-40))
+    _add("Fresh Co", status="Submitted", date_applied=_day(0))
+    html = client.get(f"/year/{year}?sort=date").get_data(as_text=True)
+    assert html.index("Fresh Co") < html.index("Old Draft Co")
+
+
+def test_check_in_reminders_use_the_same_rule():
+    a = _add("Quiet Co", status="Submitted", date_applied=_day(-30))
+    b = _add("Booked Co", status="Interview_Scheduled", date_applied=_day(-30),
+             next_action_date=_day(2))
+    c = _add("Drafty Co", status="Drafting_Application", date_applied=_day(-30))
+    conn = db.get_connection()
+    conn.execute("UPDATE applications SET status_changed_at=?", (_day(-30),))
+    conn.commit(); conn.close()
+    found = {x["company"] for x in db.get_stalled_submitted_applications(14)}
+    assert found == {"Quiet Co"}          # booked interview and drafts get no HR check-in
+
+
+def test_dashboard_status_board_counts_archived_applications(client):
+    live = _add("Live Co", status="Rejected", date_applied=_day(0))
+    gone = _add("Gone Co", status="Rejected", date_applied=_day(0))
+    old = _add("Old Co", status="Job_Expired", date_applied=_day(0))
+    db.archive_application(gone)
+    db.archive_application(old)
+    html = client.get("/").get_data(as_text=True)
+    assert re.search(r'aria-label="2 Rejected"', html)                 # 1 live + 1 archived
+    assert "(1 archived)" in html
+    # A status whose applications are all archived links to the archive view.
+    assert re.search(r'href="/year/\d+\?status=Job_Expired&amp;show=archived"', html)

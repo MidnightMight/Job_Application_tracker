@@ -46,63 +46,27 @@ def create_reminder(application_id: int, message: str, reminder_type: str = ""):
     conn.close()
 
 
-def _get_submitted_range_statuses(user_id=None) -> list:
-    """Return the ordered statuses between Submitted (inclusive) and Rejected (exclusive).
-
-    This gives the set of "active waiting" statuses to check for stale reminders —
-    Rejected itself is excluded because an already-rejected application needs no
-    check-in.  Compare with ``_statuses_ignored_for_stale`` in applications.py which
-    includes Rejected (inclusive) for a different purpose: suppressing the general
-    stale badge in the UI.
-    """
-    try:
-        from .statuses import get_status_options
-        ordered = get_status_options(user_id=user_id)
-        submitted_idx = ordered.index("Submitted")
-        rejected_idx = ordered.index("Rejected")
-        start = min(submitted_idx, rejected_idx)
-        end = max(submitted_idx, rejected_idx)
-        # Submitted inclusive, Rejected exclusive — the "active waiting" range.
-        return ordered[start:end]
-    except (ValueError, ImportError):
-        logger.debug("_get_submitted_range_statuses: falling back to defaults")
-        return [
-            "Submitted", "Online_Assessment", "Awaiting_Response",
-            "Interview_Scheduled", "Interview_In_Person",
-        ]
-    except Exception:
-        logger.exception("_get_submitted_range_statuses: unexpected error")
-        return []
+def _statuses_in_stages(ranks, user_id=None) -> list:
+    """Statuses (visible to *user_id*) whose stage, from status_rank(), is in *ranks*."""
+    from .applications import status_rank
+    from .statuses import get_status_options
+    return [s for s in get_status_options(user_id=user_id) if status_rank(s) in ranks]
 
 
 def get_stalled_submitted_applications(threshold_days: int, user_id=None) -> list:
-    """Return submitted-range applications with no status change AND no recorded contact
-    for longer than *threshold_days*, that don't already have a recent stall_checkin reminder.
-
-    Both ``status_changed_at`` and ``last_contact_date`` are considered — whichever is
-    more recent resets the stall clock.
-    """
-    statuses = _get_submitted_range_statuses(user_id=user_id)
+    """Applications that went to the employer and are stale by the same rule as the
+    stale badge (applied: *threshold_days*; interview, assessment, offer: a week;
+    never while a next step is scheduled), without a stall_checkin reminder in the
+    last 7 days."""
+    from .applications import _STALE_ACTIVE_RANKS, _STALE_APPLIED_RANKS, _enrich
+    statuses = _statuses_in_stages(_STALE_ACTIVE_RANKS + _STALE_APPLIED_RANKS, user_id=user_id)
     if not statuses:
         return []
-
     placeholders = ",".join("?" for _ in statuses)
-    # Use julianday() for all date arithmetic to avoid string-comparison edge cases.
-    # When both status_changed_at and last_contact_date are NULL the inner expression
-    # falls back to date_applied; if that is also NULL the row evaluates to NULL > ?
-    # which is FALSE in SQLite — the application is silently excluded (correct behaviour).
     sql = f"""
         SELECT a.* FROM applications a
         WHERE a.status IN ({placeholders})
           AND COALESCE(a.archived, 0) = 0
-          AND julianday('now') - julianday(
-                CASE
-                  WHEN julianday(a.last_contact_date) IS NOT NULL
-                   AND julianday(a.last_contact_date) >= julianday(COALESCE(a.status_changed_at, a.date_applied))
-                  THEN a.last_contact_date
-                  ELSE COALESCE(a.status_changed_at, a.date_applied)
-                END
-              ) > ?
           AND NOT EXISTS (
               SELECT 1 FROM reminders r
               WHERE r.application_id = a.id
@@ -111,25 +75,26 @@ def get_stalled_submitted_applications(threshold_days: int, user_id=None) -> lis
                 AND julianday('now') - julianday(r.created_at) < 7
           )
     """
-    params: list = [*statuses, threshold_days]
+    params: list = [*statuses]
     if user_id is not None:
         sql += " AND a.user_id = ?"
         params.append(user_id)
     conn = get_connection()
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    from .applications import _enrich
-    return [_enrich(dict(r)) for r in rows]
+    apps = [_enrich(dict(r), threshold_days) for r in rows]
+    return [a for a in apps if a["is_stale"]]
 
 
 def get_likely_rejected_applications(threshold_days: int, user_id=None) -> list:
-    """Return submitted-range applications with no status change for longer than
+    """Return applications still waiting on the employer with no status change for longer than
     *threshold_days*, that don't already have a recent likely_rejected reminder.
 
     Only ``status_changed_at`` is used here — contact alone does not prevent an
     application from being flagged as likely rejected.
     """
-    statuses = _get_submitted_range_statuses(user_id=user_id)
+    # Went to the employer and still open: applied, awaiting, assessment, interview.
+    statuses = _statuses_in_stages((1, 2, 5, 6), user_id=user_id)
     if not statuses:
         return []
 
@@ -148,6 +113,9 @@ def get_likely_rejected_applications(threshold_days: int, user_id=None) -> list:
                 AND r.reminder_type = 'likely_rejected'
                 AND julianday('now') - julianday(r.created_at) < 7
           )
+          -- A next step still to come (e.g. an interview date) means it isn't dead yet.
+          AND (julianday(a.next_action_date) IS NULL
+               OR date(a.next_action_date) < date('now', 'localtime'))
     """
     params: list = [*statuses, threshold_days]
     if user_id is not None:

@@ -7,6 +7,7 @@ from .connection import get_connection, _add_column_if_missing
 # Default statuses — used only to seed the statuses table on first run.
 DEFAULT_STATUSES = [
     "Select_Status",
+    "Saved",
     "Drafting_Application",
     "Drafting_CV",
     "Submitted",
@@ -22,6 +23,10 @@ DEFAULT_STATUSES = [
     "Job_Expired",
     "EOI",
 ]
+
+# Status for every new application: saved, not started yet.  Keeps new jobs out of
+# "Drafting" until you actually start on them.
+NEW_APPLICATION_STATUS = "Saved"
 
 PENDING_STATUSES = {
     "Drafting_Application",
@@ -288,6 +293,7 @@ def init_db():
         conn.commit()
 
     _migrate_legacy_status_names(c)
+    _add_saved_status(c)
     conn.commit()
 
     if c.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0:
@@ -299,6 +305,19 @@ def init_db():
         conn.commit()
 
     conn.close()
+
+
+def _add_saved_status(c):
+    """Add the global "Saved" status to an existing database, right after
+    "Select_Status" (or first), shifting the statuses after it down by one."""
+    if c.execute("SELECT 1 FROM statuses WHERE name=? AND user_id IS NULL",
+                 (NEW_APPLICATION_STATUS,)).fetchone():
+        return
+    row = c.execute("SELECT sort_order FROM statuses WHERE name='Select_Status' AND user_id IS NULL").fetchone()
+    position = (row[0] + 1) if row else 0
+    c.execute("UPDATE statuses SET sort_order = sort_order + 1 WHERE sort_order >= ?", (position,))
+    c.execute("INSERT OR IGNORE INTO statuses (name, sort_order) VALUES (?,?)",
+              (NEW_APPLICATION_STATUS, position))
 
 
 def _migrate_legacy_status_names(c):

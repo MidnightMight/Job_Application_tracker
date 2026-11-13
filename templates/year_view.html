@@ -54,6 +54,7 @@
   <input type="hidden" name="year" value="{{ year }}">
   <input type="hidden" name="status_filter" value="{{ selected_status }}">
   <input type="hidden" name="sort_mode" value="{{ sort_mode }}">
+  <input type="hidden" name="show_mode" value="{{ 'archived' if show_archived else ('eoi' if show_eoi else '') }}">
   <input type="hidden" name="next" value="{{ request.full_path }}">
 
   <!-- Bulk actions: appear once at least one row is ticked -->
@@ -169,13 +170,14 @@
         <label class="visually-hidden" for="showFilter">Show</label>
         <select id="showFilter" name="show" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
           <option value="">Current</option>
+          <option value="eoi" {% if show_eoi %}selected{% endif %}>Expressions of interest ({{ eoi_count }})</option>
           <option value="archived" {% if show_archived %}selected{% endif %}>Archived ({{ archived_count }})</option>
         </select>
         <label class="visually-hidden" for="sortMode">Sort by</label>
         <select id="sortMode" name="sort" form="filterForm" class="form-select form-select-sm w-auto js-autosubmit">
+          <option value="status" {% if sort_mode == 'status' %}selected{% endif %}>Status: interviews first</option>
           <option value="priority" {% if sort_mode == 'priority' %}selected{% endif %}>Priority</option>
           <option value="date" {% if sort_mode == 'date' %}selected{% endif %}>Newest first</option>
-          <option value="status" {% if sort_mode == 'status' %}selected{% endif %}>By status</option>
         </select>
         <noscript><button type="submit" form="filterForm" class="btn btn-sm btn-primary">Apply</button></noscript>
       </div>
@@ -221,7 +223,7 @@
               <div class="d-md-none small text-secondary fw-normal">{{ a.job_desc }}</div>
               {% if a.is_stale %}
               <span class="badge bg-warning text-dark ms-1"
-                    title="No status change in {{ stale_days }}+ days">
+                    title="No update for {{ a.quiet_days }} days (stale after {{ a.stale_after }} at this stage). Change the status, log a contact or set a next step.">
                 <i class="bi bi-exclamation-triangle-fill me-1"></i>Stale
               </span>
               {% endif %}
@@ -337,7 +339,7 @@
           {% else %}
           <tr>
             <td colspan="16" class="text-center text-muted py-4">
-              No {% if show_archived %}archived {% endif %}applications found for {{ year }}
+              No {% if show_archived %}archived applications{% elif show_eoi %}expressions of interest{% else %}applications{% endif %} found for {{ year }}
               {% if selected_status %} with status <strong>{{ selected_status | status_label }}</strong>{% endif %}.
             </td>
           </tr>

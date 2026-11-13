@@ -63,8 +63,8 @@ def test_job_expiry_date_is_imported():
 
 def test_unknown_status_falls_back_with_warning():
     result = db.bulk_import_applications([_row(status="Ghosted")])
-    assert _only_app()["status"] == "Select_Status"
-    assert any("Ghosted" in w for w in result["warnings"])
+    assert _only_app()["status"] == "Saved"
+    assert any("Ghosted" in w and "Saved" in w for w in result["warnings"])
 
 
 def test_row_without_company_or_role_is_skipped():
