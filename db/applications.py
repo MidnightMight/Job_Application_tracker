@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from .connection import get_connection, _BULK_UPDATE_FIELDS
 from .init_db import NEW_APPLICATION_STATUS
@@ -855,6 +855,27 @@ def get_calendar_actions(user_id=None) -> list[dict]:
     rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_follow_ups(user_id=None, today: date | None = None) -> list[dict]:
+    """Open applications without a booked next step, with the day each one goes
+    stale (or today when it already has): calendar follow-up reminders that use the
+    same rule as the Stale badge.  Adds 'follow_up_date' and 'follow_up_kind'."""
+    today = today or date.today()
+    out = []
+    for a in get_applications(user_id=user_id):          # every year, archived left out
+        limit = stale_limit_days(a.get("status") or "", applied_stale_days())
+        last = last_activity_date(a)
+        next_step = _day(a.get("next_action_date"))
+        if limit is None or not last or (next_step and next_step >= today) or a.get("status") == EOI_STATUS:
+            continue
+        rank = status_rank(a["status"])
+        a["follow_up_kind"] = ("finish" if rank == _STALE_DRAFTING_RANK
+                               else "chase" if rank in _STALE_ACTIVE_RANKS else "follow_up")
+        a["follow_up_date"] = max(today, last + timedelta(days=limit + 1))
+        out.append(a)
+    out.sort(key=lambda a: a["follow_up_date"])
+    return out
 
 
 # Statuses that may be archived, by hand or automatically.

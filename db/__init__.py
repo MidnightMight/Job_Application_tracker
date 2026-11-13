@@ -116,6 +116,7 @@ from .applications import (
     sort_by_priority,
     sort_by_status,
     EOI_STATUS,
+    get_follow_ups,
     status_rank,
     set_priority,
     DUPLICATE_WINDOW_DAYS,

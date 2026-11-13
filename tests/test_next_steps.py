@@ -368,3 +368,34 @@ def test_reminder_switch_turns_off_check_ins(client):
         db.set_setting("reminder_enabled", "1")
     app_module._check_stale_submitted_applications()
     assert any(r.get("reminder_type") == "stall_checkin" for r in db.get_reminders(unread_only=True))
+
+
+def test_calendar_feed_has_follow_ups_on_the_day_they_go_stale(client):
+    from datetime import date, timedelta
+    today = date.today()
+    d = lambda n: (today + timedelta(days=n)).isoformat()
+    quiet = db.add_application({"company": "Quiet Co", "job_desc": "Role", "status": "Submitted",
+                                "date_applied": d(-40)})
+    recent = db.add_application({"company": "Recent Co", "job_desc": "Role", "status": "Submitted",
+                                 "date_applied": d(-3)})
+    db.add_application({"company": "Booked Co", "job_desc": "Role", "status": "Interview_Scheduled",
+                        "date_applied": d(-20), "next_action": "Interview", "next_action_date": d(2)})
+    db.add_application({"company": "Saved Co", "job_desc": "Role", "status": "Saved", "date_applied": d(-90)})
+    conn = db.get_connection()
+    conn.execute("UPDATE applications SET status_changed_at=date_applied")
+    conn.commit(); conn.close()
+
+    ups = {a["company"]: a for a in db.get_follow_ups()}
+    assert set(ups) == {"Quiet Co", "Recent Co"}             # booked and saved: no follow-up
+    assert ups["Quiet Co"]["follow_up_date"] == today        # already stale: today
+    assert ups["Recent Co"]["follow_up_date"] == today + timedelta(days=12)   # 3 days in, 14-day limit
+
+    body = client.get(_calendar_link(client).replace("http://localhost", "")).get_data(as_text=True)
+    assert "SUMMARY:Follow up: Quiet Co" in body and "SUMMARY:Interview — Booked Co" in body
+    assert body.count(f"UID:application-{quiet}-follow-up@job-tracker") == 1
+    assert f"DTSTART;VALUE=DATE:{(today + timedelta(days=12)):%Y%m%d}" in body
+    # Logging a contact moves the follow-up out, it doesn't add a second one.
+    client.post(f"/application/{quiet}/contacted")
+    body = client.get(_calendar_link(client).replace("http://localhost", "")).get_data(as_text=True)
+    assert body.count(f"UID:application-{quiet}-follow-up@job-tracker") == 1
+    assert f"DTSTART;VALUE=DATE:{(today + timedelta(days=15)):%Y%m%d}" in body

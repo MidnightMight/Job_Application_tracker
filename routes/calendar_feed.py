@@ -69,7 +69,10 @@ def _fold(line: str) -> str:
     return "\r\n".join(out)
 
 
-def build_calendar(actions: list, app_url) -> str:
+_FOLLOW_UP_TITLES = {"follow_up": "Follow up", "chase": "Chase", "finish": "Finish or drop"}
+
+
+def build_calendar(actions: list, app_url, follow_ups: list | None = None) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR",
@@ -102,6 +105,27 @@ def build_calendar(actions: list, app_url) -> str:
             "TRANSP:TRANSPARENT",
             "END:VEVENT",
         ]
+    for a in follow_ups or []:
+        day = a["follow_up_date"]
+        title = _FOLLOW_UP_TITLES.get(a.get("follow_up_kind"), "Follow up")
+        summary = f"{title}: {a.get('company') or 'Application'}"
+        quiet = f"No update for {a.get('quiet_days')} days" if a.get("quiet_days") is not None else ""
+        details = [a.get("job_desc") or "", (a.get("status") or "").replace("_", " "), quiet,
+                   "Log a contact, change the status or book a next step to move this.",
+                   app_url(a["id"])]
+        lines += [
+            "BEGIN:VEVENT",
+            # One stable id per application, so the event moves instead of piling up.
+            f"UID:application-{a['id']}-follow-up@job-tracker",
+            f"DTSTAMP:{stamp}",
+            f"DTSTART;VALUE=DATE:{day:%Y%m%d}",
+            f"DTEND;VALUE=DATE:{day + timedelta(days=1):%Y%m%d}",
+            f"SUMMARY:{_ics_text(summary)}",
+            f"DESCRIPTION:{_ics_text(chr(10).join(d for d in details if d))}",
+            f"URL:{app_url(a['id'])}",
+            "TRANSP:TRANSPARENT",
+            "END:VEVENT",
+        ]
     lines.append("END:VCALENDAR")
     return "\r\n".join(_fold(line) for line in lines) + "\r\n"
 
@@ -114,6 +138,7 @@ def feed(token):
     body = build_calendar(
         db.get_calendar_actions(user_id=user_id),
         lambda app_id: url_for("applications.application_detail", app_id=app_id, _external=True),
+        follow_ups=db.get_follow_ups(user_id=user_id),
     )
     return Response(body, mimetype="text/calendar",
                     headers={"Content-Disposition": "inline; filename=job-applications.ics",
