@@ -95,13 +95,13 @@ if (fitToggle) {
   const modelPlaceholders = {
     ollama:    'llama3',
     openai:    'gpt-4o-mini',
-    anthropic: 'claude-3-haiku-20240307',
+    anthropic: 'claude-opus-5-5',
     custom:    'e.g. mistral, llama3',
   };
   const modelHints = {
     ollama:    'Any model available on your personal Ollama server (e.g. llama3).',
     openai:    'e.g. gpt-4o-mini, gpt-4o, gpt-3.5-turbo',
-    anthropic: 'e.g. claude-3-haiku-20240307, claude-3-sonnet-20240229',
+    anthropic: 'Leave empty for claude-opus-5-5. Cheaper: claude-sonnet-5-5 or claude-haiku-5-5.',
     custom:    'Model name accepted by your custom API server.',
   };
 
@@ -112,6 +112,8 @@ if (fitToggle) {
     if (apiKeyRow) apiKeyRow.style.display = (provider === 'openai' || provider === 'anthropic' || provider === 'custom') ? '' : 'none';
     if (modelInput) modelInput.placeholder = modelPlaceholders[provider] || '';
     if (modelHint)  modelHint.textContent  = modelHints[provider] || '';
+    const claudeGuide = document.getElementById('claudeGuide');
+    if (claudeGuide) claudeGuide.style.display = provider === 'anthropic' ? '' : 'none';
     updateProfileCardState();
   }
 

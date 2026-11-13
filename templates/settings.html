@@ -756,6 +756,30 @@
               </select>
             </div>
 
+            {# Setup guide for Claude; settings.js shows it when Anthropic is selected. #}
+            <div id="claudeGuide" class="alert alert-light border small mb-3"
+                 {% if user_ai_settings.get('ai_provider','') != 'anthropic' %}style="display:none"{% endif %}>
+              <div class="fw-semibold mb-2"><i class="bi bi-key me-1"></i>Getting a Claude API key</div>
+              <ol class="mb-2 ps-3">
+                <li>Go to <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a>
+                    (the Claude Console) and sign up or log in. This is separate from a Claude.ai
+                    Pro or Max subscription: the API is billed on its own.</li>
+                <li>Under <strong>Settings → Billing</strong>, add some credit. A few dollars lasts a long time here.
+                    Setting a monthly spend limit under <strong>Settings → Limits</strong> is a good idea.</li>
+                <li>Under <strong>Settings → API keys</strong>, choose <strong>Create key</strong>, give it a
+                    name such as "Job tracker", and copy it. It starts with <code>sk-ant-</code> and is only shown once.</li>
+                <li>Paste it into <strong>API Key</strong> below, leave <strong>Model</strong> empty, choose
+                    <strong>Save Provider Settings</strong>, then <strong>Test connection</strong>.</li>
+              </ol>
+              <div class="mb-1"><strong>Which model?</strong> Leave the field empty to use
+                <code>claude-opus-5-5</code>, the most capable everyday model.
+                For lower cost type <code>claude-sonnet-5-5</code>, or <code>claude-haiku-5-5</code> for the cheapest.</div>
+              <div class="text-muted">Prices per million tokens (input / output): Opus 5.5 $4 / $20,
+                Sonnet 5.5 $2 / $10, Haiku 5.5 $0.10 / $0.50. Filling in one job ad uses a few thousand
+                tokens: a few cents on Opus, a fraction of a cent on Haiku.
+                Check <a href="https://claude.com/pricing" target="_blank" rel="noopener">current pricing</a>.</div>
+            </div>
+
             <div id="providerApiSection">
               <div class="mb-3" id="apiKeyRow">
                 <label class="form-label fw-semibold">API Key</label>
@@ -782,7 +806,7 @@
                 <input type="text" name="ai_model" class="form-control" style="max-width:280px;"
                        value="{{ user_ai_settings.get('ai_model','') }}"
                        id="aiModelInput"
-                       placeholder="{{ 'gpt-4o-mini' if user_ai_settings.get('ai_provider','') == 'openai' else ('claude-3-haiku-20240307' if user_ai_settings.get('ai_provider','') == 'anthropic' else '') }}">
+                       placeholder="{{ 'gpt-4o-mini' if user_ai_settings.get('ai_provider','') == 'openai' else ('claude-opus-5-5' if user_ai_settings.get('ai_provider','') == 'anthropic' else '') }}">
                 <div class="form-text" id="modelHint"></div>
               </div>
             </div>
