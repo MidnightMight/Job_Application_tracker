@@ -58,3 +58,16 @@ def test_logout_post_needs_csrf_token(csrf_client):
 def test_missing_page_is_404_not_500(client):
     assert client.get("/no-such-page").status_code == 404
     assert client.get("/application/999999").status_code in (302, 404)
+
+
+def test_sample_data_does_not_come_back_after_deleting_everything():
+    import db
+    conn = db.get_connection()
+    for table in ("status_history", "reminders", "applications", "companies"):
+        conn.execute(f"DELETE FROM {table}")
+    conn.execute("DELETE FROM settings WHERE key='sample_data_seeded'")
+    conn.commit(); conn.close()
+    db.set_setting("onboarding_complete", "1")      # an existing, set-up install
+    db.init_db()                                    # a restart
+    assert db.get_applications(include_archived=True) == []
+    assert db.get_companies() == []

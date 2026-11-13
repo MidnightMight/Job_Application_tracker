@@ -297,12 +297,18 @@ def init_db():
     _retire_pending_reminders(c)
     conn.commit()
 
-    if c.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0:
-        _seed_applications(c)
-        conn.commit()
-
-    if c.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
-        _seed_companies(c)
+    # Sample data only on a brand-new install (before setup is finished), and only
+    # once: before, it came back on every start once the tables were empty.
+    seeded = c.execute("SELECT 1 FROM settings WHERE key='sample_data_seeded'").fetchone()
+    setup_done = c.execute(
+        "SELECT 1 FROM settings WHERE key='onboarding_complete' AND value='1'").fetchone()
+    if not seeded:
+        if not setup_done:
+            if c.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0:
+                _seed_applications(c)
+            if c.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
+                _seed_companies(c)
+        c.execute("INSERT INTO settings (key, value) VALUES ('sample_data_seeded', '1')")
         conn.commit()
 
     conn.close()
