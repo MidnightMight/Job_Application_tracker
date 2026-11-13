@@ -296,6 +296,7 @@ def init_db():
     _add_saved_status(c)
     _retire_pending_reminders(c)
     _normalise_date_applied(c)
+    _ensure_company_year_columns(c)
     conn.commit()
 
     # Sample data only on a brand-new install (before setup is finished), and only
@@ -313,6 +314,18 @@ def init_db():
         conn.commit()
 
     conn.close()
+
+
+def _ensure_company_year_columns(c):
+    """One applied_YYYY company column for every year with applications, plus the
+    current year (the table used to stop at 2027)."""
+    from .companies import ensure_applied_year_column
+    years = {datetime.now().year}
+    years |= {int(r[0]) for r in c.execute(
+        "SELECT DISTINCT strftime('%Y', date_applied) FROM applications "
+        "WHERE strftime('%Y', date_applied) IS NOT NULL").fetchall()}
+    for year in sorted(years):
+        ensure_applied_year_column(c, year)
 
 
 def _normalise_date_applied(c):

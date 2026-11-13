@@ -76,11 +76,10 @@ def export_applications():
 @login_required
 def export_companies():
     companies_list = db.get_companies()
-    fields = [
-        "id", "company_name", "note", "industry",
-        "applied_2023", "applied_2024", "applied_2025",
-        "applied_2026", "applied_2027",
-    ]
+    conn = db.get_connection()
+    year_columns = db.applied_year_columns(conn)
+    conn.close()
+    fields = ["id", "company_name", "note", "industry", *year_columns]
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()

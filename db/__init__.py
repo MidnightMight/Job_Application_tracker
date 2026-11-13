@@ -84,6 +84,7 @@ from .companies import (
     update_company,
     delete_company,
     bulk_delete_companies,
+    applied_year_columns,
 )
 
 from .applications import (
@@ -132,7 +133,7 @@ from .attachments import (
 
 __all__ = [
     # connection
-    "DB_PATH", "YEARS", "get_connection", "get_dynamic_years",
+    "DB_PATH", "YEARS", "get_connection", "get_dynamic_years", "applied_year_columns",
     "_add_column_if_missing", "_BULK_UPDATE_FIELDS",
     # init_db
     "DEFAULT_STATUSES", "PENDING_STATUSES", "NEW_APPLICATION_STATUS", "init_db", "clear_demo_data",
