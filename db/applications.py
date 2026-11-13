@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from .connection import get_connection, _BULK_UPDATE_FIELDS
 from .init_db import NEW_APPLICATION_STATUS
@@ -70,6 +70,9 @@ def _enrich(app: dict, applied_days: int | None = None) -> dict:
     app["is_stale"] = False
     app["quiet_days"] = None
     app["stale_after"] = None
+    # Logging a contact makes sense once it has reached an employer and is still open.
+    app["can_log_contact"] = (not app.get("archived")
+                              and status_rank(app.get("status") or "") in _STALE_ACTIVE_RANKS + _STALE_APPLIED_RANKS)
     limit = stale_limit_days(app.get("status") or "",
                              applied_days if applied_days is not None else applied_stale_days())
     last = last_activity_date(app)
@@ -854,6 +857,27 @@ def get_calendar_actions(user_id=None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_follow_ups(user_id=None, today: date | None = None) -> list[dict]:
+    """Open applications without a booked next step, with the day each one goes
+    stale (or today when it already has): calendar follow-up reminders that use the
+    same rule as the Stale badge.  Adds 'follow_up_date' and 'follow_up_kind'."""
+    today = today or date.today()
+    out = []
+    for a in get_applications(user_id=user_id):          # every year, archived left out
+        limit = stale_limit_days(a.get("status") or "", applied_stale_days())
+        last = last_activity_date(a)
+        next_step = _day(a.get("next_action_date"))
+        if limit is None or not last or (next_step and next_step >= today) or a.get("status") == EOI_STATUS:
+            continue
+        rank = status_rank(a["status"])
+        a["follow_up_kind"] = ("finish" if rank == _STALE_DRAFTING_RANK
+                               else "chase" if rank in _STALE_ACTIVE_RANKS else "follow_up")
+        a["follow_up_date"] = max(today, last + timedelta(days=limit + 1))
+        out.append(a)
+    out.sort(key=lambda a: a["follow_up_date"])
+    return out
+
+
 # Statuses that may be archived, by hand or automatically.
 ARCHIVABLE_STATUSES = ("Rejected", "Not_Applying", "Job_Expired")
 
@@ -935,6 +959,45 @@ def _parse_bool(value, default: int) -> int | None:
     return None
 
 
+# Everyday words people use for a status in a spreadsheet, mapped to the app's statuses.
+_STATUS_WORDS = {
+    "Saved": ("saved", "bookmarked", "wishlist", "to apply", "interested", "shortlisted", "new"),
+    "Drafting_Application": ("draft", "drafting", "writing", "preparing", "in progress", "started"),
+    "Submitted": ("applied", "submitted", "sent", "application sent", "application submitted"),
+    "Awaiting_Response": ("awaiting", "waiting", "pending", "in review", "under review",
+                          "reviewing", "awaiting response", "waiting to hear"),
+    "Online_Assessment": ("assessment", "online assessment", "test", "online test", "assignment",
+                          "task", "take home", "coding challenge", "psychometric"),
+    "Interview_Scheduled": ("interview", "interviewing", "interview scheduled", "phone screen",
+                            "screening", "screen", "video interview", "first interview",
+                            "second interview", "final interview"),
+    "Interview_In_Person": ("in person interview", "onsite", "on site", "face to face"),
+    "Offer_Received": ("offer", "offered", "offer received", "job offer"),
+    "Offer_Rejected": ("offer declined", "declined offer", "offer rejected", "turned down offer"),
+    "Rejected": ("rejected", "rejection", "unsuccessful", "not successful", "declined",
+                 "not selected", "no"),
+    "Likely_Rejected": ("no response", "ghosted", "no reply", "likely rejected", "silence"),
+    "Not_Applying": ("withdrawn", "withdrew", "not applying", "not interested", "skipped",
+                     "cancelled"),
+    "Job_Expired": ("expired", "closed", "job closed", "position filled", "filled"),
+    "EOI": ("eoi", "expression of interest"),
+}
+
+
+def match_status_name(text: str, valid_statuses) -> str | None:
+    """The app status a spreadsheet value means, or None.  Matches a status name in
+    any case or with spaces ("interview scheduled"), then everyday words
+    ("Applied", "Ghosted", "Phone screen").  Only returns statuses that exist."""
+    norm = " ".join(str(text).replace("_", " ").replace("-", " ").lower().split())
+    for name in valid_statuses:
+        if name.replace("_", " ").lower() == norm:
+            return name
+    for name, words in _STATUS_WORDS.items():
+        if norm in words and name in valid_statuses:
+            return name
+    return None
+
+
 def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
                       warnings: list[str]) -> dict:
     """Normalise one import row.  Only keys present in *row* are returned, so
@@ -974,6 +1037,8 @@ def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
             out[key] = parsed
         elif key == "status":
             if value and valid_statuses and value not in valid_statuses:
+                value = match_status_name(value, valid_statuses) or value
+            if value and valid_statuses and value not in valid_statuses:
                 warnings.append(f"{label}: unknown status '{value}' — set to {NEW_APPLICATION_STATUS}.")
                 value = NEW_APPLICATION_STATUS
             out[key] = value or "Select_Status"
@@ -984,6 +1049,28 @@ def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
 
 def bulk_import_applications(rows: list[dict], user_id=None,
                              update_existing: bool = False) -> dict:
+    """Import rows (see _bulk_import); new companies without industry tags get one
+    summary reminder instead of one reminder each."""
+    from .companies import _untagged_during_import
+    from .reminders import create_reminder
+    untagged: list = []
+    token = _untagged_during_import.set(untagged)
+    try:
+        result = _bulk_import(rows, user_id=user_id, update_existing=update_existing)
+    finally:
+        _untagged_during_import.reset(token)
+    if len(untagged) == 1:
+        name, app_id = untagged[0]
+        create_reminder(app_id, f"Company '{name}' was added without industry tags. "
+                                "Open Company Tracker to complete its industry/tags.")
+    elif untagged:
+        names = ", ".join(n for n, _ in untagged[:3]) + (" and others" if len(untagged) > 3 else "")
+        create_reminder(untagged[0][1], f"{len(untagged)} companies from your import have no industry "
+                                        f"tags ({names}). Open Company Tracker to add them.")
+    return result
+
+
+def _bulk_import(rows: list[dict], user_id=None, update_existing: bool = False) -> dict:
     """Import a list of dicts representing applications.
 
     * ``date_applied`` is optional — undated rows are imported as undated.

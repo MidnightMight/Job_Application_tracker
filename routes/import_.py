@@ -102,6 +102,45 @@ def _delete_upload_tmp(path: str) -> None:
         pass
 
 
+def _stash_csv(content: str) -> None:
+    """Keep the parsed CSV on the server between Map and Import (it used to travel
+    back and forth inside the mapping page as a hidden field)."""
+    _drop_stashed_csv()
+    _clean_old_upload_tmp()
+    session["import_csv"] = _save_upload_tmp(content.encode("utf-8"))
+
+
+def _take_stashed_csv() -> str | None:
+    path = session.pop("import_csv", None)
+    if not path or os.path.dirname(os.path.abspath(path)) != os.path.abspath(_UPLOAD_TMP_DIR):
+        return None
+    try:
+        return _load_upload_tmp(path).decode("utf-8")
+    except OSError:
+        return None
+    finally:
+        _delete_upload_tmp(path)
+
+
+def _drop_stashed_csv() -> None:
+    path = session.pop("import_csv", None)
+    if path and os.path.dirname(os.path.abspath(path)) == os.path.abspath(_UPLOAD_TMP_DIR):
+        _delete_upload_tmp(path)
+
+
+def _clean_old_upload_tmp(max_age_seconds: int = 24 * 3600) -> None:
+    """Remove scratch files from imports that were started but never finished."""
+    import time
+    cutoff = time.time() - max_age_seconds
+    try:
+        for name in os.listdir(_UPLOAD_TMP_DIR):
+            full = os.path.join(_UPLOAD_TMP_DIR, name)
+            if os.path.isfile(full) and os.path.getmtime(full) < cutoff:
+                _delete_upload_tmp(full)
+    except OSError:
+        pass
+
+
 def _excel_sheet_to_csv(workbook_bytes: bytes, sheet_name: str, start_row: int = 1) -> str:
     wb = openpyxl.load_workbook(io.BytesIO(workbook_bytes), read_only=True, data_only=True)
     ws = wb[sheet_name]
@@ -150,6 +189,7 @@ def import_csv():
 
         preview_rows = [row for i, row in enumerate(reader) if i < 10]
         guessed = _guess_mapping(headers)
+        _stash_csv(content)
 
         source_label = f"{filename} — {sheet_name}"
         if header_row > 1:
@@ -160,7 +200,6 @@ def import_csv():
             headers=headers,
             preview_rows=preview_rows,
             guessed=guessed,
-            csv_content=content,
             import_fields=CSV_IMPORT_FIELDS,
             source_label=source_label,
         )
@@ -217,6 +256,7 @@ def import_csv():
 
         preview_rows = remaining_rows[:10]
         guessed = _guess_mapping(headers)
+        _stash_csv(content)
 
         source_label = filename
         if header_row > 1:
@@ -227,13 +267,17 @@ def import_csv():
             headers=headers,
             preview_rows=preview_rows,
             guessed=guessed,
-            csv_content=content,
             import_fields=CSV_IMPORT_FIELDS,
             source_label=source_label,
         )
 
     if request.form.get("stage") == "import":
-        content = request.form.get("csv_content", "")
+        content = _take_stashed_csv()
+        if content is None:
+            content = request.form.get("csv_content", "")   # a mapping page opened before this change
+        if not content:
+            flash("The uploaded file has expired. Please upload it again.", "warning")
+            return redirect(url_for("import_.import_csv"))
         reader = csv.reader(io.StringIO(content))
         headers = next(reader, [])
 

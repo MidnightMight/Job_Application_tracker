@@ -62,9 +62,9 @@ def test_job_expiry_date_is_imported():
 
 
 def test_unknown_status_falls_back_with_warning():
-    result = db.bulk_import_applications([_row(status="Ghosted")])
+    result = db.bulk_import_applications([_row(status="Banana")])
     assert _only_app()["status"] == "Saved"
-    assert any("Ghosted" in w and "Saved" in w for w in result["warnings"])
+    assert any("Banana" in w and "Saved" in w for w in result["warnings"])
 
 
 def test_row_without_company_or_role_is_skipped():
@@ -176,3 +176,47 @@ def test_map_page_submits_its_own_form_when_logged_in(client):
         assert "querySelector('form[method=\"post\"]')" not in page
     finally:
         db.set_setting("login_enabled", "0")
+
+
+def test_everyday_status_words_are_recognised():
+    rows = [_row(company=f"Co {i}", status=word) for i, word in enumerate(
+        ["Applied", "interview scheduled", "Phone screen", "Ghosted", "Offer", "withdrawn",
+         "ONLINE_ASSESSMENT", "Unsuccessful", "Wishlist", "Ghosted-ish"])]
+    result = db.bulk_import_applications(rows)
+    got = [a["status"] for a in sorted(db.get_applications(), key=lambda a: int(a["company"][3:]))]
+    assert got == ["Submitted", "Interview_Scheduled", "Interview_Scheduled", "Likely_Rejected",
+                   "Offer_Received", "Not_Applying", "Online_Assessment", "Rejected", "Saved",
+                   "Saved"]
+    # Only the word nobody could guess gets a warning.
+    assert [w for w in result["warnings"] if "unknown status" in w] == \
+        [w for w in result["warnings"] if "Ghosted-ish" in w]
+
+
+def test_csv_waits_on_the_server_between_map_and_import(client):
+    import os
+    page = client.post("/application/import", data={
+        "csv_file": (io.BytesIO(b"Company,Role,Status\nAcme,Tester,Applied\n"), "jobs.csv"),
+    }, content_type="multipart/form-data").get_data(as_text=True)
+    assert 'name="csv_content"' not in page            # the file isn't sent back to the browser
+    with client.session_transaction() as sess:
+        stashed = sess["import_csv"]
+    assert os.path.exists(stashed)
+    page = client.post("/application/import", data={
+        "stage": "import", "col_map_0": "company", "col_map_1": "job_desc", "col_map_2": "status",
+    }).get_data(as_text=True)
+    assert "1 added" in page
+    assert _only_app()["status"] == "Submitted"
+    assert not os.path.exists(stashed)                 # cleaned up after the import
+    # A second Import click (or an expired upload) asks to upload again instead of failing.
+    resp = client.post("/application/import", data={"stage": "import", "col_map_0": "company"})
+    assert resp.status_code == 302
+
+
+def test_import_adds_one_reminder_for_untagged_companies_not_one_each():
+    db.bulk_import_applications([_row(company=f"New Co {i}") for i in range(12)])
+    tags = [r for r in db.get_reminders(unread_only=True) if "industry tags" in r["message"]]
+    assert len(tags) == 1 and tags[0]["message"].startswith("12 companies from your import")
+    # Adding one by hand still gets its own reminder.
+    db.add_application({"company": "Solo Co", "job_desc": "Role"})
+    tags = [r for r in db.get_reminders(unread_only=True) if "industry tags" in r["message"]]
+    assert len(tags) == 2

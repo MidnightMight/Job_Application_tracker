@@ -4,6 +4,7 @@ import io
 import json
 import re as _re
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from flask import Blueprint, jsonify, request
@@ -63,11 +64,21 @@ def _call_openai_compat(prompt: str, api_key: str, base_url: str, model: str,
     return (result["choices"][0]["message"]["content"] or "").strip()
 
 
+# Default Claude model when the user leaves the model field empty.
+DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
+
+
 def _call_anthropic(prompt: str, api_key: str, model: str, timeout: int = 90) -> str:
-    """Call the Anthropic Messages API and return the response text."""
+    """Call the Anthropic Messages API and return the response text.
+
+    Current models think before answering, so the reply can start with a
+    thinking block: the answer is the text blocks, joined.  max_tokens covers
+    thinking and answer together.
+    """
+    model = model or DEFAULT_CLAUDE_MODEL
     payload = json.dumps({
-        "model":      model or "claude-3-haiku-20240307",
-        "max_tokens": 1024,
+        "model":      model,
+        "max_tokens": 16000,
         "messages":   [{"role": "user", "content": prompt}],
     }).encode()
     headers = {
@@ -81,9 +92,37 @@ def _call_anthropic(prompt: str, api_key: str, model: str, timeout: int = 90) ->
         headers=headers,
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        result = json.loads(resp.read().decode())
-    return (result["content"][0]["text"] or "").strip()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(_anthropic_error_message(exc, model)) from exc
+    if result.get("stop_reason") == "refusal":
+        raise RuntimeError("Claude declined this request. Try again with a shorter or different job ad.")
+    text = "".join(b.get("text", "") for b in result.get("content", []) if b.get("type") == "text")
+    if not text.strip() and result.get("stop_reason") == "max_tokens":
+        raise RuntimeError("Claude ran out of room before answering. Try a shorter job ad.")
+    return text.strip()
+
+
+def _anthropic_error_message(exc, model: str) -> str:
+    """A plain-English message for an HTTP error from the Anthropic API."""
+    try:
+        detail = json.loads(exc.read().decode()).get("error", {}).get("message", "")
+    except Exception:
+        detail = ""
+    if exc.code in (401, 403):
+        return "Your Anthropic API key was rejected. Check it in Settings → AI Assistant."
+    if exc.code == 404:
+        return (f"The Claude model '{model}' isn't available (it may have been retired). "
+                f"Clear the Model field in Settings → AI Assistant to use {DEFAULT_CLAUDE_MODEL}.")
+    if exc.code == 400 and "credit" in detail.lower():
+        return "Your Anthropic account is out of credit. Add credit at platform.claude.com → Billing."
+    if exc.code == 429:
+        return "Claude is busy or your account hit its rate limit. Wait a minute and try again."
+    if exc.code >= 500:
+        return "Anthropic's API had a problem. Try again in a minute."
+    return f"Anthropic API error {exc.code}" + (f": {detail}" if detail else ".")
 
 
 def _call_ai(prompt: str, user_id, timeout: int = 90) -> str:
@@ -120,7 +159,7 @@ def _call_ai(prompt: str, user_id, timeout: int = 90) -> str:
             api_key = cfg.get("api_key", "").strip()
             if not api_key:
                 raise RuntimeError("Anthropic API key is not configured. Go to Settings → AI Assistant.")
-            model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
+            model = cfg.get("ai_model", "").strip() or DEFAULT_CLAUDE_MODEL
             return _call_anthropic(prompt, api_key, model, timeout)
 
         if provider == "custom":
@@ -220,9 +259,11 @@ def ollama_status():
             if not api_key:
                 return jsonify({"ok": False, "provider": "anthropic",
                                 "error": "Anthropic API key not configured."})
+            model = cfg.get("ai_model", "").strip() or DEFAULT_CLAUDE_MODEL
+            # Looking up the chosen model checks the key and the model name in one call.
             try:
                 req = urllib.request.Request(
-                    "https://api.anthropic.com/v1/models",
+                    "https://api.anthropic.com/v1/models/" + urllib.parse.quote(model, safe=""),
                     headers={
                         "x-api-key":         api_key,
                         "anthropic-version": "2023-06-01",
@@ -231,14 +272,10 @@ def ollama_status():
                 )
                 with urllib.request.urlopen(req, timeout=5):
                     pass
-                model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
                 return jsonify({"ok": True, "provider": "anthropic", "model": model})
             except urllib.error.HTTPError as exc:
-                if exc.code in (401, 403):
-                    return jsonify({"ok": False, "provider": "anthropic",
-                                    "error": "Invalid Anthropic API key."})
-                model = cfg.get("ai_model", "").strip() or "claude-3-haiku-20240307"
-                return jsonify({"ok": True, "provider": "anthropic", "model": model})
+                return jsonify({"ok": False, "provider": "anthropic", "model": model,
+                                "error": _anthropic_error_message(exc, model)})
             except Exception:
                 return jsonify({"ok": False, "provider": "anthropic",
                                 "error": "Could not reach Anthropic API."})

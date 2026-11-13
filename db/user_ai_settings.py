@@ -34,10 +34,37 @@ _DEFAULTS: dict = {
 }
 
 
+# With login off there is no user (user_id None).  The one person using the app
+# keeps the same AI settings in the settings table under these keys; when login is
+# switched on they move to the first admin (adopt_single_user_ai_settings).
+_SINGLE_PREFIX = "single_user_ai_"
+
+
+def _single_user_settings() -> dict:
+    from .settings import get_setting
+    merged = dict(_DEFAULTS)
+    for k in _DEFAULTS:
+        value = get_setting(_SINGLE_PREFIX + k, "")
+        if value != "":
+            merged[k] = int(value) if k == "use_admin_ai" else value
+    return merged
+
+
+def adopt_single_user_ai_settings(user_id: int) -> None:
+    """Give the login-off AI settings to *user_id* when they have none of their own."""
+    from .settings import get_setting
+    conn = get_connection()
+    has_own = conn.execute("SELECT 1 FROM user_ai_settings WHERE user_id=?", (user_id,)).fetchone()
+    conn.close()
+    stored = {k: get_setting(_SINGLE_PREFIX + k, "") for k in _ALLOWED_FIELDS}
+    if not has_own and any(v != "" for v in stored.values()):
+        save_user_ai_settings(user_id, {k: v for k, v in stored.items() if v != ""})
+
+
 def get_user_ai_settings(user_id: int | None) -> dict:
-    """Return a dict of AI settings for *user_id*, filled with defaults."""
+    """Return a dict of AI settings for *user_id* (None = login off), filled with defaults."""
     if user_id is None:
-        return dict(_DEFAULTS)
+        return _single_user_settings()
     conn = get_connection()
     row = conn.execute(
         "SELECT * FROM user_ai_settings WHERE user_id=?", (user_id,)
@@ -61,6 +88,11 @@ def save_user_ai_settings(user_id: int, fields: dict) -> None:
     safe = {k: v for k, v in fields.items() if k in _ALLOWED_FIELDS}
     if not safe:
         return
+    if user_id is None:
+        from .settings import set_setting
+        for key, value in safe.items():
+            set_setting(_SINGLE_PREFIX + key, str(value))
+        return
     conn = get_connection()
     # Ensure a row exists first.
     conn.execute(
@@ -79,8 +111,6 @@ def user_has_own_ai(user_id: int | None) -> bool:
     - ``use_admin_ai`` is 0 (user explicitly chose their own provider), AND
     - a provider is configured with required credentials/URL.
     """
-    if user_id is None:
-        return False
     cfg = get_user_ai_settings(user_id)
     if int(cfg.get("use_admin_ai", 1)):
         return False

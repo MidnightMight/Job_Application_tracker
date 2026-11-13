@@ -19,17 +19,24 @@ _NON_SUBMITTED_STATUSES = {
 
 
 def get_stats(year=None, user_id=None):
-    from .applications import get_applications
-    apps = get_applications(year=year, user_id=user_id)
+    """Counts for the year's applications.  Archived ones count too (they were
+    still applied for, and the dashboard's status board includes them); the
+    in-progress list leaves out archived applications and expressions of interest,
+    most urgent first."""
+    from .applications import get_applications, sort_by_status, EOI_STATUS
+    apps = get_applications(year=year, user_id=user_id, include_archived=True)
     total = len(apps)
     submitted = sum(
         1 for a in apps
         if a["status"] not in _NON_SUBMITTED_STATUSES
     )
-    rejected = sum(1 for a in apps if "Rejected" in a["status"])
-    offers = sum(1 for a in apps if a["status"] == "Offer_Received")
+    # Employer rejections only: declining an offer yourself is not a rejection.
+    rejected = sum(1 for a in apps if a["status"] in ("Rejected", "Likely_Rejected"))
+    # An offer you declined was still an offer.
+    offers = sum(1 for a in apps if a["status"] in ("Offer_Received", "Offer_Rejected"))
     success_rate = round((offers / submitted * 100), 1) if submitted else 0
-    pending = [a for a in apps if a["status"] in PENDING_STATUSES]
+    pending = sort_by_status([a for a in apps if a["status"] in PENDING_STATUSES
+                              and not a.get("archived") and a["status"] != EOI_STATUS])
     return {
         "total":        total,
         "submitted":    submitted,

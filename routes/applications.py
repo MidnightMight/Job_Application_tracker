@@ -227,6 +227,32 @@ def set_priority(app_id):
     return redirect(back or url_for("applications.application_detail", app_id=app_id))
 
 
+@bp.route("/application/<int:app_id>/status", methods=["POST"])
+@login_required
+def set_status(app_id):
+    """Change the status straight from the list (records it in the history)."""
+    user_id = current_user_id()
+    status = request.form.get("status", "")
+    if status not in db.get_status_options(user_id=user_id) or not db.bulk_update_applications(
+            [app_id], "status", status, user_id=user_id):
+        flash("Couldn't change the status.", "danger")
+    back = _safe_path(request.form.get("next", ""))
+    return redirect(back or url_for("applications.application_detail", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/contacted", methods=["POST"])
+@login_required
+def log_contact_today(app_id):
+    """One tap: you were in touch today (sets Last contact, which resets the stale clock)."""
+    if db.bulk_update_applications([app_id], "last_contact_date", date.today().isoformat(),
+                                   user_id=current_user_id()):
+        flash("Contact logged for today.", "success")
+    else:
+        flash("Couldn't log the contact.", "danger")
+    back = _safe_path(request.form.get("next", ""))
+    return redirect(back or url_for("applications.application_detail", app_id=app_id))
+
+
 @bp.route("/application/unarchive/<int:app_id>", methods=["POST"])
 @login_required
 def unarchive_application(app_id):
@@ -260,7 +286,7 @@ def bulk_action():
         redirect_kwargs["status"] = status_filter
     if sort_mode in {"priority", "date", "status"}:
         redirect_kwargs["sort"] = sort_mode
-    if request.form.get("show_mode") in {"archived", "eoi"}:
+    if request.form.get("show_mode") in {"archived", "eoi", "stale", "all", "current"}:
         redirect_kwargs["show"] = request.form["show_mode"]   # stay in the view you were in
 
     if not selected_ids:
