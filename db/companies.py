@@ -1,6 +1,15 @@
 """Company CRUD helpers."""
 
+import contextvars
+import re
+from datetime import date
+
 from .connection import get_connection
+
+# During a bulk import, new companies without industry tags are collected here
+# (one summary reminder at the end) instead of one inbox reminder each.
+_untagged_during_import: contextvars.ContextVar = contextvars.ContextVar(
+    "untagged_during_import", default=None)
 
 
 _NON_COMPANY_TRACKING_STATUSES = {
@@ -9,7 +18,30 @@ _NON_COMPANY_TRACKING_STATUSES = {
     "Select_Status",
     "Not_Applying",
 }
-_APPLIED_YEAR_COLUMNS = {f"applied_{y}" for y in range(2023, 2028)}
+_APPLIED_COLUMN = re.compile(r"^applied_(\d{4})$")
+_FIRST_YEAR, _LAST_YEAR = 1990, 2100
+
+
+def applied_year_columns(conn) -> list[str]:
+    """The companies table's applied_YYYY columns, oldest year first."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(companies)").fetchall()]
+    return sorted(c for c in cols if _APPLIED_COLUMN.match(c))
+
+
+def ensure_applied_year_column(conn, year) -> str | None:
+    """Make sure an applied_YYYY column exists for *year* (one per year, added as
+    years come up, instead of a fixed 2023-2027 set).  Returns its name, or None
+    for a year outside 1990-2100."""
+    try:
+        year = int(year)
+    except (TypeError, ValueError):
+        return None
+    if not _FIRST_YEAR <= year <= _LAST_YEAR:
+        return None
+    col = f"applied_{year}"               # safe: built from a validated integer
+    if col not in applied_year_columns(conn):
+        conn.execute(f"ALTER TABLE companies ADD COLUMN {col} INTEGER DEFAULT 0")
+    return col
 
 
 def _normalize_industry_tags(raw: str | None) -> str | None:
@@ -81,22 +113,14 @@ def get_company(company_id: int):
 def add_company(data, user_id: int | None = None):
     industry_tags = _normalize_industry_tags(data.get("industry", ""))
     conn = get_connection()
+    ensure_applied_year_column(conn, date.today().year)   # the form always offers this year
+    years = applied_year_columns(conn)
+    columns = ["company_name", "note", *years, "user_id", "industry"]
+    values = [data.get("company_name", ""), data.get("note", ""),
+              *[1 if data.get(col) else 0 for col in years], user_id, industry_tags]
     conn.execute(
-        """INSERT INTO companies
-           (company_name, note, applied_2023, applied_2024,
-            applied_2025, applied_2026, applied_2027, user_id, industry)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
-        (
-            data.get("company_name", ""),
-            data.get("note", ""),
-            1 if data.get("applied_2023") else 0,
-            1 if data.get("applied_2024") else 0,
-            1 if data.get("applied_2025") else 0,
-            1 if data.get("applied_2026") else 0,
-            1 if data.get("applied_2027") else 0,
-            user_id,
-            industry_tags,
-        ),
+        f"INSERT INTO companies ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
+        values,
     )
     conn.commit()
     conn.close()
@@ -105,23 +129,13 @@ def add_company(data, user_id: int | None = None):
 def update_company(company_id: int, data):
     industry_tags = _normalize_industry_tags(data.get("industry", ""))
     conn = get_connection()
+    ensure_applied_year_column(conn, date.today().year)   # the form always offers this year
+    years = applied_year_columns(conn)
+    assignments = ", ".join(f"{col}=?" for col in ["company_name", "note", *years, "industry"])
     conn.execute(
-        """UPDATE companies SET
-           company_name=?, note=?,
-           applied_2023=?, applied_2024=?, applied_2025=?,
-           applied_2026=?, applied_2027=?, industry=?
-           WHERE id=?""",
-        (
-            data.get("company_name", ""),
-            data.get("note", ""),
-            1 if data.get("applied_2023") else 0,
-            1 if data.get("applied_2024") else 0,
-            1 if data.get("applied_2025") else 0,
-            1 if data.get("applied_2026") else 0,
-            1 if data.get("applied_2027") else 0,
-            industry_tags,
-            company_id,
-        ),
+        f"UPDATE companies SET {assignments} WHERE id=?",
+        [data.get("company_name", ""), data.get("note", ""),
+         *[1 if data.get(col) else 0 for col in years], industry_tags, company_id],
     )
     conn.commit()
     conn.close()
@@ -176,8 +190,9 @@ def _auto_add_or_update_company(
             applied_col = f"applied_{year}"
 
     conn = get_connection()
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(companies)").fetchall()}
-    can_mark_applied = bool(applied_col and applied_col in cols and applied_col in _APPLIED_YEAR_COLUMNS)
+    if applied_col:
+        applied_col = ensure_applied_year_column(conn, applied_col[len("applied_"):])
+    can_mark_applied = bool(applied_col)
     row = conn.execute(
         "SELECT id, industry FROM companies WHERE LOWER(company_name)=?",
         (company_name.lower(),),
@@ -186,14 +201,10 @@ def _auto_add_or_update_company(
     company_added = False
     if row is None:
         if can_mark_applied:
-            insert_sql_by_year = {
-                "applied_2023": "INSERT INTO companies (company_name, industry, applied_2023) VALUES (?,?,1)",
-                "applied_2024": "INSERT INTO companies (company_name, industry, applied_2024) VALUES (?,?,1)",
-                "applied_2025": "INSERT INTO companies (company_name, industry, applied_2025) VALUES (?,?,1)",
-                "applied_2026": "INSERT INTO companies (company_name, industry, applied_2026) VALUES (?,?,1)",
-                "applied_2027": "INSERT INTO companies (company_name, industry, applied_2027) VALUES (?,?,1)",
-            }
-            conn.execute(insert_sql_by_year[applied_col], (company_name, normalized_industry))
+            conn.execute(
+                f"INSERT INTO companies (company_name, industry, {applied_col}) VALUES (?,?,1)",
+                (company_name, normalized_industry),
+            )
         else:
             conn.execute(
                 "INSERT INTO companies (company_name, industry) VALUES (?,?)",
@@ -203,14 +214,10 @@ def _auto_add_or_update_company(
     else:
         merged = _merge_industry_tags(row["industry"], normalized_industry)
         if can_mark_applied:
-            update_sql_by_year = {
-                "applied_2023": "UPDATE companies SET industry=?, applied_2023=1 WHERE id=?",
-                "applied_2024": "UPDATE companies SET industry=?, applied_2024=1 WHERE id=?",
-                "applied_2025": "UPDATE companies SET industry=?, applied_2025=1 WHERE id=?",
-                "applied_2026": "UPDATE companies SET industry=?, applied_2026=1 WHERE id=?",
-                "applied_2027": "UPDATE companies SET industry=?, applied_2027=1 WHERE id=?",
-            }
-            conn.execute(update_sql_by_year[applied_col], (merged, row["id"]))
+            conn.execute(
+                f"UPDATE companies SET industry=?, {applied_col}=1 WHERE id=?",
+                (merged, row["id"]),
+            )
         else:
             conn.execute(
                 "UPDATE companies SET industry=? WHERE id=?",
@@ -220,6 +227,10 @@ def _auto_add_or_update_company(
     conn.close()
 
     if company_added and not normalized_industry and app_id is not None:
+        collected = _untagged_during_import.get()
+        if collected is not None:
+            collected.append((company_name, app_id))
+            return
         from .reminders import create_reminder
 
         msg = (

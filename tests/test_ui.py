@@ -90,3 +90,24 @@ def test_add_button_offers_csv_import(client):
     assert "dropdown-toggle-split" in header                       # the arrow next to Add application
     assert header.count("Import or update from CSV / Excel") == 2  # desktop menu + phone menu
     assert header.count('href="/application/add"') >= 3           # one click still adds (+ both menus)
+
+
+def test_pick_years_for_the_applications_menu(client):
+    import datetime as _dt
+    this = _dt.date.today().year
+    db.add_application({"company": "Old Co", "job_desc": "Role", "date_applied": f"{this - 2}-05-01"})
+    nav = lambda: client.get("/").get_data(as_text=True).split('id="navbarNav"')[1].split("</ul>")[0]
+    assert "Applications</a>" in nav() and f"/year/{this - 2}" in nav()    # both years: dropdown
+
+    # Keep only this year: the bar links straight to it.
+    client.post("/settings?section=general", data={"action": "save_menu_years", "show_year": str(this)})
+    assert db.get_hidden_years() == {this - 2}
+    assert f"{this} applications</a>" in nav() and f"/year/{this - 2}" not in nav()
+    # Hidden only from the menu: the year still opens, and its switcher shows it.
+    assert "Old Co" in client.get(f"/year/{this - 2}").get_data(as_text=True)
+
+    # Unticking everything isn't allowed; a new year would appear on its own.
+    client.post("/settings?section=general", data={"action": "save_menu_years"})
+    assert db.get_hidden_years() == {this - 2}
+    assert db.get_menu_years() == [this]
+    db.set_hidden_years(None, [])

@@ -37,6 +37,9 @@ from .settings import (
     get_setting,
     set_setting,
     get_all_settings,
+    get_hidden_years,
+    set_hidden_years,
+    get_menu_years,
 )
 
 from .users import (
@@ -54,10 +57,10 @@ from .user_ai_settings import (
     get_user_ai_settings,
     save_user_ai_settings,
     user_has_own_ai,
+    adopt_single_user_ai_settings,
 )
 
 from .reminders import (
-    get_pending_for_reminders,
     create_reminder,
     get_reminders,
     dismiss_reminder,
@@ -85,6 +88,7 @@ from .companies import (
     update_company,
     delete_company,
     bulk_delete_companies,
+    applied_year_columns,
 )
 
 from .applications import (
@@ -115,6 +119,7 @@ from .applications import (
     sort_by_priority,
     sort_by_status,
     EOI_STATUS,
+    get_follow_ups,
     status_rank,
     set_priority,
     DUPLICATE_WINDOW_DAYS,
@@ -133,7 +138,7 @@ from .attachments import (
 
 __all__ = [
     # connection
-    "DB_PATH", "YEARS", "get_connection", "get_dynamic_years",
+    "DB_PATH", "YEARS", "get_connection", "get_dynamic_years", "applied_year_columns",
     "_add_column_if_missing", "_BULK_UPDATE_FIELDS",
     # init_db
     "DEFAULT_STATUSES", "PENDING_STATUSES", "NEW_APPLICATION_STATUS", "init_db", "clear_demo_data",
@@ -150,7 +155,7 @@ __all__ = [
     # user_ai_settings
     "get_user_ai_settings", "save_user_ai_settings", "user_has_own_ai",
     # reminders
-    "get_pending_for_reminders", "create_reminder", "get_reminders",
+    "create_reminder", "get_reminders",
     "dismiss_reminder", "dismiss_all_reminders", "get_unread_reminder_count",
     "get_stalled_submitted_applications", "get_likely_rejected_applications",
     "get_due_next_steps_without_reminder",

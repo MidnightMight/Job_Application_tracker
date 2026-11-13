@@ -340,3 +340,74 @@ def test_dashboard_status_board_counts_archived_applications(client):
     assert "(1 archived)" in html
     # A status whose applications are all archived links to the archive view.
     assert re.search(r'href="/year/\d+\?status=Job_Expired&amp;show=archived"', html)
+
+
+def test_dashboard_counts_include_archived_and_offers_are_counted_right():
+    year = date.today().year
+    _add("Live Co", status="Submitted", date_applied=_day(0))
+    old = _add("Old Co", status="Rejected", date_applied=_day(0))
+    db.archive_application(old)
+    _add("Said No Co", status="Offer_Rejected", date_applied=_day(0))
+    _add("Interview Co", status="Interview_Scheduled", date_applied=_day(-5))
+    _add("Eoi Co", status="EOI", date_applied=_day(0))
+    stats = db.get_stats(year=year)
+    assert stats["total"] == 5                     # archived ones count
+    assert stats["rejected"] == 1                  # declining an offer isn't a rejection
+    assert stats["offers"] == 1                    # but it was an offer
+    # In progress: no archived, no EOI, most urgent first.
+    assert [a["company"] for a in stats["pending"]] == ["Interview Co", "Live Co"]
+
+
+def test_quick_status_contact_and_needs_attention(client):
+    year = date.today().year
+    quiet = _add("Quiet Co", status="Submitted", date_applied=_day(-40))
+    _add("Fresh Co", status="Submitted", date_applied=_day(0))
+    conn = db.get_connection()
+    conn.execute("UPDATE applications SET status_changed_at=? WHERE id=?", (_day(-40), quiet))
+    conn.commit(); conn.close()
+
+    page = client.get(f"/year/{year}?show=stale").get_data(as_text=True)
+    assert "Needs attention (1)" in page and "Quiet Co" in page and "Fresh Co" not in page
+    assert f'/application/{quiet}/contacted' in page and f'/application/{quiet}/status' in page
+
+    # One tap: contacted today -> no longer stale.
+    nxt = f"/year/{year}?show=stale"
+    assert client.post(f"/application/{quiet}/contacted", data={"next": nxt}).location.endswith(nxt)
+    assert db.get_application(quiet)["last_contact_date"] == date.today().isoformat()
+    assert "Needs attention (0)" in client.get(f"/year/{year}").get_data(as_text=True)
+
+    # Quick status change goes into the history; nonsense statuses are refused.
+    client.post(f"/application/{quiet}/status", data={"status": "Interview_Scheduled"})
+    assert db.get_application(quiet)["status"] == "Interview_Scheduled"
+    assert db.get_application_timeline(quiet)[-1]["status"] == "Interview_Scheduled"
+    client.post(f"/application/{quiet}/status", data={"status": "Made_Up"})
+    assert db.get_application(quiet)["status"] == "Interview_Scheduled"
+
+
+def test_old_style_dates_are_fixed_so_the_year_shows():
+    a = _add("Slash Co", status="Rejected")
+    b = _add("Odd Co", status="Rejected")
+    conn = db.get_connection()
+    conn.execute("UPDATE applications SET date_applied='10/03/2025' WHERE id=?", (a,))
+    conn.execute("UPDATE applications SET date_applied='sometime' WHERE id=?", (b,))
+    conn.commit(); conn.close()
+    assert 2025 not in db.get_dynamic_years()
+    db.init_db()
+    assert db.get_application(a)["date_applied"] == "2025-03-10"
+    assert db.get_application(b)["date_applied"] == "sometime"      # unreadable: left alone
+    assert 2025 in db.get_dynamic_years()
+
+
+def test_past_years_open_with_archived_applications_too(client):
+    last = date.today().year - 1
+    done = _add("Old Rejected Co", status="Rejected", date_applied=f"{last}-03-01")
+    db.archive_application(done)
+    _add("Old Open Co", status="Submitted", date_applied=f"{last}-04-01")
+    page = client.get(f"/year/{last}").get_data(as_text=True)
+    assert "Old Rejected Co" in page and "Old Open Co" in page
+    assert '<option value="all" selected>' in page and "ml-row-archived" in page
+    # The current year still opens on what's going, with All one click away.
+    this = client.get(f"/year/{date.today().year}").get_data(as_text=True)
+    assert '<option value="current" selected>' in this
+    current_only = client.get(f"/year/{last}?show=current").get_data(as_text=True)
+    assert "Old Rejected Co" not in current_only and "Old Open Co" in current_only

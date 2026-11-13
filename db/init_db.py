@@ -294,17 +294,64 @@ def init_db():
 
     _migrate_legacy_status_names(c)
     _add_saved_status(c)
+    _retire_pending_reminders(c)
+    _normalise_date_applied(c)
+    _ensure_company_year_columns(c)
     conn.commit()
 
-    if c.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0:
-        _seed_applications(c)
-        conn.commit()
-
-    if c.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
-        _seed_companies(c)
+    # Sample data only on a brand-new install (before setup is finished), and only
+    # once: before, it came back on every start once the tables were empty.
+    seeded = c.execute("SELECT 1 FROM settings WHERE key='sample_data_seeded'").fetchone()
+    setup_done = c.execute(
+        "SELECT 1 FROM settings WHERE key='onboarding_complete' AND value='1'").fetchone()
+    if not seeded:
+        if not setup_done:
+            if c.execute("SELECT COUNT(*) FROM applications").fetchone()[0] == 0:
+                _seed_applications(c)
+            if c.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 0:
+                _seed_companies(c)
+        c.execute("INSERT INTO settings (key, value) VALUES ('sample_data_seeded', '1')")
         conn.commit()
 
     conn.close()
+
+
+def _ensure_company_year_columns(c):
+    """One applied_YYYY company column for every year with applications, plus the
+    current year (the table used to stop at 2027)."""
+    from .companies import ensure_applied_year_column
+    years = {datetime.now().year}
+    years |= {int(r[0]) for r in c.execute(
+        "SELECT DISTINCT strftime('%Y', date_applied) FROM applications "
+        "WHERE strftime('%Y', date_applied) IS NOT NULL").fetchall()}
+    for year in sorted(years):
+        ensure_applied_year_column(c, year)
+
+
+def _normalise_date_applied(c):
+    """Rewrite dates applied that aren't YYYY-MM-DD (e.g. 10/03/2025 from older
+    imports): every year list and count reads the year from that format, so
+    such applications showed up nowhere.  Unreadable values are left alone."""
+    from .applications import _parse_date
+    rows = c.execute(
+        "SELECT id, date_applied FROM applications WHERE date_applied IS NOT NULL AND date_applied != '' "
+        "AND (length(date_applied) < 10 OR strftime('%Y', date_applied) IS NULL "
+        "     OR substr(date_applied, 5, 1) != '-')").fetchall()
+    for row_id, value in rows:
+        fixed = _parse_date(value)
+        if fixed and fixed != value:
+            c.execute("UPDATE applications SET date_applied=? WHERE id=?", (fixed, row_id))
+
+
+def _retire_pending_reminders(c):
+    """The daily "has been pending for N days" reminder was removed (it added a new
+    one per application every day).  Once, mark the ones left in inboxes as read;
+    they stay in the inbox history."""
+    if c.execute("SELECT 1 FROM settings WHERE key='pending_reminders_retired'").fetchone():
+        return
+    c.execute("UPDATE reminders SET dismissed=1 WHERE dismissed=0 AND reminder_type IS NULL "
+              "AND message LIKE '%has been pending (%'")
+    c.execute("INSERT INTO settings (key, value) VALUES ('pending_reminders_retired', '1')")
 
 
 def _add_saved_status(c):

@@ -50,12 +50,9 @@ def test_import_flow_with_update_existing(client):
     }, content_type="multipart/form-data")
     page = upload.get_data(as_text=True)
     assert 'name="update_existing"' in page
-    # Pick up the hidden csv_content exactly as the browser would post it.
-    import html as _html
-    csv_content = _html.unescape(re.search(r'name="csv_content" value="([^"]*)"', page).group(1))
+    # The file waits on the server between the two steps, as in the browser.
     result = client.post("/application/import", data={
         "stage": "import",
-        "csv_content": csv_content,
         "col_map_0": "id", "col_map_1": "company", "col_map_2": "job_desc",
         "col_map_3": "date_applied", "col_map_4": "status",
         "update_existing": "1",

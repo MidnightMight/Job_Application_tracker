@@ -36,12 +36,6 @@ def settings():
 
         if action == "save_general":
             db.set_setting("reminder_enabled", "1" if request.form.get("reminder_enabled") else "0")
-            days = request.form.get("reminder_days", "3").strip()
-            if days.isdigit() and int(days) >= 1:
-                db.set_setting("reminder_days", days)
-            else:
-                flash("Reminder days must be a positive integer.", "danger")
-                return redirect(url_for("settings_routes.settings", section="general"))
             db.set_setting(
                 "company_pool_enabled",
                 "1" if request.form.get("company_pool_enabled") else "0",
@@ -88,6 +82,16 @@ def settings():
             flash("General settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="general"))
 
+        elif action == "save_menu_years":
+            every = db.get_dynamic_years(user_id=user_id)
+            shown = {int(y) for y in request.form.getlist("show_year") if y.isdigit()}
+            if not shown & set(every):
+                flash("Keep at least one year in the menu.", "warning")
+            else:
+                db.set_hidden_years(user_id, [y for y in every if y not in shown])
+                flash("Applications menu updated.", "success")
+            return redirect(url_for("settings_routes.settings", section="general") + "#menu-years")
+
         elif action in ("calendar_create", "calendar_remove"):
             if action == "calendar_create":
                 new_calendar_token(user_id)
@@ -114,6 +118,7 @@ def settings():
                 admins = [u for u in users if u["is_admin"]]
                 first_user = (admins or users)[0]
                 db.reassign_null_user_data(first_user["id"])
+                db.adopt_single_user_ai_settings(first_user["id"])
             flash("Security settings saved.", "success")
             return redirect(url_for("settings_routes.settings", section="users"))
 
@@ -213,9 +218,6 @@ def settings():
             return redirect(url_for("settings_routes.settings", section="ai"))
 
         elif action == "save_profile":
-            if DEPLOYMENT_MODE == "local":
-                flash("AI profile settings are not available in local mode.", "warning")
-                return redirect(url_for("settings_routes.settings", section="ai"))
             profile_user_id = current_user_id()
             skills     = request.form.get("user_profile_skills",     "").strip()
             experience = request.form.get("user_profile_experience", "").strip()
@@ -235,13 +237,9 @@ def settings():
             return redirect(url_for("settings_routes.settings", section="ai"))
 
         elif action == "save_user_ai":
-            if DEPLOYMENT_MODE == "local":
-                flash("AI settings are not available in local mode.", "warning")
-                return redirect(url_for("settings_routes.settings", section="ai"))
+            # Works with login off (one shared set) and in local mode (own providers
+            # don't need the Docker-only shared Ollama server).
             profile_user_id = current_user_id()
-            if profile_user_id is None:
-                flash("You must be logged in to save personal AI settings.", "warning")
-                return redirect(url_for("settings_routes.settings", section="ai"))
             # Toggle: 1 = use admin's server, 0 = use own settings.
             use_admin_ai = 1 if request.form.get("use_admin_ai") == "1" else 0
             provider = request.form.get("ai_provider", "ollama").strip()
@@ -291,6 +289,8 @@ def settings():
         user_ai_settings=user_ai_cfg,
         profile_ai_enabled=(admin_ai_on or user_ai_on),
         calendar_url=calendar_feed_url(user_id),
+        all_years=db.get_dynamic_years(user_id=user_id),
+        hidden_years=db.get_hidden_years(user_id),
     )
 
 

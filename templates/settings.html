@@ -66,20 +66,9 @@
               </label>
             </div>
             <div class="form-text">
-              When enabled, the inbox will receive a reminder for each application
-              that has been in a pending status longer than the threshold below.
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <label for="reminder_days" class="form-label fw-semibold">Reminder threshold (days)</label>
-            <input type="number" class="form-control" id="reminder_days"
-                   name="reminder_days" min="1" max="365"
-                   value="{{ settings.get('reminder_days', '3') }}"
-                   style="max-width:120px;">
-            <div class="form-text">
-              Default: <strong>3</strong> days. A reminder is created once per day per pending
-              application that exceeds this threshold.
+              When enabled, the inbox gets a reminder when a next step is due, when an application
+              you've sent goes quiet (see <em>Stale Application Detection</em> below; at most once a
+              week per application), and when one looks likely rejected.
             </div>
           </div>
 
@@ -201,16 +190,45 @@
       </div>
     </div>
 
+    <div class="card shadow-sm mb-4" id="menu-years">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-calendar3 me-1"></i>Years in the Applications menu
+      </div>
+      <div class="card-body">
+        <p class="small text-secondary">
+          Untick years you don't need in the menu. Their applications are kept, and search still
+          finds them. New years appear on their own. With only one year ticked, the menu becomes a
+          direct link to it.
+        </p>
+        <form method="post" action="{{ url_for('settings_routes.settings', section='general') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="action" value="save_menu_years">
+          <div class="d-flex flex-wrap gap-3 mb-3">
+            {% for y in all_years %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="show_year" value="{{ y }}"
+                     id="show_year_{{ y }}" {% if y not in hidden_years %}checked{% endif %}>
+              <label class="form-check-label" for="show_year_{{ y }}">{{ y }}</label>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-save me-1"></i>Save</button>
+        </form>
+      </div>
+    </div>
+
     <div class="card shadow-sm mb-4" id="calendar">
       <div class="card-header fw-semibold">
         <i class="bi bi-calendar-event me-1"></i>Calendar feed
       </div>
       <div class="card-body">
         <p class="small text-secondary">
-          Puts each application's <strong>next step</strong> (follow-up, interview, assessment due…)
-          in your phone or computer calendar as an all-day event. Add the link below to your
-          calendar app as a subscription; it updates on its own. Anyone with the link can see
-          those events, so keep it private.
+          Puts each application's <strong>next step</strong> (interview, assessment due…) in your
+          phone or computer calendar as an all-day event, plus a <strong>follow-up</strong> on the day
+          an application without a next step goes stale ("Follow up", "Chase" or "Finish or drop"),
+          so the calendar shows who to chase. Add the link below to your calendar app as a
+          subscription; it updates on its own (most apps check every few hours). Anyone with the
+          link can see those events, so keep it private.
         </p>
         {% if calendar_url %}
         <div class="input-group mb-2">
@@ -585,10 +603,10 @@
     <div class="alert alert-secondary d-flex align-items-center gap-3" role="alert">
       <i class="bi bi-laptop fs-4 flex-shrink-0"></i>
       <div>
-        <strong>Not available in local mode.</strong><br>
-        The local AI assistant (Ollama) is disabled when running directly on Windows or macOS.
-        To enable it, deploy the app in Docker and set
-        <code>DEPLOYMENT_MODE=docker</code>.
+        <strong>Shared Ollama server not available in local mode.</strong><br>
+        The shared AI server (Ollama) is turned off when the app runs directly on Windows or macOS
+        (deploy it in Docker with <code>DEPLOYMENT_MODE=docker</code> to use it).
+        You can still use your own AI provider below, such as Claude or OpenAI.
       </div>
     </div>
     {% else %}
@@ -680,15 +698,15 @@
       </div>
     </div>
     {% endif %}
+    {% endif %}{# end local-mode guard: the shared Ollama card only #}
 
-    {# ── Per-user AI provider ── #}
-    {% if login_enabled %}
+    {# ── Per-user AI provider (with login off: the one person using the app) ── #}
     {# use_admin_ai: 1 = use admin server (default), 0 = use own settings #}
     {% set _use_admin = user_ai_settings.get('use_admin_ai', 1)|int %}
     <div class="card shadow-sm mb-4">
       <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
-          <i class="bi bi-cpu me-1 text-primary"></i>Your Personal AI Provider
+          <i class="bi bi-cpu me-1 text-primary"></i>{{ 'Your Personal AI Provider' if login_enabled else 'Your AI Provider' }}
           <span class="badge bg-info text-dark ms-2 small">Per-account</span>
         </span>
         {# ── Master toggle ── #}
@@ -756,6 +774,30 @@
               </select>
             </div>
 
+            {# Setup guide for Claude; settings.js shows it when Anthropic is selected. #}
+            <div id="claudeGuide" class="alert alert-light border small mb-3"
+                 {% if user_ai_settings.get('ai_provider','') != 'anthropic' %}style="display:none"{% endif %}>
+              <div class="fw-semibold mb-2"><i class="bi bi-key me-1"></i>Getting a Claude API key</div>
+              <ol class="mb-2 ps-3">
+                <li>Go to <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a>
+                    (the Claude Console) and sign up or log in. This is separate from a Claude.ai
+                    Pro or Max subscription: the API is billed on its own.</li>
+                <li>Under <strong>Settings → Billing</strong>, add some credit. A few dollars lasts a long time here.
+                    Setting a monthly spend limit under <strong>Settings → Limits</strong> is a good idea.</li>
+                <li>Under <strong>Settings → API keys</strong>, choose <strong>Create key</strong>, give it a
+                    name such as "Job tracker", and copy it. It starts with <code>sk-ant-</code> and is only shown once.</li>
+                <li>Paste it into <strong>API Key</strong> below, leave <strong>Model</strong> empty, choose
+                    <strong>Save Provider Settings</strong>, then <strong>Test connection</strong>.</li>
+              </ol>
+              <div class="mb-1"><strong>Which model?</strong> Leave the field empty to use
+                <code>claude-opus-5-5</code>, the most capable everyday model.
+                For lower cost type <code>claude-sonnet-5-5</code>, or <code>claude-haiku-5-5</code> for the cheapest.</div>
+              <div class="text-muted">Prices per million tokens (input / output): Opus 5.5 $4 / $20,
+                Sonnet 5.5 $2 / $10, Haiku 5.5 $0.10 / $0.50. Filling in one job ad uses a few thousand
+                tokens: a few cents on Opus, a fraction of a cent on Haiku.
+                Check <a href="https://claude.com/pricing" target="_blank" rel="noopener">current pricing</a>.</div>
+            </div>
+
             <div id="providerApiSection">
               <div class="mb-3" id="apiKeyRow">
                 <label class="form-label fw-semibold">API Key</label>
@@ -782,7 +824,7 @@
                 <input type="text" name="ai_model" class="form-control" style="max-width:280px;"
                        value="{{ user_ai_settings.get('ai_model','') }}"
                        id="aiModelInput"
-                       placeholder="{{ 'gpt-4o-mini' if user_ai_settings.get('ai_provider','') == 'openai' else ('claude-3-haiku-20240307' if user_ai_settings.get('ai_provider','') == 'anthropic' else '') }}">
+                       placeholder="{{ 'gpt-4o-mini' if user_ai_settings.get('ai_provider','') == 'openai' else ('claude-opus-5-5' if user_ai_settings.get('ai_provider','') == 'anthropic' else '') }}">
                 <div class="form-text" id="modelHint"></div>
               </div>
             </div>
@@ -794,7 +836,6 @@
         </form>
       </div>
     </div>
-    {% endif %}
 
     {# ── User Profile card — always shown when AI is available ── #}
     <div class="card shadow-sm mb-4 {% if not profile_ai_enabled %}profile-card-disabled{% endif %}" id="profileCard">
@@ -914,7 +955,6 @@
         application detail page to let you ask questions about that application.</p>
       </div>
     </div>
-    {% endif %}{# end local-mode guard for AI section #}
 
     {# ── Updates ── #}
     {% elif section == 'updates' %}

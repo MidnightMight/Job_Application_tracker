@@ -52,6 +52,7 @@ def onboarding():
 
             new_user = db.get_user_by_username(username)
             db.reassign_null_user_data(new_user["id"])
+            db.adopt_single_user_ai_settings(new_user["id"])
             db.set_setting("login_enabled", "1")
             session["user_id"] = new_user["id"]
             session["username"] = username

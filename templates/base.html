@@ -110,15 +110,22 @@
         <li class="nav-item">
           <a class="nav-link {% if ep == 'dashboard.dashboard' %}active{% endif %}" href="{{ url_for('dashboard.dashboard') }}">Dashboard</a>
         </li>
+        {% if menu_years | length == 1 %}
+        <li class="nav-item">
+          <a class="nav-link text-nowrap {% if ep == 'dashboard.year_view' %}active{% endif %}"
+             href="{{ url_for('dashboard.year_view', year=menu_years[0]) }}">{{ menu_years[0] }} applications</a>
+        </li>
+        {% else %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle {% if ep == 'dashboard.year_view' %}active{% endif %}"
              href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Applications</a>
           <ul class="dropdown-menu">
-            {% for y in years %}
+            {% for y in menu_years %}
             <li><a class="dropdown-item" href="{{ url_for('dashboard.year_view', year=y) }}">{{ y }}</a></li>
             {% endfor %}
           </ul>
         </li>
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link {% if ep.startswith('companies.') %}active{% endif %}" href="{{ url_for('companies.companies') }}">Companies</a>
         </li>

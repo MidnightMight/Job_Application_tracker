@@ -62,10 +62,16 @@ def year_view(year):
     sort_mode = request.args.get("sort", "status").strip().lower()
     status_options = db.get_status_options(user_id=user_id)
     show = request.args.get("show", "")
-    if status_filter == db.EOI_STATUS and show != "archived":
+    if not show:
+        # A past year is mostly finished (often auto-archived), so it opens with
+        # everything in it; the current year opens with what's still going.
+        show = "all" if year < date.today().year else "current"
+    if status_filter == db.EOI_STATUS and show not in ("archived", "all"):
         show = "eoi"                     # picking EOI in the status filter opens its view
+    show_all = show == "all"
     show_archived = show == "archived"
     show_eoi = show == "eoi"
+    show_stale = show == "stale"
     everything = db.get_applications(
         year=year,
         status=status_filter if status_filter else None,
@@ -74,8 +80,13 @@ def year_view(year):
     )
     archived_count = sum(1 for a in everything if a.get("archived"))
     eoi_count = sum(1 for a in everything if not a.get("archived") and a.get("status") == db.EOI_STATUS)
-    if show_archived:
+    stale_count = sum(1 for a in everything if a.get("is_stale"))
+    if show_all:
+        apps = list(everything)                                   # archived and EOI included
+    elif show_archived:
         apps = [a for a in everything if a.get("archived")]
+    elif show_stale:
+        apps = [a for a in everything if a.get("is_stale")]      # never archived, saved or EOI
     else:
         # Expressions of interest have their own view; the main list leaves them out.
         apps = [a for a in everything if not a.get("archived")
@@ -95,7 +106,7 @@ def year_view(year):
         year=year,
         stats=stats,
         status_counts=db.get_status_counts(year=year, user_id=user_id),
-        years=db.get_dynamic_years(user_id=user_id),
+        years=sorted(set(db.get_menu_years(user_id=user_id)) | {year}),
         status_options=status_options,
         selected_status=status_filter,
         sort_mode=sort_mode,
@@ -104,4 +115,8 @@ def year_view(year):
         archived_count=archived_count,
         show_eoi=show_eoi,
         eoi_count=eoi_count,
+        show_stale=show_stale,
+        stale_count=stale_count,
+        show_all=show_all,
+        all_count=len(everything),
     )

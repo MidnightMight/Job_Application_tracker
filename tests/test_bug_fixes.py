@@ -58,3 +58,34 @@ def test_logout_post_needs_csrf_token(csrf_client):
 def test_missing_page_is_404_not_500(client):
     assert client.get("/no-such-page").status_code == 404
     assert client.get("/application/999999").status_code in (302, 404)
+
+
+def test_sample_data_does_not_come_back_after_deleting_everything():
+    import db
+    conn = db.get_connection()
+    for table in ("status_history", "reminders", "applications", "companies"):
+        conn.execute(f"DELETE FROM {table}")
+    conn.execute("DELETE FROM settings WHERE key='sample_data_seeded'")
+    conn.commit(); conn.close()
+    db.set_setting("onboarding_complete", "1")      # an existing, set-up install
+    db.init_db()                                    # a restart
+    assert db.get_applications(include_archived=True) == []
+    assert db.get_companies() == []
+
+
+def test_company_years_are_not_capped_at_2027(client):
+    import db
+    db.add_application({"company": "Future Co", "job_desc": "Role", "status": "Submitted",
+                        "date_applied": "2031-02-03"})
+    company = [c for c in db.get_companies() if c["company_name"] == "Future Co"][0]
+    assert company["applied_2031"] == 1                      # column added on demand
+    conn = db.get_connection()
+    assert "applied_2031" in db.applied_year_columns(conn)
+    conn.close()
+    # Editing the company keeps (and can change) the new year.
+    db.update_company(company["id"], {"company_name": "Future Co", "applied_2031": "1",
+                                      "applied_2025": "1"})
+    company = db.get_company(company["id"])
+    assert company["applied_2031"] == 1 and company["applied_2025"] == 1
+    assert "applied_2031" in client.get("/export/companies").get_data(as_text=True).splitlines()[0]
+    db.init_db()                                              # restart keeps working

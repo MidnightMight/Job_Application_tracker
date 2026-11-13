@@ -289,6 +289,7 @@ def inject_globals():
 
     return {
         "years":                  db.get_dynamic_years(user_id=user_id),
+        "menu_years":             db.get_menu_years(user_id=user_id),     # Applications menu
         "current_year_for_footer": _date.today().year,
         "unread_reminder_count":  db.get_unread_reminder_count(user_id=user_id),
         "login_enabled":          db.get_setting("login_enabled", "0") == "1",
@@ -309,19 +310,21 @@ def inject_globals():
 # Background scheduler — reminder checks
 # ---------------------------------------------------------------------------
 
+def _reminders_on() -> bool:
+    """Settings > General > "Enable reminder notifications": all automatic reminders."""
+    return db.get_setting("reminder_enabled", "1") == "1"
+
+
 def _check_and_create_reminders():
-    """Scheduled task: create inbox reminders for long-pending applications."""
+    """Scheduled task: inbox reminders for next steps that are due.
+
+    (The old daily "has been pending for N days" reminder is gone: it added a new
+    reminder for every pending application every day.  The stage-based check-ins
+    in _check_stale_submitted_applications cover the same need, once a week.)
+    """
     try:
-        if db.get_setting("reminder_enabled", "1") != "1":
+        if not _reminders_on():
             return
-        days = int(db.get_setting("reminder_days", "3"))
-        for app_record in db.get_pending_for_reminders(days):
-            msg = (
-                f"'{app_record['job_desc'] or 'Application'}' at {app_record['company']} "
-                f"has been pending ({app_record['status'].replace('_', ' ')}) "
-                f"for {app_record['duration']} days."
-            )
-            db.create_reminder(app_record["id"], msg)
         _create_next_step_reminders()
     except Exception:
         logger.exception("Reminder check failed")
@@ -362,6 +365,8 @@ def _check_stale_submitted_applications():
       lower success_chance to ≤ 10 % and create an 'Update to Likely Rejected?' reminder.
     """
     from datetime import date as _date
+    if not _reminders_on():
+        return
     try:
         stall_value = int(db.get_setting("stale_threshold_value", "2"))
         stall_unit  = db.get_setting("stale_threshold_unit", "weeks")
