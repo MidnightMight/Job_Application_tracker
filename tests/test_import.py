@@ -154,3 +154,25 @@ def test_export_then_reimport_with_update_creates_no_duplicates(client):
     result = db.bulk_import_applications(rows, update_existing=True)
     assert result["updated"] == 2 and result["imported"] == 0
     assert {a["status"] for a in db.get_applications(include_archived=True)} == {"Rejected"}
+
+
+def test_map_page_submits_its_own_form_when_logged_in(client):
+    """With login on, the menu's Log out form comes first on the page; the Import
+    button's script must submit the import form, not the first POST form."""
+    from werkzeug.security import generate_password_hash
+    db.set_setting("login_enabled", "1")
+    try:
+        if not db.get_user_by_username("importer"):
+            db.add_user("importer", generate_password_hash("pw"), is_admin=True)
+        client.post("/login", data={"username": "importer", "password": "pw"})
+        page = client.post(
+            "/application/import",
+            data={"csv_file": (io.BytesIO(b"Company,Role\nAcme,Tester\n"), "jobs.csv")},
+            content_type="multipart/form-data",
+        ).get_data(as_text=True)
+        assert 'action="/logout"' in page
+        assert '<form method="post" id="importForm">' in page
+        assert "getElementById('importForm')" in page
+        assert "querySelector('form[method=\"post\"]')" not in page
+    finally:
+        db.set_setting("login_enabled", "0")
