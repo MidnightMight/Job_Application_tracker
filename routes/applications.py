@@ -13,7 +13,7 @@ from flask import (
 
 import db
 from .auth import _safe_path, login_required, current_user_id
-from db.applications import _STALE_DAYS
+from db.applications import applied_stale_days
 
 bp = Blueprint("applications", __name__)
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def _form_values(source) -> SimpleNamespace:
         how_applied=source.get("how_applied", ""),
         employer_contact=source.get("employer_contact", ""),
         date_applied=source.get("date_applied", ""),
-        status=source.get("status", "Select_Status"),
+        status=source.get("status", db.NEW_APPLICATION_STATUS),
         success_chance=source.get("success_chance", "0"),
         link=source.get("link", ""),
         cover_letter=1 if source.get("cover_letter") else 0,
@@ -120,7 +120,7 @@ def add_application():
                     duplicate_warning=True,
                     duplicates=duplicates,
                     duplicate_window_days=db.DUPLICATE_WINDOW_DAYS,
-                    stale_days=_STALE_DAYS,
+                    stale_days=applied_stale_days(),
                 )
 
         db.add_application(request.form, user_id=user_id)
@@ -144,8 +144,9 @@ def add_application():
         app=prefill,
         companies=companies_list,
         status_options=db.get_status_options(user_id=user_id),
+        default_status=db.NEW_APPLICATION_STATUS,
         action="Add",
-        stale_days=_STALE_DAYS,
+        stale_days=applied_stale_days(),
     )
 
 
@@ -177,7 +178,7 @@ def edit_application(app_id):
         companies=companies_list,
         status_options=db.get_status_options(user_id=user_id),
         action="Edit",
-        stale_days=_STALE_DAYS,
+        stale_days=applied_stale_days(),
     )
 
 
@@ -259,6 +260,8 @@ def bulk_action():
         redirect_kwargs["status"] = status_filter
     if sort_mode in {"priority", "date", "status"}:
         redirect_kwargs["sort"] = sort_mode
+    if request.form.get("show_mode") in {"archived", "eoi"}:
+        redirect_kwargs["show"] = request.form["show_mode"]   # stay in the view you were in
 
     if not selected_ids:
         flash("No applications selected.", "warning")

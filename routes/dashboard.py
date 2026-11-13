@@ -6,11 +6,9 @@ from flask import Blueprint, render_template, request
 
 import db
 from .auth import login_required, current_user_id
-from db.applications import _STALE_DAYS
+from db.applications import applied_stale_days
 
 bp = Blueprint("dashboard", __name__)
-# Keep unknown statuses at the end of status-sorted lists.
-_UNKNOWN_STATUS_SORT_ORDER = 10_000
 
 
 @bp.route("/")
@@ -23,10 +21,14 @@ def dashboard():
     apps_per_year = db.get_apps_per_year(user_id=user_id)
     success_per_year = db.get_success_rate_per_year(user_id=user_id)
     keyword_freq = db.get_company_note_frequency(user_id=user_id)
-    # Status counts in the user's status order (unknown statuses last) for the honeycomb.
+    # The status board counts every application this year, archived ones too, in the
+    # user's status order (unknown statuses last).  Each cell also knows how many of
+    # its applications are archived, so its link can open the right view.
+    board_counts = db.get_status_counts(year=current_year, user_id=user_id, include_archived=True)
+    archived_counts = {s: board_counts[s] - status_counts.get(s, 0) for s in board_counts}
     order = db.get_status_options(user_id=user_id)
-    pipeline = [(s, status_counts[s]) for s in order if s in status_counts]
-    pipeline += [(s, n) for s, n in status_counts.items() if s not in order]
+    statuses = [s for s in order if s in board_counts] + [s for s in board_counts if s not in order]
+    pipeline = [(s, board_counts[s], archived_counts[s]) for s in statuses]
     return render_template(
         "dashboard.html",
         stats=stats,
@@ -57,9 +59,13 @@ def search():
 def year_view(year):
     user_id = current_user_id()
     status_filter = request.args.get("status", "")
-    sort_mode = request.args.get("sort", "priority").strip().lower()
+    sort_mode = request.args.get("sort", "status").strip().lower()
     status_options = db.get_status_options(user_id=user_id)
-    show_archived = request.args.get("show", "") == "archived"
+    show = request.args.get("show", "")
+    if status_filter == db.EOI_STATUS and show != "archived":
+        show = "eoi"                     # picking EOI in the status filter opens its view
+    show_archived = show == "archived"
+    show_eoi = show == "eoi"
     everything = db.get_applications(
         year=year,
         status=status_filter if status_filter else None,
@@ -67,21 +73,21 @@ def year_view(year):
         include_archived=True,
     )
     archived_count = sum(1 for a in everything if a.get("archived"))
-    apps = [a for a in everything if bool(a.get("archived")) == show_archived]
-    if sort_mode == "status":
-        order = {name: i for i, name in enumerate(status_options)}
-        apps.sort(
-            key=lambda a: (
-                order.get(a["status"], _UNKNOWN_STATUS_SORT_ORDER),
-                a.get("date_applied") or "",
-                a.get("company") or "",
-            )
-        )
+    eoi_count = sum(1 for a in everything if not a.get("archived") and a.get("status") == db.EOI_STATUS)
+    if show_archived:
+        apps = [a for a in everything if a.get("archived")]
+    else:
+        # Expressions of interest have their own view; the main list leaves them out.
+        apps = [a for a in everything if not a.get("archived")
+                and (a.get("status") == db.EOI_STATUS) == show_eoi]
+    if sort_mode == "priority":
+        apps = db.sort_by_priority(apps)
     elif sort_mode == "date":
         pass  # get_applications already returns newest first
     else:
-        sort_mode = "priority"
-        apps = db.sort_by_priority(apps)
+        # Default: interviews and assessments first, then drafting, saved, applied, finished.
+        sort_mode = "status"
+        apps = db.sort_by_status(apps, status_options)
     stats = db.get_stats(year=year, user_id=user_id)
     return render_template(
         "year_view.html",
@@ -93,7 +99,9 @@ def year_view(year):
         status_options=status_options,
         selected_status=status_filter,
         sort_mode=sort_mode,
-        stale_days=_STALE_DAYS,
+        stale_days=applied_stale_days(),
         show_archived=show_archived,
         archived_count=archived_count,
+        show_eoi=show_eoi,
+        eoi_count=eoi_count,
     )

@@ -9,6 +9,7 @@ from .init_db import PENDING_STATUSES
 # Applications in any of these states are excluded from the "submitted" count.
 _NON_SUBMITTED_STATUSES = {
     "Select_Status",
+    "Saved",
     "Drafting_Application",
     "Drafting_CV",
     "Not_Applying",
@@ -39,9 +40,9 @@ def get_stats(year=None, user_id=None):
     }
 
 
-def get_status_counts(year=None, user_id=None):
+def get_status_counts(year=None, user_id=None, include_archived: bool = False):
     from .applications import get_applications
-    apps = get_applications(year=year, user_id=user_id)
+    apps = get_applications(year=year, user_id=user_id, include_archived=include_archived)
     counts: dict = {}
     for a in apps:
         counts[a["status"]] = counts.get(a["status"], 0) + 1
@@ -233,11 +234,11 @@ OUTCOMES = (
                                               "Interview_In_Person"}),
     ("waiting",   "Waiting to hear",        {"Submitted", "Awaiting_Response"}),
     ("rejected",  "Rejected",               {"Rejected", "Likely_Rejected"}),
-    ("not_sent",  "Not sent or withdrawn",  {"Select_Status", "Drafting_Application", "Drafting_CV",
+    ("not_sent",  "Not sent or withdrawn",  {"Select_Status", "Saved", "Drafting_Application", "Drafting_CV",
                                               "EOI", "Not_Applying", "Job_Expired"}),
     ("other",     "Other status",           set()),
 )
-_DRAFT_STATUSES = {"Select_Status", "Drafting_Application", "Drafting_CV", "EOI"}
+_DRAFT_STATUSES = {"Select_Status", "Saved", "Drafting_Application", "Drafting_CV", "EOI"}
 _INTERVIEW_STATUSES = OUTCOMES[1][2]
 # Having been in any of these means it went to the employer, even if it was
 # later withdrawn (Not applying) or the ad expired.
@@ -315,7 +316,7 @@ def get_application_flow(year=None, user_id=None) -> dict:
         ("not_sent",        "Never sent",              1, "not_sent", "all"),
         ("heard",           "Heard back",              2, "progress", "sent"),
         ("no_reply",        "No reply",                2, "waiting",  "sent"),
-        ("drafting",        "Still drafting",          2, "not_sent", "not_sent"),
+        ("drafting",        "Saved or drafting",       2, "not_sent", "not_sent"),
         ("not_applying",    "Didn't apply",            2, "not_sent", "not_sent"),
         ("expired",         "Ad expired",              2, "not_sent", "not_sent"),
         ("progressed",      "Interview stage",         3, "progress", "heard"),

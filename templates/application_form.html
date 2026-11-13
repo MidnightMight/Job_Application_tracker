@@ -246,7 +246,7 @@
                   <i class="bi bi-calendar-check me-1"></i>Today
                 </button>
               </div>
-              <div class="form-text">Optional — leave blank if not yet applied. You'll be warned after {{ stale_days }} days with no status change.</div>
+              <div class="form-text">Optional — leave blank if not yet applied. Marked stale when nothing happens for a while: a week when drafting or interviewing, {{ stale_days }} days once applied, never while a next step is booked.</div>
             </div>
 
             <!-- Last Contact Date -->
@@ -271,7 +271,7 @@
               <label class="form-label fw-semibold">Status</label>
               <select name="status" class="form-select">
                 {% for s in status_options %}
-                <option value="{{ s }}" {% if app and app.status == s %}selected{% endif %}>
+                <option value="{{ s }}" {% if (app.status if app else default_status) == s %}selected{% endif %}>
                   {{ s | status_label }}
                 </option>
                 {% endfor %}

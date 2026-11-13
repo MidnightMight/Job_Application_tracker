@@ -83,10 +83,10 @@
       <div class="card-body">
         {% if pipeline %}
         <div class="ml-hive" role="list">
-          {% for status, count in pipeline %}
+          {% for status, count, archived in pipeline %}
           <a class="ml-cell" role="listitem"
-             href="{{ url_for('dashboard.year_view', year=current_year, status=status) }}"
-             title="Show {{ status | status_label }} applications"
+             href="{{ url_for('dashboard.year_view', year=current_year, status=status, show='archived' if archived == count else None) }}"
+             title="Show {{ status | status_label }} applications{% if archived %} ({{ archived }} archived){% endif %}"
              aria-label="{{ count }} {{ status | status_label }}">
             <span class="ml-cell-inner status-{{ status | replace(' ', '_') }}">
               <span class="ml-cell-count">{{ count }}</span>

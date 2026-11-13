@@ -5,74 +5,82 @@ import logging
 from datetime import date, datetime
 
 from .connection import get_connection, _BULK_UPDATE_FIELDS
+from .init_db import NEW_APPLICATION_STATUS
 
 logger = logging.getLogger(__name__)
 
 
-# Statuses that are "done" — no stale warning for these.
-_TERMINAL_STATUSES = frozenset({
-    "Offer_Received",
-    "Offer_Rejected",
-    "Rejected",
-    "Not_Applying",
-    "Job_Expired",
-    "Select_Status",
-})
-
-# Days with no status change before an application is flagged as stale.
-_STALE_DAYS = 3
+# ── Stale: nothing has happened for longer than you'd expect at this stage ──
+# "Something happened" = the latest status change or recorded contact.  A next
+# step in the future means you're waiting on something scheduled, so not stale.
+# Stages come from status_rank(), so custom statuses and your status order in
+# Settings don't change the rule.
+STALE_ACTIVE_DAYS = 7      # interview, assessment, offer: chase after a week
+STALE_DRAFTING_DAYS = 7    # drafting for over a week: finish it or drop it
+_STALE_APPLIED_RANKS = (5, 6)       # applied / awaiting, other custom statuses
+_STALE_ACTIVE_RANKS = (0, 1, 2)     # offer, interview, assessment
+_STALE_DRAFTING_RANK = 3
 
 
-def _enrich(app: dict, stale_ignored_statuses: set[str] | None = None) -> dict:
-    """Add computed fields: 'duration' (days since applied) and 'is_stale'."""
+def applied_stale_days() -> int:
+    """The Settings check-in threshold (default 2 weeks), in days."""
+    from .settings import get_setting
+    try:
+        value = int(get_setting("stale_threshold_value", "2") or 2)
+    except (TypeError, ValueError):
+        value = 2
+    return max(1, value) * (7 if get_setting("stale_threshold_unit", "weeks") == "weeks" else 1)
+
+
+def stale_limit_days(status: str, applied_days: int) -> int | None:
+    """Days of quiet before an application in *status* counts as stale; None = never."""
+    rank = status_rank(status)
+    if rank in _STALE_ACTIVE_RANKS:
+        return STALE_ACTIVE_DAYS
+    if rank == _STALE_DRAFTING_RANK:
+        return STALE_DRAFTING_DAYS
+    if rank in _STALE_APPLIED_RANKS:
+        return applied_days
+    return None   # saved, no status, likely rejected, finished, EOI
+
+
+def _day(value) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def last_activity_date(app: dict) -> date | None:
+    """Latest of the last status change and the last recorded contact
+    (the date applied when neither is known)."""
+    days = [d for d in (_day(app.get("status_changed_at")), _day(app.get("last_contact_date"))) if d]
+    if days:
+        return max(days)
+    return _day(app.get("date_applied"))
+
+
+def _enrich(app: dict, applied_days: int | None = None) -> dict:
+    """Add computed fields: 'duration' (days since applied), 'is_stale',
+    'quiet_days' (days since the last activity) and 'stale_after' (the limit)."""
     today = date.today()
+    applied = _day(app.get("date_applied"))
+    app["duration"] = (today - applied).days if applied else 0
 
-    # duration — days since date_applied (0 when not set)
-    try:
-        d = datetime.strptime(app["date_applied"], "%Y-%m-%d").date()
-        app["duration"] = (today - d).days
-    except Exception:
-        app["duration"] = 0
-
-    # is_stale — True when status has not changed in >= _STALE_DAYS days and
-    # the application is not in a terminal state.
     app["is_stale"] = False
-    if (
-        app.get("status") not in _TERMINAL_STATUSES
-        and app.get("status") not in (stale_ignored_statuses or set())
-    ):
-        ref = app.get("status_changed_at") or app.get("date_applied") or ""
-        try:
-            ref_date = datetime.fromisoformat(ref[:10]).date()
-            app["is_stale"] = (today - ref_date).days >= _STALE_DAYS
-        except Exception:
-            pass
+    app["quiet_days"] = None
+    app["stale_after"] = None
+    limit = stale_limit_days(app.get("status") or "",
+                             applied_days if applied_days is not None else applied_stale_days())
+    last = last_activity_date(app)
+    if last:
+        app["quiet_days"] = (today - last).days
+    next_step = _day(app.get("next_action_date"))
+    if (limit is not None and last and not app.get("archived")
+            and not (next_step and next_step >= today)):
+        app["stale_after"] = limit
+        app["is_stale"] = app["quiet_days"] > limit
     return app
-
-
-def _statuses_ignored_for_stale(user_id: int | None = None) -> set[str]:
-    """Statuses in the Submitted→Rejected range (inclusive) are stale-ignored."""
-    try:
-        from .statuses import get_status_options
-
-        ordered = get_status_options(user_id=user_id)
-        submitted_idx = ordered.index("Submitted")
-        rejected_idx = ordered.index("Rejected")
-        start = min(submitted_idx, rejected_idx)
-        end = max(submitted_idx, rejected_idx)
-        return set(ordered[start:end + 1])
-    except ValueError:
-        logger.debug(
-            "_statuses_ignored_for_stale: Submitted or Rejected missing for user_id=%s",
-            user_id,
-        )
-        return set()
-    except ImportError:
-        logger.debug("_statuses_ignored_for_stale: could not import get_status_options")
-        return set()
-    except Exception:
-        logger.exception("_statuses_ignored_for_stale: unexpected error")
-        return set()
 
 
 def get_applications(year=None, status=None, user_id=None, include_archived: bool = False) -> list:
@@ -97,11 +105,9 @@ def get_applications(year=None, status=None, user_id=None, include_archived: boo
     sql += " ORDER BY date_applied DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    stale_ignored = _statuses_ignored_for_stale(user_id=user_id)
-    enriched = [_enrich(dict(r), stale_ignored) for r in rows]
-    # Stale applications float to the top so they get immediate attention.
-    enriched.sort(key=lambda a: (0 if a["is_stale"] else 1, a.get("date_applied") or ""))
-    return enriched
+    applied_days = applied_stale_days()
+    # Newest first; the views choose their own order (stale rows are no longer moved up).
+    return [_enrich(dict(r), applied_days) for r in rows]
 
 
 # Choices for "How applied" on the form.  Stored as the text shown, so exports
@@ -163,8 +169,8 @@ def search_applications(query: str, year: int | None = None, user_id=None, inclu
     sql += " ORDER BY date_applied DESC"
     rows = conn.execute(sql, params).fetchall()
     conn.close()
-    stale_ignored = _statuses_ignored_for_stale(user_id=user_id)
-    return [_enrich(dict(r), stale_ignored) for r in rows]
+    applied_days = applied_stale_days()
+    return [_enrich(dict(r), applied_days) for r in rows]
 
 
 def get_application(app_id: int, user_id=None):
@@ -236,6 +242,53 @@ def sort_by_priority(apps: list) -> list:
     return sorted(newest_first, key=key)
 
 
+# Status that has its own view in the year list (like the archive), out of the main list.
+EOI_STATUS = "EOI"
+
+# "By status" order: what needs you soonest first.  Custom statuses are placed by
+# name (anything with "interview", "assess", "draft"...), otherwise after Applied.
+_FINISHED_STATUSES = {"Rejected", "Offer_Rejected", "Not_Applying", "Job_Expired"}
+
+
+def status_rank(status: str) -> int:
+    """Group number for sorting by status (lower shows first)."""
+    s = status or ""
+    low = s.lower()
+    if s == "Offer_Received":
+        return 0                                    # an offer needs an answer
+    if "interview" in low:
+        return 1
+    if "assess" in low or "assignment" in low or "task" in low or "test" in low:
+        return 2
+    if s == "EOI":
+        return 9                                    # expressions of interest: very last
+    if "draft" in low:
+        return 3
+    if s in ("Saved", "Select_Status", ""):
+        return 4
+    if s in ("Submitted", "Awaiting_Response") or "applied" in low or "awaiting" in low:
+        return 5
+    if s in _FINISHED_STATUSES:
+        return 8
+    if s == "Likely_Rejected":
+        return 7
+    return 6                                        # other custom statuses
+
+
+def sort_by_status(apps: list, status_order: list[str] | None = None) -> list:
+    """Interview, assessment, drafting, saved, applied, then finished.  Within a
+    group: your status order in Settings, highest priority, soonest next step,
+    newest application."""
+    order = {name: i for i, name in enumerate(status_order or [])}
+
+    def key(a):
+        status = a.get("status") or ""
+        return (status_rank(status), order.get(status, len(order)),
+                -(a.get("priority") or 0), a.get("next_action_date") or "9999-99-99")
+    newest_first = sorted(apps, key=lambda a: a.get("date_applied") or "", reverse=True)
+    return sorted(newest_first, key=key)
+
+
 def set_priority(app_id: int, priority: int, user_id=None) -> bool:
     now = datetime.now().isoformat(timespec="seconds")
     sql = "UPDATE applications SET priority=?, last_modified_at=? WHERE id=?"
@@ -278,7 +331,7 @@ def add_application(data, user_id=None) -> int:
             data.get("team", ""),
             company,
             data.get("date_applied", ""),
-            data.get("status", "Select_Status"),
+            (data.get("status") or NEW_APPLICATION_STATUS),
             1 if data.get("cover_letter") else 0,
             1 if data.get("resume") else 0,
             data.get("comment", ""),
@@ -303,7 +356,7 @@ def add_application(data, user_id=None) -> int:
     app_id = cur.lastrowid
     conn.execute(
         "INSERT INTO status_history (application_id, status, changed_at) VALUES (?,?,?)",
-        (app_id, data.get("status", "Select_Status"), now),
+        (app_id, (data.get("status") or NEW_APPLICATION_STATUS), now),
     )
     conn.commit()
     conn.close()
@@ -313,7 +366,7 @@ def add_application(data, user_id=None) -> int:
         company,
         industry,
         date_applied=data.get("date_applied", ""),
-        status=data.get("status", "Select_Status"),
+        status=(data.get("status") or NEW_APPLICATION_STATUS),
         app_id=app_id,
     )
 
@@ -921,8 +974,8 @@ def _clean_import_row(row: dict, label: str, valid_statuses: set[str],
             out[key] = parsed
         elif key == "status":
             if value and valid_statuses and value not in valid_statuses:
-                warnings.append(f"{label}: unknown status '{value}' — set to Select_Status.")
-                value = "Select_Status"
+                warnings.append(f"{label}: unknown status '{value}' — set to {NEW_APPLICATION_STATUS}.")
+                value = NEW_APPLICATION_STATUS
             out[key] = value or "Select_Status"
         else:
             out[key] = value or ""
@@ -1008,7 +1061,8 @@ def bulk_import_applications(rows: list[dict], user_id=None,
             updated += 1
             continue
 
-        record.setdefault("status", "Select_Status")
+        if record.get("status") in (None, "", "Select_Status"):
+            record["status"] = NEW_APPLICATION_STATUS
         record.setdefault("resume", 1)
         new_id = add_application(record, user_id=user_id)
         existing_ids.add(new_id)

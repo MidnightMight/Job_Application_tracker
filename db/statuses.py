@@ -8,6 +8,7 @@ from .connection import get_connection
 # Statuses that must never be deleted — they are core workflow states.
 PROTECTED_STATUSES = frozenset({
     "Select_Status",
+    "Saved",
     "Drafting_Application",
     "Submitted",
     "Rejected",
