@@ -355,6 +355,7 @@ footer a { color: var(--ml-muted) !important; }
   letter-spacing: 0; white-space: nowrap;
 }
 .status-Select_Status        { background-color: #E8E3D9 !important; color: #4A4F5C !important; }
+.status-Saved                { background-color: #CFE6E1 !important; color: #0E3B33 !important; }
 .status-Drafting_Application { background-color: #C9D3E3 !important; color: #1B1F2A !important; }
 .status-Drafting_CV          { background-color: #D6DAE2 !important; color: #1B1F2A !important; }
 .status-EOI                  { background-color: #BCD3F5 !important; color: #0B1730 !important; }
@@ -371,6 +372,7 @@ footer a { color: var(--ml-muted) !important; }
 .status-Job_Expired          { background-color: #B9B2A6 !important; color: #111 !important; }
 [data-bs-theme="dark"] .status-Select_Status { background-color: #2A3B5C !important; color: #C9D2E3 !important; }
 [data-bs-theme="dark"] .status-Drafting_CV   { background-color: #3A4A68 !important; color: #EEF2F8 !important; }
+[data-bs-theme="dark"] .status-Saved         { background-color: #1E4A43 !important; color: #D6EFEA !important; }
 [data-bs-theme="dark"] .status-Submitted     { background-color: #3D7FE0 !important; }
 
 /* Row tints by status */
